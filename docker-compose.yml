@@ -41,7 +41,9 @@ services:
     restart: always
 
   caddy:
-    image: caddy:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     ports:
       - 80:80
       - 443:443
@@ -52,6 +54,7 @@ services:
       - ./public/images:/srv/images
     environment:
       - CADDY_AGREE=true
+      #- CLOUDFLARE_API_TOKEN= 
     restart: always
     depends_on:
       - meshinfo
