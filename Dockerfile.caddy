@@ -1,0 +1,13 @@
+# Use the official Caddy builder
+FROM caddy:builder AS builder
+
+# Add the Cloudflare DNS plugin
+RUN xcaddy build \
+    --with github.com/caddy-dns/cloudflare
+
+# Use the official Caddy base image
+FROM caddy:latest
+
+# Copy the custom Caddy binary
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+  
