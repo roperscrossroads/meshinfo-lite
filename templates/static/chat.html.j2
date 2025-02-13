@@ -56,11 +56,14 @@
           </tr>
         </thead>
         <tbody>
+          {% set ns = namespace(prev_msg="x", curr_msg="y") %}
           {% for message in chat['channels'][channel]['messages'] %}
           {% set node_from = nodes[message.from] if message.from in nodes else None %}
           {% set node_sender = nodes[message.sender] if message.sender in nodes else None %}
           {% set node_to = nodes[message.to] if message.to in nodes else None %}
           {% set distance_from_sender = utils.calculate_distance_between_nodes(node_from, node_sender) if node_from and node_sender else None %}
+          {% set ns.curr_msg=node_from.id+node_to.id+message.text %} 
+          {% if ns.prev_msg != ns.curr_msg %}
           <tr>
               <td class="p-1 border border-gray-400 text-nowrap">{{ datetime.fromtimestamp(message.timestamp).astimezone(zoneinfo).strftime('%Y-%m-%d %H:%M:%S %z') }}</td>
               <td class="p-1 text-center border border-gray-400">
@@ -91,9 +94,11 @@
                 {% endif %}
               </td>
               <td class="p-1 text-wrap border border-gray-400">
-                {{ message.text }}
+                {{ message.text }}  {{ prev_msg }}
               </td>
           </tr>
+          {% set ns.prev_msg = ns.curr_msg %}
+          {% endif %}
           {% endfor %}
         </tbody>
       </table>
