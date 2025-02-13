@@ -255,6 +255,7 @@ class StaticHTMLRenderer:
         "hardware": node["hardware"],
         "role": node["role"] if "role" in node else None,
         "position": self._serialize_position(node["position"]) if node["position"] else None,
+        "mapreport": node["mapreport"] if "mapreport" in node else None,
         "neighborinfo": self._serialize_neighborinfo(node) if node['neighborinfo'] else None,
         "telemetry": node["telemetry"],
         "last_seen_human": last_seen.astimezone().isoformat(),

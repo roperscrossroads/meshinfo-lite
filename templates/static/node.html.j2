@@ -119,6 +119,16 @@
               </td>
             </tr>
             <tr>
+              <th class="p-1" align=left>Firmware version</th>
+              <td class="p-1">
+              {% if node.mapreport and 'firmware_version' in node.mapreport and node.mapreport.firmware_version %}
+                {{ node.mapreport.firmware_version }}
+              {% else %}
+                Unknown
+              {% endif %}
+              </td>
+            </tr>
+            <tr>
               <th class="p-1" align=left>Role</th>
               <td class="p-1">
               {% if node.role is not none %}

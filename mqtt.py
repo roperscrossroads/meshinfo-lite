@@ -134,13 +134,14 @@ class MQTT:
 
                 elif mp.decoded.portnum == portnums_pb2.MAP_REPORT_APP:
                     try:
-                        report = mesh_pb2.Position().FromString(mp.decoded.payload)
+                        #  report = mesh_pb2.Position().FromString(mp.decoded.payload)
+                        report = mqtt_pb2.MapReport().FromString(mp.decoded.payload)
                         out = json.loads(MessageToJson(report, preserving_proto_field_name=True, ensure_ascii=False, indent=2, sort_keys=True, use_integers_for_enums=True, always_print_fields_with_no_presence=True))
                         outs["type"] = "mapreport"
                         outs["payload"] = out
                         if self.config['debug']:
                             print(f"Decoded protobuf message: mapreport: {outs}")
-                        # self.handle_mapreport(outs)
+                        await self.handle_mapreport(outs)
                     except UnicodeDecodeError as e:
                         print(f"*** Unicode decoding error: text: {str(e)}")
                     except DecodeError as e:
@@ -414,8 +415,8 @@ class MQTT:
             self.data.update_node(id, node)
             print(f"Node {id} skeleton added with position")
         await self.data.save()
-
-    async def handle_telemetry(self, msg):
+    
+    async def handle_position(self, msg):
         msg['from'] = utils.convert_node_id_from_int_to_hex(msg["from"])
         if 'to' in msg:
             msg['to'] = utils.convert_node_id_from_int_to_hex(msg["to"])
@@ -425,23 +426,35 @@ class MQTT:
         id = msg['from']
         if id in self.data.nodes:
             node = self.data.nodes[id]
-            node['telemetry'] = msg['payload'] if 'payload' in msg else None
+            node['position'] = msg['payload'] if 'payload' in msg else None
             self.data.update_node(id, node)
-            print(f"Node {id} updated with telemetry")
+            print(f"Node {id} updated with position")
         else:
             node = Node.default_node(id)
-            node['telemetry'] = msg['payload'] if 'payload' in msg else None
+            node['position'] = msg['payload'] if 'payload' in msg else None
             self.data.update_node(id, node)
-            print(f"Node {id} skeleton added with telemetry")
-
-        if id not in self.data.telemetry_by_node:
-            self.data.telemetry_by_node[id] = []
-
-        if 'payload' in msg:
-            self.data.telemetry.insert(0, msg)
-            self.data.telemetry_by_node[id].insert(0, msg)
-
+            print(f"Node {id} skeleton added with position")
         await self.data.save()
+
+    async def handle_mapreport(self, msg):
+        msg['from'] = utils.convert_node_id_from_int_to_hex(msg["from"])
+        if 'to' in msg:
+            msg['to'] = utils.convert_node_id_from_int_to_hex(msg["to"])
+        if 'sender' in msg and msg['sender'] and isinstance(msg['sender'], str):
+            msg['sender'] = msg['sender'].replace('!', '')
+        id = msg['from']
+        if id in self.data.nodes:
+            node = self.data.nodes[id]
+            node['mapreport'] = msg['payload'] if 'payload' in msg else None
+            self.data.update_node(id, node)
+            print(f"Node {id} updated with mapreport")
+        else:
+            node = Node.default_node(id)
+            node['mapreport'] = msg['payload'] if 'payload' in msg else None
+            self.data.update_node(id, node)
+            print(f"Node {id} skeleton added with mapreport")
+        await self.data.save()
+       
 
     async def handle_text(self, msg):
         msg['from'] = utils.convert_node_id_from_int_to_hex(msg["from"])
