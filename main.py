@@ -9,6 +9,7 @@ import discord
 from dotenv import load_dotenv
 
 from api import api
+from web import web
 from bot import discord as discord_bot
 from config import Config
 from memory_data_store import MemoryDataStore
@@ -46,7 +47,9 @@ async def main():
     async with asyncio.TaskGroup() as tg:
         loop = asyncio.get_event_loop()
         api_server = api.API(config, data)
+        web_server = web.WEB()
         tg.create_task(api_server.serve(loop))
+        tg.create_task(web_server.serve(loop))
         if config['broker']['enabled'] is True:
             mqtt = MQTT(config, data)
             tg.create_task(mqtt.connect())
