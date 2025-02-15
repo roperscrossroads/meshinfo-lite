@@ -13,3 +13,4 @@ uvicorn
 audioop-lts
 flask
 asgiref
+Hypercorn

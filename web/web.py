@@ -1,8 +1,8 @@
-from flask import Flask, send_file, send_from_directory
 from asgiref.wsgi import WsgiToAsgi
-import uvicorn
+from flask import Flask, send_file, send_from_directory
+from hypercorn.asyncio import serve
+from hypercorn.config import Config
 import os
-import asyncio
 
 app = Flask(__name__)
 
@@ -16,9 +16,11 @@ IMAGES_DIR = os.path.abspath("./public/images")
 def serve_index():
     return send_file(f'{ROOT_DIR}/index.html')
 
+
 @app.route('/<path:filename>')
 def serve_static(filename):
     return send_from_directory(ROOT_DIR, filename)
+
 
 # Serve images from a separate directory
 @app.route('/images/<path:filename>')
@@ -28,23 +30,9 @@ def serve_images(filename):
 
 class WEB:
     async def serve(self):
-        app_asgi = WsgiToAsgi(app)
-
-        conf = uvicorn.Config(
-            app=app_asgi,
-            host="0.0.0.0",
-            port=8000,
-        )
-        server = uvicorn.Server(conf)
-
-        print(f"Starting Uvicorn server at http://{conf.host}:{conf.port}")
-
-        # Ensure that we run inside an event loop properly
-        loop = asyncio.get_running_loop()
-        await server.serve()
-        print("Uvicorn server stopped")
-
-
-if __name__ == "__main__":
-    web = WEB()
-    asyncio.run(web.serve())  # Ensure the event loop is properly created and managed
+        config = Config()
+        config.bind = ["0.0.0.0:8000"]
+        print(f"Starting Hypercorn server an port 8000")
+        asgi_app = WsgiToAsgi(app)
+        await serve(asgi_app, config)
+        print("Hypercorn server stopped")
