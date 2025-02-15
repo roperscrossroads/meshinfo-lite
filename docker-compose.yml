@@ -1,6 +1,6 @@
 services:
   meshinfo:
-    image: ghcr.io/dadecoza/meshinfo:latest
+    image: ghcr.io/dadecoza/meshinfo:0.1.0-za
     volumes:
       - ./config.json:/app/config.json
       - ./output:/app/output
