@@ -65,6 +65,8 @@ def graph_icon(name):
       return "/images/icons/computer.png"
    elif "bridge" in name.lower():
       return "/images/icons/computer.png"
+   elif "meshtastic" in name.lower():
+      return "/images/icons/clown.png"
    return "/images/icons/radio.png"
 
 def filter_dict(d, whitelist):

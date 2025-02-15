@@ -1,24 +1,6 @@
 services:
-  postgres:
-    image: postgres:latest
-    volumes:
-      - ./postgres/data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_PASSWORD=password
-    restart: always
-
-  mqtt:
-    container_name: mqtt
-    image: eclipse-mosquitto:latest
-    ports:
-      - 1883:1883
-    volumes:
-      - ./mosquitto/data:/mosquitto/data:rw
-      - ./mosquitto/config:/mosquitto/config:rw
-    restart: always
-
   meshinfo:
-    image: ghcr.io/meshaddicts/meshinfo:latest
+    image: ghcr.io/dadecoza/meshinfo:latest
     volumes:
       - ./config.json:/app/config.json
       - ./output:/app/output
@@ -26,36 +8,6 @@ services:
       - PYTHONUNBUFFERED=1
     ports:
       - 9000:9000
+      - 8000:8000
     restart: always
-    depends_on:
-      - postgres
-      - mqtt
-
-  frontend:
-    image: ghcr.io/meshaddicts/meshinfo-spa:latest
-    ports:
-      - 8000:80
-    environment:
-      - VITE_API_BASE_URL=/api
-      - NODE_ENV=production
-    restart: always
-
-  caddy:
-    build:
-      context: .
-      dockerfile: Dockerfile.caddy
-    ports:
-      - 80:80
-      - 443:443
-    volumes:
-      - ./caddy/data:/data/caddy
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - ./output/static-html:/srv
-      - ./public/images:/srv/images
-    environment:
-      - CADDY_AGREE=true
-      #- CLOUDFLARE_API_TOKEN= 
-    restart: always
-    depends_on:
-      - meshinfo
-      - frontend
+ 

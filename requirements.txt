@@ -10,3 +10,6 @@ meshtastic
 cryptography
 protobuf
 uvicorn
+audioop-lts
+flask
+asgiref

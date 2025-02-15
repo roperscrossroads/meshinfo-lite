@@ -49,7 +49,7 @@ async def main():
         api_server = api.API(config, data)
         web_server = web.WEB()
         tg.create_task(api_server.serve(loop))
-        tg.create_task(web_server.serve(loop))
+        tg.create_task(web_server.serve())
         if config['broker']['enabled'] is True:
             mqtt = MQTT(config, data)
             tg.create_task(mqtt.connect())

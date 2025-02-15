@@ -1,8 +1,8 @@
 # trunk-ignore-all(checkov/CKV_DOCKER_3)
 FROM python:3.13-slim
 
-LABEL org.opencontainers.image.source https://github.com/MeshAddicts/meshinfo
-LABEL org.opencontainers.image.description "Realtime web UI to run against a Meshtastic regional or private mesh network."
+LABEL org.opencontainers.image.source=https://github.com/dadecoza/meshinfo
+LABEL org.opencontainers.image.description="Realtime web UI to run against a Meshtastic regional or private mesh network."
 
 ENV MQTT_TLS=false
 ENV PYTHONUNBUFFERED=1
@@ -16,6 +16,9 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 HEALTHCHECK NONE
+
+EXPOSE 8000
+EXPOSE 9000
 
 RUN chmod +x run.sh
 

@@ -2,31 +2,19 @@
 
 {% block title %}Graph{% endblock %}
 {% block content %}
-  <div class="w-full h-full" id="container" style="background: cyan; height: 100vh">
+  <div class="w-full h-full" id="container" style="height: 100vh">
   </div>
   <script src="https://cdn.anychart.com/releases/8.13.0/js/anychart-core.min.js"></script>
   <script src="https://cdn.anychart.com/releases/8.13.0/js/anychart-graph.min.js"></script>
   <script>
-    // create data
     var data = {{ graph|tojson|safe }};
     {% raw %}
-    // create a chart and set the data
     var chart = anychart.graph(data);
-
-    // set the container id
     chart.container("container");
-
-    // enable labels of nodes
     chart.nodes().labels().enabled(true);
-
-    // chart.nodes.normal().height(40);
-
-    // configure labels of nodes
     chart.nodes().labels().format("{%name}");
     chart.nodes().labels().fontSize(12);
     chart.nodes().labels().fontWeight(600);
-
-    // initiate drawing the chart
     chart.draw();
     {% endraw %}
   </script>

@@ -9,8 +9,9 @@ if [ -z "$1" ]
     exit 1
 fi
 
-REPO=meshaddicts/meshinfo
+REPO=dadecoza/meshinfo
 VERSION=$1
-
+# echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
 git tag -a $VERSION -m "Version $VERSION" && git push --tags
-docker build -t ghcr.io/$REPO:$VERSION --platform=linux/amd64 . && docker push ghcr.io/$REPO:$VERSION
+sudo docker build -t ghcr.io/$REPO:$VERSION --platform=linux/amd64 .
+echo "sudo docker push ghcr.io/$REPO:$VERSION"
