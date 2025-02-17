@@ -109,5 +109,6 @@ HARDWARE_PHOTOS = {
   HardwareModel.HELTEC_MESH_NODE_T114: "HELTEC_MESH_NODE_T114.png",
   HardwareModel.HELTEC_CAPSULE_SENSOR_V3: "HELTEC_CAPSULE_SENSOR_V3.png",
   HardwareModel.TRACKER_T1000_E: "TRACKER_T1000_E.png",
-  HardwareModel.RPI_PICO2: "RPI_PICO.png"
+  HardwareModel.RPI_PICO2: "RPI_PICO.png",
+  HardwareModel.RPI_PICO2: "NRF52840DK.png"
 }
