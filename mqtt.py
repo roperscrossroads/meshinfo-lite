@@ -117,6 +117,7 @@ class MQTT:
                 outs['snr'] = mp.rx_snr
                 outs['timestamp'] = mp.rx_time
                 outs['topic'] = msg.topic.value
+                outs['via'] = msg.topic.value.split("/")[-1].replace('!', '')
 
                 if mp.decoded.portnum == portnums_pb2.TEXT_MESSAGE_APP:
                     try:
@@ -390,6 +391,8 @@ class MQTT:
             node['role'] = msg['payload']['role']
         else:
             node['role'] = 0
+        
+        node['updated_via'] = msg['via'] if 'via' in msg else None
 
         self.data.update_node(id, node)
 
@@ -407,16 +410,18 @@ class MQTT:
         if id in self.data.nodes:
             node = self.data.nodes[id]
             node['position'] = msg['payload'] if 'payload' in msg else None
+            node['updated_via'] = msg['via'] if 'via' in msg else None
             self.data.update_node(id, node)
             print(f"Node {id} updated with position")
         else:
             node = Node.default_node(id)
             node['position'] = msg['payload'] if 'payload' in msg else None
+            node['updated_via'] = msg['via'] if 'via' in msg else None
             self.data.update_node(id, node)
             print(f"Node {id} skeleton added with position")
         await self.data.save()
     
-    async def handle_position(self, msg):
+    async def handle_telemetry(self, msg):
         msg['from'] = utils.convert_node_id_from_int_to_hex(msg["from"])
         if 'to' in msg:
             msg['to'] = utils.convert_node_id_from_int_to_hex(msg["to"])
@@ -426,14 +431,22 @@ class MQTT:
         id = msg['from']
         if id in self.data.nodes:
             node = self.data.nodes[id]
-            node['position'] = msg['payload'] if 'payload' in msg else None
+            node['telemetry'] = msg['payload'] if 'payload' in msg else None
             self.data.update_node(id, node)
-            print(f"Node {id} updated with position")
+            print(f"Node {id} updated with telemetry")
         else:
             node = Node.default_node(id)
-            node['position'] = msg['payload'] if 'payload' in msg else None
+            node['telemetry'] = msg['payload'] if 'payload' in msg else None
             self.data.update_node(id, node)
-            print(f"Node {id} skeleton added with position")
+            print(f"Node {id} skeleton added with telemetry")
+
+        if id not in self.data.telemetry_by_node:
+            self.data.telemetry_by_node[id] = []
+
+        if 'payload' in msg:
+            self.data.telemetry.insert(0, msg)
+            self.data.telemetry_by_node[id].insert(0, msg)
+
         await self.data.save()
 
     async def handle_mapreport(self, msg):
@@ -454,7 +467,6 @@ class MQTT:
             self.data.update_node(id, node)
             print(f"Node {id} skeleton added with mapreport")
         await self.data.save()
-       
 
     async def handle_text(self, msg):
         msg['from'] = utils.convert_node_id_from_int_to_hex(msg["from"])

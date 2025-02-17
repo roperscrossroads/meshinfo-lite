@@ -222,6 +222,20 @@
               <td>Unknown</td>
               {% endif %}
             </tr>
+            <tr>
+              <th class="p-1" align=left>Updated via</th>
+              {% if node.updated_via %}
+                {% if node.updated_via == node.id %}
+                  <td class="p-1 text-nowrap">Self</td>
+                {% elif node.updated_via in nodes %}
+                  <td class="p-1 text-nowrap"><a href='node_{{ nodes[node.updated_via]["id"] }}.html'>{{ nodes[node.updated_via]["longname"] }}</a></td>
+                {% else %}
+                  <td class="p-1 text-nowrap">{{ node.updated_via }}</td>
+                {% endif %}
+              {% else %}
+              <td>Unknown</td>
+              {% endif %}
+            </tr>
           </tbody>
         </table>
       </div>
