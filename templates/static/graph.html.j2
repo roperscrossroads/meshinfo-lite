@@ -16,6 +16,22 @@
     chart.nodes().labels().fontSize(12);
     chart.nodes().labels().fontWeight(600);
     chart.draw();
+    chart.fit();
+    chart.listen('click', function(e) {
+    var tag = e.domTarget.tag;
+    if (tag) {
+      if (tag.type === 'node') {
+        var url;
+        for (var i = 0; i < data.nodes.length; i++) {
+          if (data.nodes[i].id === tag.id) {
+            url = "node_" + data.nodes[i].id + ".html";
+            break;
+          }
+        }
+        window.open(url, '_self');
+      }
+    }
+  });
     {% endraw %}
   </script>
 {% endblock %}
