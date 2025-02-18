@@ -58,4 +58,7 @@ async def main():
             tg.create_task(bot.start_server())
 
 if __name__ == "__main__":
+    fh = open("meshinfo.pid", "w")
+    fh.write(str(os.getpid()))
+    fh.close()
     asyncio.run(main())
