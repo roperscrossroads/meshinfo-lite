@@ -402,13 +402,15 @@ class MemoryDataStore:
         known_nodes.append(id)
         for neighbor in node['neighborinfo']['neighbors']:
           neigbor_id = utils.convert_node_id_from_int_to_hex(neighbor["node_id"])
-          edge_key = f"{id}.{neigbor_id}"
-          if edge_key not in known_edges:
-            known_edges.append(edge_key)
+          edge_key_1 = f"{id}.{neigbor_id}"
+          edge_key_2 = f"{neigbor_id}.{id}"
+          if edge_key_1 not in known_edges and edge_key_2 not in known_edges:
             if neigbor_id in self.nodes:
               graph_data["edges"].append(
                 {"from": id, "to": neigbor_id}
               )
+              known_edges.append(edge_key_1)
+              known_edges.append(edge_key_2)
     for edge in graph_data["edges"]:
       to = edge['to']
       to_node = None

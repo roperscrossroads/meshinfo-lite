@@ -12,6 +12,6 @@ fi
 REPO=dadecoza/meshinfo
 VERSION=$1
 # echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
-git tag -a $VERSION -m "Version $VERSION" && git push --tags
-sudo docker build -t ghcr.io/$REPO:$VERSION --platform=linux/amd64 .
+git tag -a $VERSION -m "Version $VERSION" && git push --tags && \
+sudo docker build -t ghcr.io/$REPO:$VERSION --platform=linux/amd64 . && \
 echo "sudo docker push ghcr.io/$REPO:$VERSION"

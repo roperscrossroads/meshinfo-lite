@@ -9,6 +9,7 @@ app = Flask(__name__)
 # Define root directory and images directory
 ROOT_DIR = os.path.abspath("./output/static-html")
 IMAGES_DIR = os.path.abspath("./public/images")
+CSS_DIR = os.path.abspath("./public/css")
 
 
 # Serve static files from the root directory
@@ -26,6 +27,12 @@ def serve_static(filename):
 @app.route('/images/<path:filename>')
 def serve_images(filename):
     return send_from_directory(IMAGES_DIR, filename)
+
+
+# Serve CSS from a separate directory
+@app.route('/css/<path:filename>')
+def serve_css(filename):
+    return send_from_directory(CSS_DIR, filename)
 
 
 class WEB:

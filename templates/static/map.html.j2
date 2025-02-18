@@ -1,4 +1,4 @@
-{% extends "templates/static/layout-map.html.j2" %}
+{% extends "templates/static/layout.html.j2" %}
 
 {% block title %}Map | MeshInfo{% endblock %}
 {% block head %}
@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-  <div id="map" class="map"></div>
+  <div id="map" class="map" style="height: 100vh"></div>
   <div id="nodeDetail" class="ol-popup">
     <a href="#" id="popup-closer" class="ol-popup-closer"></a>
     <div id="popup-content"></div>
