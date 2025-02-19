@@ -327,6 +327,8 @@ class MQTT:
         topic = msg['topic'] if 'topic' in msg else 'unknown'
         if self.config['debug']:
             print(f"MQTT >> {topic} -- {msg}")
+        if len(self.data.mqtt_messages) >= 1000:
+            self.data.mqtt_messages.pop()
         self.data.mqtt_messages.append(msg)
         clean_msg = msg.copy()
         if 'decoded' in clean_msg:
