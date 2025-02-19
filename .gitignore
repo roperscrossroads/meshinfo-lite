@@ -26,3 +26,8 @@ spa
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+bin/
+lib/
+lib64/
+pyenv.cfg
