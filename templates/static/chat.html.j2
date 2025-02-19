@@ -1,45 +1,16 @@
+{% set this_page = "chat" %}
 {% extends "templates/static/layout.html.j2" %}
 
 {% block title %}Chat{% endblock %}
-
+  
 {% block content %}
-    <h5 class="mb-2 text-gray-500">Chat</h5>
-    <h1 class="mb-2 text-xl">Chat</h1>
+    <h5>Chat</h5>
     {% for channel in chat['channels'] if channel in config['broker']['channels']['display'] %}
-    <p class="mb-2">
+    <p>
       There are <b>{{ chat['channels'][channel]['messages']|count }}</b> messages on <a href="#channel-{{ channel }}">channel {{ channel }}</a> that have
       been heard by the mesh by <a href="node_{{ config['server']['node_id'] }}.html">{{ config['server']['node_id'] }}</a> ({{ config['server']['node_id'] }}).
     </p>
     {% endfor %}
-
-    <div>
-      <div class="sm:hidden">
-        <label for="tabs" class="sr-only">Select a tab</label>
-        <!-- Use an "onChange" listener to redirect the user to the selected tab URL. -->
-        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm">
-          {% for channel in chat['channels'] if channel in config['broker']['channels']['display'] %}
-          <option>Channel {{ channel }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="hidden sm:block">
-        <div class="border-b border-gray-200">
-          <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-            <!-- Current: "border-indigo-500 text-indigo-600", Default: "border-transparent text-gray-500 hover:border-gray-200 hover:text-gray-700" -->
-            {% for channel in chat['channels'] if channel in config['broker']['channels']['display'] %}
-            <a href="#"
-                class="flex whitespace-nowrap border-b-2 border-transparent px-1 py-4 text-sm font-medium text-gray-500 hover:border-gray-200 hover:text-gray-700"
-                onChange=""
-                >
-              Channel {{ channel }}
-              <!-- Current: "bg-indigo-100 text-indigo-600", Default: "bg-gray-100 text-gray-900" -->
-              <span class="ml-3 hidden rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-900 md:inline-block">{{ chat['channels'][channel]['messages']|count }}</span>
-            </a>
-            {% endfor %}
-          </nav>
-        </div>
-      </div>
-    </div>
 
     {% for channel in chat['channels'] if channel in config['broker']['channels']['display'] %}
     <div id="tab-channel-{{ channel }}" class="mt-4" role="tabpanel" aria-labelledby="tab-{{ channel }}">
