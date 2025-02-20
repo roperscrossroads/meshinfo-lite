@@ -6,16 +6,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="/images/icons/favicon.ico">
   <link href="/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    th {
+      background-color: #D7F9FF;
+      text-align: center;
+    }
+
+    nav {
+      background-color: #9fdef9;
+    }
+
+    .table-striped>tbody>tr:nth-child(2n+1)>td,
+    .table-striped>tbody>tr:nth-child(2n+1)>th {
+      background-color: #F9F9D7;
+    }
+  </style>
   {% block head %}{% endblock %}
 </head>
 
 <body>
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarTogglerDemo01"
-      aria-controls="navbarTogglerDemo01" aria-expanded="false" aria-label="Toggle navigation">
+  <nav class="navbar navbar-expand-lg navbar-light">
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarToggler"
+      aria-controls="navbarToggler" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
-    <div class="collapse navbar-collapse" id="navbarTogglerDemo01">
+    <div class="collapse navbar-collapse" id="navbarToggler">
       <a class="navbar-brand" href="{{  config.mesh.url }}">{{ config.mesh.name }}</a>
       <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
         {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes"] %}
