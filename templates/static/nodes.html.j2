@@ -161,10 +161,10 @@
           </td>
           <td class="hidden 2xl:table-cell p-1 border border-gray-400" align=right>
             {% if 'channel_utilization' in node.telemetry %}
-              {% if node.telemetry.channel_utilitization is number %}
+              {% if node.telemetry.channel_utilization is number %}
                 {{ node.telemetry.channel_utilization|round(1) }}%
               {% else %}
-                {{ node.telemetry.channel_utilitization }}
+                {{ node.telemetry.channel_utilization }}
               {% endif %}
             {% endif %}
           </td>
