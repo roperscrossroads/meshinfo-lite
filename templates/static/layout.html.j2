@@ -43,6 +43,16 @@
           <a class="nav-link" href="{{ page }}.html">{{ page.title() }} <span class="sr-only">(current)</span></a>
         </li>
         {% endfor %}
+        <li class="nav-item dropdown{% if this_page == "logs" %} active{% endif %}">
+          <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" data-toggle="dropdown"
+            aria-haspopup="true" aria-expanded="false">
+            Logs
+          </a>
+          <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+            <a class="dropdown-item" href="mesh_log.html">Mesh Messages</a>
+            <a class="dropdown-item" href="mqtt_log.html">MQTT Messages</a>
+          </div>
+        </li>
       </ul>
     </div>
   </nav>

@@ -11,6 +11,7 @@ import encoders
 import geo
 import meshtastic_support
 import utils
+import htmlmin
 
 class StaticHTMLRenderer:
   def __init__(self, config, data):
@@ -53,17 +54,34 @@ class StaticHTMLRenderer:
     if self.config['debug']:
       print(f"Rendering {filename}")
     html = self.render_html(filename, **kwargs)
-    self.save_file(filename, html)
-
+    self.save_file(filename, htmlmin.minify(html, remove_empty_space=True))
 
   ### Page Renderers
 
   def render_chat(self):
+    combined_chat = []
+    uniq = ""
+    for channel in self.data.chat["channels"]:
+      for message in self.data.chat["channels"][channel]["messages"]:
+        msg = dict(message)
+        msg['channel'] = channel
+        combined_chat.append(msg)
+    combined_chat = sorted(combined_chat, key=lambda x: x['timestamp'])
+    combined_chat.reverse()
+    unique_chat = []
+    for message in combined_chat:
+      current = message["from"] + message["to"] + message["text"]
+      if uniq == current:
+        continue
+      unique_chat.append(message)
+      uniq = current
+
+
     self.render_html_and_save(
       'chat.html',
       config=self.config,
       nodes=self.data.nodes,
-      chat=self.data.chat,
+      chat=unique_chat,
       utils=utils,
       datetime=datetime.datetime,
       zoneinfo=ZoneInfo(self.config['server']['timezone']),
