@@ -46,6 +46,11 @@
         <td>
           <a href="node_{{ message['from'] }}.html">{{ nodes[message["from"]].longname+" (" + nodes[message["from"]].shortname + ")" }}</a><br>
           <span style="font-size: 10px">Total Check-Ins: {{ monday.nodes[message['from']]['check_ins'] }}</span>
+          {% if ns.first %}
+            {% if monday.nodes[message['from']]['streak'] %}
+              <br><span style="font-size: 10px">🏃 {{ monday.nodes[message['from']]['streak'] + 1}} week streak</span>
+            {% endif %}
+          {% endif %}
         </td>
         {% else %}
         <td>{{ message["from"] }}</td>
