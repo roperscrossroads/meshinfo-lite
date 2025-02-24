@@ -12,6 +12,7 @@ import geo
 import meshtastic_support
 import utils
 import htmlmin
+from meshtastic_monday import MeshtasticMonday
 
 class StaticHTMLRenderer:
   def __init__(self, config, data):
@@ -37,6 +38,7 @@ class StaticHTMLRenderer:
     self.render_stats()
     self.render_telemetry()
     self.render_traceroutes()
+    self.render_monday()
     print("Done rendering static HTML files")
 
   def save_file(self, filename, content):
@@ -76,12 +78,24 @@ class StaticHTMLRenderer:
       unique_chat.append(message)
       uniq = current
 
-
     self.render_html_and_save(
       'chat.html',
       config=self.config,
       nodes=self.data.nodes,
       chat=unique_chat,
+      utils=utils,
+      datetime=datetime.datetime,
+      zoneinfo=ZoneInfo(self.config['server']['timezone']),
+      timestamp=datetime.datetime.now(ZoneInfo(self.config['server']['timezone']))
+    )
+  
+  def render_monday(self):
+    monday = MeshtasticMonday(self.data).get_data()
+    self.render_html_and_save(
+      'monday.html',
+      config=self.config,
+      nodes=self.data.nodes,
+      monday=monday,
       utils=utils,
       datetime=datetime.datetime,
       zoneinfo=ZoneInfo(self.config['server']['timezone']),

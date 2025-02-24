@@ -40,7 +40,7 @@
       <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
         {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes"] %}
         <li class="nav-item{% if page == this_page %} active{% endif %}">
-          <a class="nav-link" href="{{ page }}.html">{{ page.title() }} <span class="sr-only">(current)</span></a>
+          <a class="nav-link" href="{{ page }}.html">{{ page.title() }}</a>
         </li>
         {% endfor %}
         <li class="nav-item dropdown{% if this_page == "logs" %} active{% endif %}">
@@ -52,6 +52,9 @@
             <a class="dropdown-item" href="mesh_log.html">Mesh Messages</a>
             <a class="dropdown-item" href="mqtt_log.html">MQTT Messages</a>
           </div>
+        </li>
+        <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
+          <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
         </li>
       </ul>
     </div>
