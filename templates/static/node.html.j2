@@ -104,7 +104,7 @@
             <th scope="row" style="background: #F2F6F9; text-align: left;">Hardware</th>
             <td class="text-left">
               {% if node.hardware %}
-              {% if node.hardware in meshtastic_support.HardwareModel %}
+              {% if node.hardware in meshtastic_support.HardwareModel._value2member_map_ %}
               {% if meshtastic_support.HardwareModel(node.hardware) and meshtastic_support.HardwareModel(node.hardware)
               in
               meshtastic_support.HARDWARE_PHOTOS %}
