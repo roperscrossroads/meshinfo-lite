@@ -394,6 +394,7 @@ class MemoryDataStore:
           {
             "id": id,
             "name": node['longname'],
+            "short": node['shortname'],
             "height": 30,
             "stroke": None,
             'fill': {"src": utils.graph_icon(node['longname'])}
@@ -424,6 +425,7 @@ class MemoryDataStore:
           {
             "id": to,
             "name": to_node['longname'],
+            "short": to_node['shortname'],
             "height": 30,
             "stroke": None,
             'fill': {"src": utils.graph_icon(to_node['longname'])}

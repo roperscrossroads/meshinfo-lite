@@ -1,46 +1,45 @@
+{% set this_page = "telemetry" %}
 {% extends "templates/static/layout.html.j2" %}
 
 {% block title %}Telemetry{% endblock %}
 
 {% block content %}
-  <h5 class="mb-2 text-gray-500">Telemetry</h5>
-  <h1 class="mb-2 text-xl">Telemetry</h1>
-  <p class="mb-2">
-    Telemetry as seen by <a href="node_{{ config['server']['node_id'] }}.html">{{ config['server']['node_id'] }}</a> ({{ config['server']['node_id'] }}).
-  </p>
-
-  <table class="w-full max-w-full table-auto border-collapse border border-gray-500 bg-gray-50">
+<div class="container pt-3">
+  <h5>{{ this_page.title() }}</h5>
+  <table class="table table-striped table-bordered table-sm">
     <thead>
       <tr>
-        <th class="p-1 border border-gray-500 bg-gray-400" align=left>Timestamp</th>
-        <th class="p-1 border border-gray-500 bg-gray-400" align=left>Node</th>
-        <th class="p-1 border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/up.svg" alt="Air Util TX" class="w-4 h-4 inline-block" title="Air Util TX">
+        <th scope="col">Timestamp</th>
+        <th scope="col">Node</th>
+        <th scope="col">
+          <img src="images/icons/up.svg" alt="Air Util TX" title="Air Util TX" style="height:18px">
         </th>
-        <th class="p-1 border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/down.svg" class="w-4 h-4 inline-block" alt="Channel Util" title="Channel Util">
+        <th scope="col">
+          <img src="images/icons/down.svg" alt="Channel Util" title="Channel Util" style="height:18px">
         </th>
-        <th class="p-1 border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/battery.svg" class="w-6 h-6 inline-block" alt="Battery" title="Battery">
+        <th scope="col">
+          <img src="images/icons/battery.svg" alt="Battery" title="Battery" style="height:18px">
         </th>
-        <th class="p-1 border border-gray-500 bg-gray-400" align=center>Uptime</th>
-        <th class="p-1 border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/voltage.svg" class="w-4 h-4 inline-block" alt="Voltage" title="Voltage">
+        <th scope="col">Uptime</th>
+        <th scope="col">
+          <img src="images/icons/voltage.svg" alt="Voltage" title="Voltage" style="height:18px">
         </th>
-        <th class="p-1 hidden lg:table-cell border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/current.svg" class="w-5 h-5 inline-block" alt="Current" title="Current">
+        <th scope="col">
+          <img src="images/icons/current.svg" alt="Current" title="Current" style="height:18px">
         </th>
-        <th class="p-1 hidden lg:table-cell border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/pressure.svg" class="w-4 h-4 inline-block" alt="Barometric Pressure" title="Barometric Pressure">
+        <th scope="col">
+          <img src="images/icons/pressure.svg" alt="Barometric Pressure" title="Barometric Pressure"
+            style="height:18px">
         </th>
-        <th class="p-1 hidden lg:table-cell border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/relative-humidity.svg" class="w-4 h-4 inline-block" alt="Relative Humidity" title="Relative Humidity">
+        <th scope="col">
+          <img src="images/icons/relative-humidity.svg" alt="Relative Humidity" title="Relative Humidity"
+            style="height:18px">
         </th>
-        <th class="p-1 hidden lg:table-cell border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/temperature.svg" class="w-4 h-4 inline-block" alt="Temperature" title="Temperature">
+        <th scope="col">
+          <img src="images/icons/temperature.svg" alt="Temperature" title="Temperature" style="height:18px">
         </th>
-        <th class="p-1 hidden lg:table-cell border border-gray-500 bg-gray-400" align=center>
-          <img src="images/icons/resistance.svg" class="w-5 h-5 inline-block" alt="Gas Resistance" title="Gas Resistance">
+        <th scope="col">
+          <img src="images/icons/resistance.svg" alt="Gas Resistance" title="Gas Resistance" style="height:18px">
         </th>
       </tr>
     </thead>
@@ -48,41 +47,41 @@
       {% for item in telemetry[0:1000] %}
       {% set inode = nodes[item.from] %}
       <tr>
-        <td class="p-1 border border-gray-400 text-nowrap">
+        <td>
           {% if 'timestamp' in item %}
           {{ datetime.fromtimestamp(item.timestamp).astimezone(zoneinfo) }}
           {% else %}
-          <span class="text-gray-500">Unknown</span>
+          <span>Unknown</span>
           {% endif %}
         </td>
-        <td class="p-1 border border-gray-400">
+        <td>
           {% if inode %}
           <a href="node_{{ inode.id }}.html">{{ inode.shortname }}</a>
           {% else %}
-          <span class="text-gray-500">UNK</span>
+          <span>UNK</span>
           {% endif %}
         </td>
-        <td class="p-1 border border-gray-400" align=right>
+        <td>
           {% if item.payload.air_util_tx is defined %}
           {{ item.payload.air_util_tx | round(2) }}%
           {% endif %}
         </td>
-        <td class="p-1 border border-gray-400" align=right>
+        <td>
           {% if item.payload.channel_utilization is defined %}
           {{ item.payload.channel_utilization | round(1) }}%
           {% endif %}
         </td>
-        <td class="p-1 border border-gray-400" align=right>
+        <td>
           {% if item.payload.battery_level is defined %}
           {{ item.payload.battery_level | round(2) }}%
           {% endif %}
         </td>
-        <td class="p-1 border border-gray-400" align=right>
+        <td>
           {% if item.payload.uptime_seconds is defined %}
           {{ item.payload.uptime_seconds }}
           {% endif %}
         </td>
-        <td class="p-1 border border-gray-400 text-nowrap" align=right>
+        <td>
           {% if item.payload.voltage is defined %}
           {% if item.payload.voltage is string %}
           {{ item.payload.voltage }}
@@ -90,36 +89,37 @@
           {{ item.payload.voltage | round(2) }} V
           {% endif %}
           {% endif %}
-          {% if item.payload.voltage_ch1 is defined and item.payload.voltage_ch2 is defined and item.payload.voltage_ch3 is defined %}
+          {% if item.payload.voltage_ch1 is defined and item.payload.voltage_ch2 is defined and item.payload.voltage_ch3
+          is defined %}
           <table>
-          <tr>
-            <td>
-              Ch1
-            </td>
-            <td align=right class="pl-2">
-              {{ item.payload.voltage_ch1 | round(2) }} V<br/>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Ch2
-            </td>
-            <td align=right class="pl-2">
-              {{ item.payload.voltage_ch2 | round(2) }} V<br/>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Ch3
-            </td>
-            <td align=right class="pl-2">
-              {{ item.payload.voltage_ch3 | round(2) }} V
-            </td>
-          </tr>
+            <tr>
+              <td>
+                Ch1
+              </td>
+              <td>
+                {{ item.payload.voltage_ch1 | round(2) }} V<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch2
+              </td>
+              <td>
+                {{ item.payload.voltage_ch2 | round(2) }} V<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch3
+              </td>
+              <td>
+                {{ item.payload.voltage_ch3 | round(2) }} V
+              </td>
+            </tr>
           </table>
           {% endif %}
         </td>
-        <td class="hidden lg:table-cell p-1 border border-gray-400 text-nowrap" align=right>
+        <td>
           {% if 'current' in item.payload and item.payload.current is string %}
           {{ item.payload.current }}
           {% elif 'current' in item.payload %}
@@ -127,39 +127,39 @@
           {% endif %}
           {% if 'current_ch1' in item.payload and 'current_ch2' in item.payload and 'current_ch3' in item.payload %}
           <table>
-          <tr>
-            <td>
-              Ch1
-            </td>
-            <td align=right class="pl-2">
-              {{ item.payload.current_ch1 | round(2) }} mA<br/>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Ch2
-            </td>
-            <td align=right class="pl-2">
-              {{ item.payload.current_ch2 | round(2) }} mA<br/>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Ch3
-            </td>
-            <td align=right class="pl-2">
-              {{ item.payload.current_ch3 | round(2) }} mA
-            </td>
-          </tr>
+            <tr>
+              <td>
+                Ch1
+              </td>
+              <td>
+                {{ item.payload.current_ch1 | round(2) }} mA<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch2
+              </td>
+              <td>
+                {{ item.payload.current_ch2 | round(2) }} mA<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch3
+              </td>
+              <td>
+                {{ item.payload.current_ch3 | round(2) }} mA
+              </td>
+            </tr>
           </table>
           {% endif %}
         </td>
-        <td class="hidden lg:table-cell p-1 border border-gray-400 text-nowrap" align=right>
+        <td>
           {% if item.payload.barometric_pressure is defined %}
           {{ item.payload.barometric_pressure | round(2) }} hPa
           {% endif %}
         </td>
-        <td class="hidden lg:table-cell p-1 border border-gray-400 text-nowrap" align=right>
+        <td>
           {% if item.payload.relative_humidity is defined and item.payload.relative_humidity %}
           {% if item.payload.relative_humidity is string %}
           {{ item.payload.relative_humidity }}
@@ -168,16 +168,16 @@
           {% endif %}
           {% endif %}
         </td>
-        <td class="hidden lg:table-cell p-1 border border-gray-400 text-nowrap" align=right>
+        <td>
           {% if item.payload.temperature is defined %}
-            {% if item.payload.temperature is number %}
-              {{ item.payload.temperature | round(2) }}&deg;C
-            {% else %}
-              {{ item.payload.temperature }}
-            {% endif %}
+          {% if item.payload.temperature is number %}
+          {{ item.payload.temperature | round(2) }}&deg;C
+          {% else %}
+          {{ item.payload.temperature }}
+          {% endif %}
           {% endif %}
         </td>
-        <td class="hidden lg:table-cell p-1 border border-gray-400 text-nowrap" align=right>
+        <td>
           {% if item.payload.gas_resistance is defined %}
           {{ item.payload.gas_resistance | round(2) }} Ohm
           {% endif %}
@@ -186,4 +186,5 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
 {% endblock %}

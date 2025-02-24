@@ -2,60 +2,54 @@
 
 {% block title %}{{ node.shortname }} | Node | MeshInfo{% endblock %}
 {% block head %}
-  <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.css" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
-  <h5 class="mb-4 text-gray-500">
+<div class="container pt-3">
+<div class="container">
+  <p>
     <a href="nodes.html">Nodes</a> &gt; {{ node.shortname }}
-  </h5>
-
-  <div class="mb-4 flex flex-row">
-    <div class="mr-2">
-      <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed={{ node.id }}" alt="Avatar" class="w-16 h-16 mb-1 object-cover">
-    </div>
-    <div>
-      <h1 class="mb-2 text-xl">{{ node.shortname }} - {{ node.longname }}</h1>
-      <div class="flex align-middle mb-4">
+  </p>
+  <table>
+    <tr>
+      <td rowspan="2"><img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed={{ node.id }}" alt="Avatar"
+          style="height: 50px;"></td>
+      <td colspan="4">
+        <h5>{{ node.shortname }} - {{ node.longname }}</h5>
+      </td>
+    </tr>
+    <tr>
       {% if node.telemetry %}
-      {% if node.telemetry.air_util_tx %}
-          <span class="mr-4 align-middle" title="Air Util TX">
-            <img src="images/icons/up.svg" alt="Air Util TX" class="w-4 h-4 inline-block align-middle">
-            {{ node.telemetry.air_util_tx | round(1) }}%
-          </span>
+      <td class="text-center">
+        {% if node.telemetry.air_util_tx %}
+        <span class="text-center" title="Air Util TX">
+          <img src="images/icons/up.svg" alt="Air Util TX" style="height: 14px">
+          {{ node.telemetry.air_util_tx | round(1) }}%
+        </span>
         {% endif %}
+      </td>
+      <td class="text-center">
         {% if node.telemetry.channel_utilization %}
-          <span class="mr-4 align-middle" title="Channel Util">
-            <img src="images/icons/down.svg" alt="Channel Util" class="w-4 h-4 inline-block align-middle">
-            {{ node.telemetry.channel_utilization | round(1) }}%
-          </span>
+        <span class="text-center" title="Channel Util">
+          <img src="images/icons/down.svg" alt="Channel Util" style="height: 14px">
+          {{ node.telemetry.channel_utilization | round(1) }}%
+        </span>
         {% endif %}
+      </td>
+      <td class="text-center">
         {% if node.telemetry.battery_level %}
-          <span class="mr-4 align-middle" title="Battery Level">
-            <img src="images/icons/battery.svg" alt="Battery" class="w-4 h-4 inline-block align-middle">
-            {{ node.telemetry.battery_level | round(0) }}%
-          </span>
+        <span class="text-center" title="Battery Level">
+          <img src="images/icons/battery.svg" alt="Battery" style="height: 20px">
+          {{ node.telemetry.battery_level | round(0) }}%
+        </span>
         {% endif %}
-        {% if node.telemetry.temperature %}
-          <span class="mr-4 align-middle" title="Temperature">
-            <img src="images/icons/temperature.svg" alt="Temperature" class="w-4 h-4 inline-block align-middle">
-            {% if node.telemetry.temperature is number %}
-              {{ node.telemetry.temperature | round(1) }}&deg;C
-            {% else %}
-              {{ node.telemetry.temperature }}
-            {% endif %}
-          </span>
-        {% endif %}
-        {% if node.telemetry.humidity %}
-          <span class="mr-4 align-middle" title="Humidity">
-            <img src="images/icons/humidity.svg" alt="Humidity" class="w-4 h-4 inline-block align-middle">
-            {{ node.telemetry.humidity }}%
-          </span>
-        {% endif %}
+      </td>
+      <td class="text-center">
         {% if node.telemetry.voltage %}
-          <span class="mr-4 align-middle" title="Voltage">
-            <img src="images/icons/voltage.svg" alt="Voltage" class="w-4 h-4 inline-block align-middle">
+          <span class="text-center" title="Voltage">
+            <img src="images/icons/voltage.svg" alt="Voltage" style="height: 14px">
             {% if node.telemetry.voltage is number %}
               {{ node.telemetry.voltage | round(1) }}V
             {% else %}
@@ -63,353 +57,358 @@
             {% endif %}
           </span>
         {% endif %}
+      </td>
+      {% else %}
+      <td colspan="4"></td>
       {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="grid grid-col-1 md:grid-flow-col md:auto-cols-max">
-    <div class="w-auto sm:w-96 mb-4 md:mr-4">
+    </tr>
+  </table>
+</div>
+<div class="container">
+  <div class="row">
+    <div class="col-sm p-2">
       {% if node.position and node.position.latitude_i and node.position.longitude_i %}
-      <div class="w-auto sm:w-96 mb-4 md:mr-4">
-        <div id="map" class="map"></div>
-      </div>
+      <div id="map" class="map"></div>
       {% endif %}
-
+      <div class="w-100 mt-2 text-center fw-bold p-2" style="background: #D7F9FF;">Elsewhere</div>
       <div>
-        <h3 class="font-bold text-gray-600">Elsewhere</h3>
-        <div>
-          <a href="https://meshview.armooo.net/packet_list/{{ utils.convert_node_id_from_hex_to_int(node.id) }}" target="_blank">Armooo's MeshView</a><br/>
-          <a href="https://app.bayme.sh/node/{{ node.id }}" target="_blank">Bay Mesh Explorer</a><br/>
-          <a href="https://meshtastic.liamcottle.net/?node_id={{ utils.convert_node_id_from_hex_to_int(node.id) }}" target="_blank">Liam's Map</a><br/>
-          <a href="https://meshmap.net/#{{ utils.convert_node_id_from_hex_to_int(node.id) }}" target="_blank">MeshMap</a>
-        </div>
+        <a href="https://meshview.zr1rf.za.net/packet_list/{{ utils.convert_node_id_from_hex_to_int(node.id) }}"
+          target="_blank">Armooo's MeshView</a><br />
+        <a href="https://app.bayme.sh/node/{{ node.id }}" target="_blank">Bay Mesh Explorer</a><br />
+        <a href="https://meshtastic.liamcottle.net/?node_id={{ utils.convert_node_id_from_hex_to_int(node.id) }}"
+          target="_blank">Liam's Map</a><br />
+        <a href="https://meshmap.net/#{{ utils.convert_node_id_from_hex_to_int(node.id) }}" target="_blank">MeshMap</a>
       </div>
     </div>
-
-    <div class="w-auto md:w-96">
-      <div class="mb-4">
-        <h3 class="mb-2 font-bold text-gray-600">Details</h3>
-        <table class="table-auto min-w-full border border-gray-200 bg-gray-50">
-          <tbody class="divide-y divide-dashed divide-gray-200">
-            <tr>
-              <th class="p-1" align=left>ID (hex)</th>
-              <td class="p-1">{{ node.id }}</td>
-            </tr>
-            <tr>
-              <th class="p-1" align=left>ID (int)</th>
-              <td class="p-1">{{ utils.convert_node_id_from_hex_to_int(node.id) }}</td>
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Hardware</th>
-              <td class="p-1">
+    <div class="col-sm p-2">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th colspan="2" scope="col">Details</th>
+          </tr>
+        </thead>
+        <tbody style="background: #F2F6F9;">
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">ID (hex)</th>
+            <td class="text-left">
+              {{ node.id }}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">ID (int)</th>
+            <td class="text-left">
+              {{ utils.convert_node_id_from_hex_to_int(node.id) }}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Hardware</th>
+            <td class="text-left">
               {% if node.hardware %}
-                {% if node.hardware in meshtastic_support.HardwareModel._value2member_map_ %}
-                  {% if meshtastic_support.HardwareModel(node.hardware) and meshtastic_support.HardwareModel(node.hardware) in meshtastic_support.HARDWARE_PHOTOS %}
-                  <img src="images/hardware/{{ meshtastic_support.HARDWARE_PHOTOS[meshtastic_support.HardwareModel(node.hardware)] }}" alt="{{ meshtastic_support.HardwareModel(node.hardware).name }}" title="{{ meshtastic_support.HardwareModel(node.hardware).name }}" class="w-16 h-16 mb-1 object-cover">
-                  {% else %}
-                  {{ meshtastic_support.HardwareModel(node.hardware).name }}
-                  {% endif %}
-                {% else %}
-                {{ node.hardware }}
-                {% endif %}
+              {% if node.hardware in meshtastic_support.HardwareModel %}
+              {% if meshtastic_support.HardwareModel(node.hardware) and meshtastic_support.HardwareModel(node.hardware)
+              in
+              meshtastic_support.HARDWARE_PHOTOS %}
+              <img
+                src="images/hardware/{{ meshtastic_support.HARDWARE_PHOTOS[meshtastic_support.HardwareModel(node.hardware)] }}"
+                alt="{{ meshtastic_support.HardwareModel(node.hardware).name }}"
+                title="{{ meshtastic_support.HardwareModel(node.hardware).name }}" class="rounded"
+                style="max-height: 100px;">
               {% else %}
-                Unknown
+              {{ meshtastic_support.HardwareModel(node.hardware).name }}
               {% endif %}
-              </td>
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Firmware version</th>
-              <td class="p-1">
+              {% else %}
+              {{ node.hardware }}
+              {% endif %}
+              {% else %}
+              Unknown
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Firmware version</th>
+            <td class="text-left">
               {% if node.mapreport and 'firmware_version' in node.mapreport and node.mapreport.firmware_version %}
-                {{ node.mapreport.firmware_version }}
+              {{ node.mapreport.firmware_version }}
               {% else %}
-                Unknown
+              Unknown
               {% endif %}
-              </td>
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Role</th>
-              <td class="p-1">
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Role</th>
+            <td class="text-left">
               {% if node.role is not none %}
-                {% if node.role == 0 %}
-                Client
-                {% elif node.role == 1 %}
-                Client Mute
-                {% elif node.role == 2 %}
-                Router
-                {% elif node.role == 3 %}
-                Router Client
-                {% elif node.role == 4 %}
-                Repeater
-                {% elif node.role == 5 %}
-                Tracker
-                {% elif node.role == 6 %}
-                Sensor
-                {% elif node.role == 7 %}
-                ATAK
-                {% elif node.role == 8 %}
-                Client Hidden
-                {% elif node.role == 9 %}
-                Lost and Found
-                {% elif node.role == 10 %}
-                ATAK Tracker
-                {% else %}
-                Unknown
-                {% endif %}
+              {% if node.role == 0 %}
+              Client
+              {% elif node.role == 1 %}
+              Client Mute
+              {% elif node.role == 2 %}
+              Router
+              {% elif node.role == 3 %}
+              Router Client
+              {% elif node.role == 4 %}
+              Repeater
+              {% elif node.role == 5 %}
+              Tracker
+              {% elif node.role == 6 %}
+              Sensor
+              {% elif node.role == 7 %}
+              ATAK
+              {% elif node.role == 8 %}
+              Client Hidden
+              {% elif node.role == 9 %}
+              Lost and Found
+              {% elif node.role == 10 %}
+              ATAK Tracker
               {% else %}
-                Unknown
+              Unknown
               {% endif %}
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Position</th>
-              <td class="p-1">
+              {% else %}
+              Unknown
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Position</th>
+            <td class="text-left">
               {% if node.position and node.position.latitude_i and node.position.longitude_i %}
-                {{ node.position.longitude_i / 1e7 }}, {{ node.position.latitude_i / 1e7 }}
+              {{ node.position.longitude_i / 1e7 }}, {{ node.position.latitude_i / 1e7 }}
               {% else %}
-                Unknown
+              Unknown
               {% endif %}
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Location</th>
-              <td class="p-1">
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Location</th>
+            <td class="text-left">
               {% if node.position and node.position.geocoded %}
-                {{ node.position.geocoded.display_name }}
+              {{ node.position.geocoded.display_name }}
               {% else %}
-                Unknown
+              Unknown
               {% endif %}
-              </td>
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Altitude</th>
-              <td class="p-1">
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Altitude</th>
+            <td class="text-left">
               {% if node.position and node.position.altitude %}
-                {{ node.position.altitude }} m
+              {{ node.position.altitude }} m
               {% else %}
-                Unknown
+              Unknown
               {% endif %}
-              </td>
-            </tr>
-            <tr>
-              {% set server_node = nodes[config['server']['node_id']] %}
-              {% set distance_from_server_node = utils.calculate_distance_between_nodes(server_node, node) %}
-              <th class="p-1 text-nowrap whitespace-nowrap" align=left>
-                Distance from {{ server_node.shortname }}
-              </th>
-              <td class="p-1">
-              {% if distance_from_server_node != None %}
-                {{ distance_from_server_node }} km
-              {% else %}
-                Unknown
-              {% endif %}
-              </td>
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Status</th>
-              <td class="p-1">
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Status</th>
+            <td class="text-left">
               {% if node.active %}
-                <span class="text-green-500">Online</span>
+              <span class="text-success">Online</span>
               {% else %}
-                <span class="text-gray-700">Offline</span>
+              <span class="text-secondary">Offline</span>
               {% endif %}
-              </td>
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Last Seen</th>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Last Seen</th>
+            <td class="text-left">
               {% if node.last_seen %}
-              <td class="p-1 text-nowrap" title="{{ node.last_seen }}">{{ node.last_seen }}</td>
+              {{ node.last_seen }}
               {% else %}
-              <td>Unknown</td>
+              Unknown
               {% endif %}
-            </tr>
-            <tr>
-              <th class="p-1" align=left>Updated via</th>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Updated via</th>
+            <td class="text-left">
               {% if node.updated_via %}
-                {% if node.updated_via == node.id %}
-                  <td class="p-1 text-nowrap">Self</td>
-                {% elif node.updated_via in nodes %}
-                  <td class="p-1 text-nowrap"><a href='node_{{ nodes[node.updated_via]["id"] }}.html'>{{ nodes[node.updated_via]["longname"] }}</a></td>
-                {% else %}
-                  <td class="p-1 text-nowrap">{{ node.updated_via }}</td>
-                {% endif %}
+              {% if node.updated_via == node.id %}
+              Self
+              {% elif node.updated_via in nodes %}
+              <a href='node_{{ nodes[node.updated_via]["id"] }}.html'>{{ nodes[node.updated_via]["longname"] }}</a>
               {% else %}
-              <td>Unknown</td>
+              {{ node.updated_via }}
               {% endif %}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="mb-4">
-        <h3 class="mb-2 font-bold text-gray-600">Heard (zero hop)</h3>
-        <table class="table-auto min-w-full border border-gray-200 bg-gray-50">
-          <tbody class="divide-y divide-dashed divide-gray-200">
+              {% else %}
+              Unknown
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <table class="table table-striped table-sm">
+        <thead>
+          <tr>
+            <th colspan="3" scope="col">Heard (zero hop)</th>
+          </tr>
+        </thead>
+        <tbody>
           {% for neighbor in node.neighborinfo.neighbors %}
-            {% set nid = utils.convert_node_id_from_int_to_hex(neighbor.node_id) %}
-            {% set nnode = nodes[nid] if nid in nodes else None %}
-            <tr>
-              <td class="w-1/3 p-1 text-nowrap">
-                {% if nnode %}
-                <a href="node_{{ nnode.id }}.html">{{ nnode.shortname }}</a>
-                {% else %}
-                <span class="text-gray-500">UNK</span>
-                {% endif %}
-              </td>
-              <td class="p-1 text-nowrap">
-                SNR: {{ neighbor.snr }}
-              </td>
-              <td class="p-1 text-nowrap" align=right>
-                {% if nnode %}
-                {% set dist = utils.calculate_distance_between_nodes(nnode, node) %}
-                {% if dist %}
-                {{ dist }} km
-                {% endif %}
-                {% endif %}
-              </td>
-            </tr>
+          {% set nid = utils.convert_node_id_from_int_to_hex(neighbor.node_id) %}
+          {% set nnode = nodes[nid] if nid in nodes else None %}
+          <tr>
+            <td scope="col">
+              {% if nnode %}
+              <a href="node_{{ nnode.id }}.html">{{ nnode.shortname }}</a>
+              {% else %}
+              <span class="text-secondary">UNK</span>
+              {% endif %}
+            </td>
+            <td scope="col">
+              SNR: {{ neighbor.snr }}
+            </td>
+            <td scope="col">
+              {% if nnode %}
+              {% set dist = utils.calculate_distance_between_nodes(nnode, node) %}
+              {% if dist %}
+              {{ dist }} km
+              {% endif %}
+              {% endif %}
+            </td>
+          </tr>
           {% endfor %}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="mb-4">
-        <h3 class="mb-2 font-bold text-gray-600">Heard By (zero hop)</h3>
-        <table class="table-auto min-w-full border border-gray-200 bg-gray-50">
-          <tbody class="divide-y divide-dashed divide-gray-200">
+        </tbody>
+      </table>
+      <table class="table table-striped table-sm">
+        <thead>
+          <tr>
+            <th colspan="3" scope="col">Heard By (zero hop)</th>
+          </tr>
+        </thead>
+        <tbody>
           {% for id, nnode in nodes.items() %}
-            {% if nnode.neighborinfo and nnode.neighborinfo.neighbors %}
-              {% for neighbor in nnode.neighborinfo.neighbors %}
-                {% if utils.convert_node_id_from_int_to_hex(neighbor.node_id) == node.id %}
-                <tr>
-                  <td class="w-1/3 p-1 text-nowrap" width=25%>
-                    {% if id in nodes %}
-                      <a href="node_{{ id }}.html">{{ nodes[id].shortname }}</a>
-                    {% else %}
-                      <span class="text-gray-500">UNK</span>
-                    {% endif %}
-                  </td>
-                  <td class="p-1 text-nowrap">
-                    SNR: {{ neighbor.snr }}
-                  </td>
-                  <td class="p-1 text-nowrap" align=right>
-                    {% set dist = utils.calculate_distance_between_nodes(nodes[id], node) %}
-                    {% if dist %}
-                    {{ dist }} km
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endif %}
-              {% endfor %}
-            {% endif %}
+          {% if nnode.neighborinfo and nnode.neighborinfo.neighbors %}
+          {% for neighbor in nnode.neighborinfo.neighbors %}
+          {% if utils.convert_node_id_from_int_to_hex(neighbor.node_id) == node.id %}
+          <tr>
+            <td scope="col">
+              {% if id in nodes %}
+              <a href="node_{{ id }}.html">{{ nodes[id].shortname }}</a>
+              {% else %}
+              <span class="text-secondary">UNK</span>
+              {% endif %}
+            </td>
+            <td scope="col">
+              SNR: {{ neighbor.snr }}
+            </td>
+            <td scope="col">
+              {% set dist = utils.calculate_distance_between_nodes(nodes[id], node) %}
+              {% if dist %}
+              {{ dist }} km
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
           {% endfor %}
-          </tbody>
-        </table>
-      </div>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
-
-
-  <script type="module">
-    var defaultStyle = new ol.style.Style({
-      image: new ol.style.Circle({
-        radius: 6,
-        fill: new ol.style.Fill({
-          color: 'rgba(0, 0, 240, 1)'
-        }),
-        stroke: new ol.style.Stroke({
-          color: 'white',
-          width: 2
-        })
+</div>
+<script type="module">
+  var defaultStyle = new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 6,
+      fill: new ol.style.Fill({
+        color: 'rgba(0, 0, 240, 1)'
+      }),
+      stroke: new ol.style.Stroke({
+        color: 'white',
+        width: 2
       })
-    });
+    })
+  });
 
-    var offlineStyle = new ol.style.Style({
-      image: new ol.style.Circle({
-        radius: 6,
-        fill: new ol.style.Fill({
-          color: 'rgba(0, 0, 0, 0.50)'
-        }),
-        stroke: new ol.style.Stroke({
-          color: 'white',
-          width: 2
-        })
+  var offlineStyle = new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 6,
+      fill: new ol.style.Fill({
+        color: 'rgba(0, 0, 0, 0.50)'
+      }),
+      stroke: new ol.style.Stroke({
+        color: 'white',
+        width: 2
       })
-    });
+    })
+  });
 
-    var onlineStyle = new ol.style.Style({
-      image: new ol.style.Circle({
-        radius: 6,
-        fill: new ol.style.Fill({
-          color: 'rgba(50, 240, 50, 1)'
-        }),
-        stroke: new ol.style.Stroke({
-          color: 'white',
-          width: 2
-        })
+  var onlineStyle = new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 6,
+      fill: new ol.style.Fill({
+        color: 'rgba(50, 240, 50, 1)'
+      }),
+      stroke: new ol.style.Stroke({
+        color: 'white',
+        width: 2
       })
-    });
+    })
+  });
 
-    var node = {
-      id: '{{ node.id }}',
-      shortname: '{{ node.shortname }}',
-      longname: '{{ node.longname }}',
-      last_seen: '{{ node.last_seen }}',
-      position: {
-        latitude: 38.575764,
-        longitude: -121.478851
-      },
-      active: {{ node.active | tojson }},
+  var node = {
+    id: '{{ node.id }}',
+    shortname: '{{ node.shortname }}',
+    longname: '{{ node.longname }}',
+    last_seen: '{{ node.last_seen }}',
+    position: {
+      latitude: 38.575764,
+      longitude: -121.478851
+    },
+    active: {{ node.active | tojson }},
     };
 
-    {% if node.position and node.position.longitude_i and node.position.latitude_i %}
-    node.position.latitude = {{ node.position.latitude_i / 1e7 }};
-    node.position.longitude = {{ node.position.longitude_i / 1e7 }};
-    {% endif %}
+  {% if node.position and node.position.longitude_i and node.position.latitude_i %}
+  node.position.latitude = {{ node.position.latitude_i / 1e7 }};
+  node.position.longitude = {{ node.position.longitude_i / 1e7 }};
+  {% endif %}
 
-    {% if node.position and node.position.altitude %}
-    node.position.altitude = {{ node.position.altitude }};
-    {% endif %}
+  {% if node.position and node.position.altitude %}
+  node.position.altitude = {{ node.position.altitude }};
+  {% endif %}
 
-    {% if node.position and node.position.latitude_i and node.position.longitude_i %}
-    const map = new ol.Map({
-      layers: [
-        new ol.layer.Tile({
-          source: new ol.source.OSM(),
-        }),
-      ],
-      target: 'map',
-      view: new ol.View({
-        center: ol.proj.fromLonLat([node.position.longitude, node.position.latitude]),
-        zoom: 12,
+  {% if node.position and node.position.latitude_i and node.position.longitude_i %}
+  const map = new ol.Map({
+    layers: [
+      new ol.layer.Tile({
+        source: new ol.source.OSM(),
       }),
-    });
+    ],
+    target: 'map',
+    view: new ol.View({
+      center: ol.proj.fromLonLat([node.position.longitude, node.position.latitude]),
+      zoom: 12,
+    }),
+  });
 
-    var features = [];
-    var feature = new ol.Feature({
-      geometry: new ol.geom.Point(ol.proj.fromLonLat([node.position.longitude, node.position.latitude])),
-      node: node,
-    });
-    if (node.active) {
-      feature.setStyle(onlineStyle);
-    } else {
-      feature.setStyle(offlineStyle);
-    }
-    features.push(feature);
+  var features = [];
+  var feature = new ol.Feature({
+    geometry: new ol.geom.Point(ol.proj.fromLonLat([node.position.longitude, node.position.latitude])),
+    node: node,
+  });
+  if (node.active) {
+    feature.setStyle(onlineStyle);
+  } else {
+    feature.setStyle(offlineStyle);
+  }
+  features.push(feature);
 
-    const layer = new ol.layer.Vector({
-      style: defaultStyle,
-      source: new ol.source.Vector({
-        features: features
-      })
-    });
-    map.addLayer(layer);
-    {% endif %}
+  const layer = new ol.layer.Vector({
+    style: defaultStyle,
+    source: new ol.source.Vector({
+      features: features
+    })
+  });
+  map.addLayer(layer);
+  {% endif %}
 
-  </script>
-  <style>
-    #map {
-      height: 300px;
-      width: 100%;
-    }
-  </style>
+</script>
+<style>
+  #map {
+    height: 300px;
+    width: 100%;
+  }
+</style>
+</div>
 {% endblock %}

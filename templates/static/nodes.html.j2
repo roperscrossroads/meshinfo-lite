@@ -4,12 +4,13 @@
 {% block title %}Nodes{% endblock %}
 
 {% block content %}
+<div class="container pt-3">
 <h5>{{ this_page.title() }}</h5>
 <p>
   There are <b>{{ active_nodes|count }}</b> active out of a total of <b>{{ nodes|count }}</b>.
 </p>
 <div class="table-responsive">
-  <table class="table table-striped table-bordered">
+  <table class="table table-striped table-bordered table-sm">
     <thead>
       <tr>
         <th colspan="2" scope="col">ID</th>
@@ -45,9 +46,9 @@
         <th scope="col">Since</th>
       </tr>
     <tbody>
-      {% for id, node in active_nodes.items() %}
+      {% for id, node in active_nodes.items()|sort(attribute='1.shortname') %}
       <tr>
-        <td scope="col" class="p-0" style="width:50px;">
+        <td class="p-0" style="width:50px;">
           <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed={{ id }}" alt="Avatar"
             style="height: 50px; width: 50px;">
         </td>
@@ -177,5 +178,6 @@
 
     </thead>
   </table>
+</div>
 </div>
 {% endblock %}
