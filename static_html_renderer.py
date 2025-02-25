@@ -115,11 +115,15 @@ class StaticHTMLRenderer:
     )
 
   def render_index(self):
+    active_nodes = {}
+    for id, node in self.data.nodes.items():
+        if 'active' in node and node['active']:
+            active_nodes[id] = self._serialize_node(node)
     self.render_html_and_save(
       'index.html',
       config=self.config,
       nodes=self.data.nodes,
-      active_nodes=self.data.nodes,
+      active_nodes=active_nodes,
       datetime=datetime.datetime,
       zoneinfo=ZoneInfo(self.config['server']['timezone']),
       timestamp=datetime.datetime.now(ZoneInfo(self.config['server']['timezone']))
