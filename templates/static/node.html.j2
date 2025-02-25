@@ -179,6 +179,17 @@
             </td>
           </tr>
           <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Grid Square</th>
+            <td class="text-left">
+              {% if node.position and node.position.latitude_i and node.position.longitude_i %}
+              {% set grid = utils.latlon_to_grid(node.position.latitude_i / 1e7, node.position.longitude_i / 1e7) %}
+              {{ grid }}
+              {% else %}
+              Unknown
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
             <th scope="row" style="background: #F2F6F9; text-align: left;">Location</th>
             <td class="text-left">
               {% if node.position and node.position.geocoded %}
