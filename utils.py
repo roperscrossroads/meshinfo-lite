@@ -46,6 +46,21 @@ def geocode_position(api_key: str, latitude: float, longitude: float):
   print(f"Geocoded {latitude}, {longitude} to {response.json()}")
   return response.json()
 
+def latlon_to_grid(lat, lon):
+  """Convert latitude and longitude to Maidenhead grid locator."""
+  lon += 180
+  lat += 90
+
+  grid = ""
+  grid += chr(int(lon / 20) + ord('A'))  # First character (longitude field)
+  grid += chr(int(lat / 10) + ord('A'))  # Second character (latitude field)
+  grid += str(int((lon % 20) / 2))       # Third character (longitude square)
+  grid += str(int((lat % 10) / 1))       # Fourth character (latitude square)
+  grid += chr(int((lon % 2) * 12) + ord('a'))  # Fifth character (longitude subsquare)
+  grid += chr(int((lat % 1) * 24) + ord('a'))  # Sixth character (latitude subsquare)
+
+  return grid
+
 def graph_icon(name):
    if "qth" in name.lower():
       return "/images/icons/house.png"

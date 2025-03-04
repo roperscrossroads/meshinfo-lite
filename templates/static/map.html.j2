@@ -1,3 +1,4 @@
+{% set this_page = "map" %}
 {% extends "templates/static/layout.html.j2" %}
 
 {% block title %}Map | MeshInfo{% endblock %}
@@ -12,25 +13,25 @@
     <a href="#" id="popup-closer" class="ol-popup-closer"></a>
     <div id="popup-content"></div>
   </div>
-  <div id="details" class="p-4 bg-white">
-    <div class="flex items-center w-full justify-items-stretch">
-      <div id="details-title" class="flex-auto text-lg text-start">NODE NAME</div>
-      <div id="details-subtitle" class="flex-auto ml-4 text-sm text-end">NODE</div>
+  <div id="details" class="p-2" style="background-color: white;">
+    <div>
+      <div id="details-title"></div>
+      <div id="details-subtitle"></div>
     </div>
-    <div id="details-content" class="align-items-center">
+    <div id="details-content">
     </div>
   </div>
-  <div id="legend" class="p-2 bg-white">
-    <div class="text-lg">LEGEND</div>
-    <div class="align-items-center">
-      <div class="inline-block w-12 h-1 bg-green-400"></div>
-      <div class="inline-block">Heard A Neighbor</div>
+  <div id="legend" class="p-2" style="background-color: #ffffff;">
+    <div>LEGEND</div>
+    <div>
+      <div style="background-color: #66FF66; height: 4px; width: 25px; display: inline-flex;"></div> Heard A Neighbor
+      <div</div>
     </div>
     <div>
-      <div class="inline-block w-12 h-1 bg-blue-400"></div> Heard By Neighbor
+      <div style="background-color: #6666FF; height: 4px; width: 25px; display: inline-flex;"></div> Heard By Neighbor
     </div>
     <div>
-      <div class="inline-block w-12 h-1 bg-purple-400"></div> Both Heard Each Other
+      <div style="background-color: #FF66FF; height: 4px; width: 25px; display: inline-flex;"></div> Both Heard Each Other
     </div>
   </div>
   <script type="module">
@@ -221,6 +222,7 @@
       nodeTitle.innerHTML = '';
       nodeSubtitle.innerHTML = '';
       nodeContent.innerHTML = '';
+      $('#details').hide();
       return false;
     };
 
@@ -231,6 +233,7 @@
       neighborLayers = [];
 
       if (map.hasFeatureAtPixel(event.pixel) === true) {
+        $('#details').show();
         var coordinate = event.coordinate;
         var feature = map.forEachFeatureAtPixel(event.pixel, function(feature) {
           return feature;
@@ -251,19 +254,21 @@
           if (node.neighbors.length == 0) {
             panel += 'None';
           } else {
-            panel += "<table border=1 cellpadding=2 cellspacing=0 width=100% class='border border-gray-300'>";
-            panel += "<tr><th width=33% align=left>Node</th><th width=33% align=center>SNR</th><th width=33% align=right>Distance</th></tr>";
+            panel += "<table class='table table-striped table-bordered table-sm'>";
+            panel += "<thead><tr><th>Node</th><th>SNR</th><th>Distance</th></tr></thead>";
+            panel += "<tbody>";
             panel += node.neighbors.map(function(neighbor) {
               var nnode = nodes[neighbor.id];
               if (!nnode) {
-                return '<tr><td class="text-gray-600">UNK</td><td align=center>' + neighbor.snr + '</td><td></td></tr>';
+                return '<tr><td class="secondary-text">UNK</td><td>' + neighbor.snr + '</td><td></td></tr>';
               }
               const distance = Math.sqrt(
                 Math.pow(node.position[0] - nnode.position[0], 2) +
                 Math.pow(node.position[1] - nnode.position[1], 2)
               ) * 111.32;
-              return '<tr><td align=left><a href="node_' + nnode.id + '.html">' + nnode.shortname + '</a></td><td align=center>' + neighbor.snr + '</td><td align=right>' + distance.toFixed(2) + ' km</td></tr>';
+              return '<tr><td><a href="node_' + nnode.id + '.html">' + nnode.shortname + '</a></td><td>' + neighbor.snr + '</td><td>' + distance.toFixed(2) + ' km</td></tr>';
             }).join('');
+            panel += "</tbody>";
             panel += "</table>";
 
             node.neighbors.map(function(neighbor) {
@@ -306,23 +311,25 @@
           if (heard_by.length == 0) {
             panel += 'None<br/>';
           } else {
-            panel += "<table border=1 cellpadding=2 cellspacing=0 width=100% class='border border-gray-300'>";
-            panel += "<tr><th width=33% align=left>Node</th><th width=33% align=center>SNR</th><th width=33% align=right>Distance</th></tr>";
+            panel += "<table class='table table-striped table-bordered table-sm'>";
+            panel += "<thead><tr><th>Node</th><th>SNR</th><th>Distance</th></tr></thead>";
+            panel += "<tbody>";
             panel += heard_by.map(function(id) {
               var nnode = nodes[id];
               var neighbor = nnode.neighbors.find(function(neighbor) {
                 return neighbor.id == node.id;
               });
               if (!nnode) {
-                return '<tr><td class="text-gray-600">UNK</td><td align=center>' + neighbor.snr + '</td><td></td></tr>';
+                return '<tr><td class="text-secondary">UNK</td><td>' + neighbor.snr + '</td><td></td></tr>';
               }
               // calculate distance between two nodes without using ol.sphere
               const distance = Math.sqrt(
                 Math.pow(node.position[0] - nnode.position[0], 2) +
                 Math.pow(node.position[1] - nnode.position[1], 2)
               ) * 111.32;
-              return '<tr><td align=left><a href="node_' + nnode.id + '.html">' + nnode.shortname + '</a></td><td align=center>' + neighbor.snr + '</td><td align=right>' + distance.toFixed(2) + ' km</td></tr>';
+              return '<tr><td><a href="node_' + nnode.id + '.html">' + nnode.shortname + '</a></td><td>' + neighbor.snr + '</td><td>' + distance.toFixed(2) + ' km</td></tr>';
             }).join('');
+            panel += "</tbody>";
             panel += "</table>";
 
             // add the heard_by lines
@@ -369,8 +376,7 @@
 
           panel += '<b>Elsewhere</b><br/>';
           var node_id = parseInt(node.id, 16);
-          panel += '<a href="https://meshview.armooo.net/packet_list/' + node_id + '" target="_blank">Armooo\'s MeshView</a><br/>';
-          panel += '<a href="https://app.bayme.sh/node/' + node.id + '" target="_blank">Bay Mesh Explorer</a><br/>';
+          panel += '<a href="https://meshview.zr1rf.za.net/packet_list/' + node_id + '" target="_blank">Armooo\'s MeshView</a><br/>';
           panel += '<a href="https://meshtastic.liamcottle.net/?node_id=' + node_id + '" target="_blank">Liam\'s Map</a><br/>';
           panel += '<a href="https://meshmap.net/#' + node_id + '" target="_blank">MeshMap</a><br/>';
 
@@ -387,6 +393,7 @@
           nodeTitle.innerHTML = 'Unknown';
           nodeSubtitle.innerHTML = 'UNK';
           nodeContent.innerHTML = '';
+          $('#details').hide();
         }
       } else {
         //overlay.setPosition(undefined);
@@ -394,8 +401,10 @@
         nodeSubtitle.innerHTML = '';
         nodeContent.innerHTML = '';
         closer.blur();
+        $('#details').hide();
       }
     });
+    $('#details').hide();
   </script>
   <style>
     #map {

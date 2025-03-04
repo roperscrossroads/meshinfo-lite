@@ -11,6 +11,8 @@ import encoders
 import geo
 import meshtastic_support
 import utils
+import htmlmin
+from meshtastic_monday import MeshtasticMonday
 
 class StaticHTMLRenderer:
   def __init__(self, config, data):
@@ -36,6 +38,7 @@ class StaticHTMLRenderer:
     self.render_stats()
     self.render_telemetry()
     self.render_traceroutes()
+    self.render_monday()
     print("Done rendering static HTML files")
 
   def save_file(self, filename, content):
@@ -53,17 +56,46 @@ class StaticHTMLRenderer:
     if self.config['debug']:
       print(f"Rendering {filename}")
     html = self.render_html(filename, **kwargs)
-    self.save_file(filename, html)
-
+    self.save_file(filename, htmlmin.minify(html, remove_empty_space=True))
 
   ### Page Renderers
 
   def render_chat(self):
+    combined_chat = []
+    uniq = ""
+    for channel in self.data.chat["channels"]:
+      for message in self.data.chat["channels"][channel]["messages"]:
+        msg = dict(message)
+        msg['channel'] = channel
+        combined_chat.append(msg)
+    combined_chat = sorted(combined_chat, key=lambda x: x['timestamp'])
+    combined_chat.reverse()
+    unique_chat = []
+    for message in combined_chat:
+      current = message["from"] + message["to"] + message["text"]
+      if uniq == current:
+        continue
+      unique_chat.append(message)
+      uniq = current
+
     self.render_html_and_save(
       'chat.html',
       config=self.config,
       nodes=self.data.nodes,
-      chat=self.data.chat,
+      chat=unique_chat,
+      utils=utils,
+      datetime=datetime.datetime,
+      zoneinfo=ZoneInfo(self.config['server']['timezone']),
+      timestamp=datetime.datetime.now(ZoneInfo(self.config['server']['timezone']))
+    )
+  
+  def render_monday(self):
+    monday = MeshtasticMonday(self.data).get_data()
+    self.render_html_and_save(
+      'monday.html',
+      config=self.config,
+      nodes=self.data.nodes,
+      monday=monday,
       utils=utils,
       datetime=datetime.datetime,
       zoneinfo=ZoneInfo(self.config['server']['timezone']),
@@ -83,11 +115,15 @@ class StaticHTMLRenderer:
     )
 
   def render_index(self):
+    active_nodes = {}
+    for id, node in self.data.nodes.items():
+        if 'active' in node and node['active']:
+            active_nodes[id] = self._serialize_node(node)
     self.render_html_and_save(
       'index.html',
       config=self.config,
       nodes=self.data.nodes,
-      active_nodes=self.data.nodes,
+      active_nodes=active_nodes,
       datetime=datetime.datetime,
       zoneinfo=ZoneInfo(self.config['server']['timezone']),
       timestamp=datetime.datetime.now(ZoneInfo(self.config['server']['timezone']))
