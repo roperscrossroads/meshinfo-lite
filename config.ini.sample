@@ -1,0 +1,32 @@
+[mesh]
+name=ZA Mesh
+description=Serving Meshtastic to South Africa.
+contact=dade@dade.co.za
+url=http://localhost:8080
+latitude=-33.918861
+longitude=18.423300
+
+[mqtt]
+broker=mqtt.zr1rf.za.net
+port=1883
+topic=msh/ZA/#
+username=meshdev
+password=large4cats
+
+[database]
+host=mariadb
+username=meshdata
+password=passw0rd
+database=meshdata
+
+[webserver]
+port=8000
+
+[server]
+node_activity_prune_threshold=7200
+render_interval=15
+debug=true
+
+[geocoding]
+enabled=false
+apikey=YOUR_KEY_HERE

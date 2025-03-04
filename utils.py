@@ -95,7 +95,9 @@ def graph_icon(name):
         "edc": "heltec",
         "mqtt": "computer",
         "bridge": "computer",
-        "meshtastic": "clown",
+        "meshtastic": "meshtastic",
+        "bbs": "bbs",
+        "narf": "narf"
     }
     for key, icon in icons.items():
         if key in name.lower():

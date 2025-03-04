@@ -1,11 +1,12 @@
 import meshinfo_web
 import meshinfo_mqtt
 import meshinfo_renderer
-from meshdata import MeshData
+from meshdata import MeshData, create_database
 import threading
 import logging
 import colorlog
 import configparser
+import time
 import sys
 import os
 
@@ -60,12 +61,25 @@ if __name__ == "__main__":
     logger.info(fh.read())
     fh.close()
 
-    try:
-        md = MeshData()
-        md.setup_database()
-    except Exception as e:
-        logger.error("Failed to setup database")
+    logger.info("Setting up database")
+    db_connected = False
+    for i in range(10):
+        try:
+            md = MeshData()
+            md.setup_database()
+            db_connected = True
+            break
+        except Exception as e:
+            logger.warning(f"Waiting for database to become ready.")
+            #  logger.error(str(e))
+            time.sleep(10)
+    if not db_connected:
+        logger.error("Giving up. Bye.")
         sys.exit(1)
+
+    fh = open("meshinfo.pid", "w")
+    fh.write(str(os.getpid()))
+    fh.close()
 
     thread_mqtt = threading.Thread(target=meshinfo_mqtt.run)
     thread_web = threading.Thread(target=meshinfo_web.run)

@@ -37,23 +37,13 @@
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarToggler">
-      <a class="navbar-brand" href="{{  config.mesh.url }}">{{ config.mesh.name }}</a>
+      <a class="navbar-brand" href="{{  config["mesh"]["url"] }}">{{ config["mesh"]["name"] }}</a>
       <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
-        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes"] %}
+        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs"] %}
         <li class="nav-item{% if page == this_page %} active{% endif %}">
           <a class="nav-link" href="{{ page }}.html">{{ page.title() }}</a>
         </li>
         {% endfor %}
-        <li class="nav-item dropdown{% if this_page == "logs" %} active{% endif %}">
-          <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" data-toggle="dropdown"
-            aria-haspopup="true" aria-expanded="false">
-            Logs
-          </a>
-          <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
-            <a class="dropdown-item" href="mesh_log.html">Mesh Messages</a>
-            <a class="dropdown-item" href="mqtt_log.html">MQTT Messages</a>
-          </div>
-        </li>
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
           <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
         </li>

@@ -4,7 +4,21 @@ import datetime
 import json
 import time
 import utils
-from encoders import _JSONEncoder
+import logging
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, bytes):
+            return obj.decode("utf-8")  # Convert bytes to string
+        elif isinstance(obj, datetime.datetime):
+            return obj.isoformat()  # Convert datetime to ISO format
+        elif isinstance(obj, datetime.date):
+            return obj.isoformat()  # Convert date to string
+        elif isinstance(obj, set):
+            return list(obj)  # Convert set to list
+        # Use default serialization for other types
+        return super().default(obj)
 
 
 class MeshData:
@@ -12,10 +26,12 @@ class MeshData:
         config = configparser.ConfigParser()
         config.read('config.ini')
         self.config = config
+        self.db = None
         self.connect_db()
 
     def __del__(self):
-        self.db.close()
+        if self.db:
+            self.db.close()
 
     def int_id(self, id):
         try:
@@ -229,6 +245,7 @@ SELECT * FROM nodeinfo where ts_seen > FROM_UNIXTIME(%s)"""
         cur.execute(sql)
         rows = cur.fetchall()
         column_names = [desc[0] for desc in cur.description]
+        prev_key = ""
         for row in rows:
             record = {}
             for i in range(len(row)):
@@ -239,7 +256,10 @@ SELECT * FROM nodeinfo where ts_seen > FROM_UNIXTIME(%s)"""
                     record[col] = row[i]
             record["from"] = self.hex_id(record["from_id"])
             record["to"] = self.hex_id(record["to_id"])
-            chats.append(record)
+            msg_key = record["from"] + record["to"] + record["text"]
+            if msg_key != prev_key:
+                chats.append(record)
+                prev_key = msg_key
         return chats
 
     def get_logs(self):
@@ -261,6 +281,8 @@ SELECT * FROM nodeinfo where ts_seen > FROM_UNIXTIME(%s)"""
         return logs
 
     def update_geocode(self, id, lat, lon):
+        if self.config["geocoding"]["enabled"] != "true":
+            return
         update = False
         sql = """SELECT 1 FROM position WHERE
 id=%s AND (geocoded IS NULL OR (latitude_i <> %s OR longitude_i <> %s))"""
@@ -514,6 +536,15 @@ ts_updated = VALUES(ts_updated)"""
         self.db.commit()
 
     def store_telemetry(self, data):
+        cur = self.db.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM telemetry")
+        count = cur.fetchone()[0]
+        if count >= 1000:
+            cur.execute(f"""DELETE FROM telemetry
+ORDER BY ts_created ASC LIMIT 1""")
+        cur.close()
+        self.db.commit()
+
         node_id = self.verify_node(data["from"])
         payload = dict(data["decoded"]["json_payload"])
 
@@ -611,11 +642,12 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
         self.db.commit()
 
         sql = "INSERT INTO meshlog (topic, message) VALUES (%s, %s)"
-        params = (topic, json.dumps(data, cls=_JSONEncoder))
+        params = (topic, json.dumps(data, indent=4, cls=CustomJSONEncoder))
         cur = self.db.cursor()
         cur.execute(sql, params)
         cur.close()
         self.db.commit()
+        logging.debug(json.dumps(data, indent=4, cls=CustomJSONEncoder))
 
     def store(self, data, topic):
         if not data:
@@ -718,6 +750,57 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
         cur.close()
         self.db.commit()
 
+    def import_nodes(self, filename):
+        fh = open(filename, "r")
+        j = json.loads(fh.read())
+        fh.close()
+        records = []
+        for node_id in j:
+            record = {}
+            node = j[node_id]
+            int_id = self.int_id(node_id)
+            record["id"] = int_id
+            record["long_name"] = node["longname"]
+            record["short_name"] = node["shortname"]
+            record["hw_model"] = node["hardware"]
+            record["role"] = node["role"] if "role" in node else 0
+            if "mapreport" in node and "firmware_version" in node["mapreport"]:
+                record["firmware_version"] = \
+                    node["mapreport"]["firmware_version"]
+            else:
+                record["firmware_version"] = None
+            records.append(record)
+
+        for record in records:
+            sql = """INSERT INTO nodeinfo (
+    id,
+    long_name,
+    short_name,
+    hw_model,
+    role,
+    firmware_version,
+    ts_updated
+)
+VALUES (%s, %s, %s, %s, %s, %s, NOW())
+ON DUPLICATE KEY UPDATE
+long_name = VALUES(long_name),
+short_name = VALUES(short_name),
+hw_model = COALESCE(VALUES(hw_model), hw_model),
+role = COALESCE(VALUES(role), role),
+firmware_version = COALESCE(VALUES(firmware_version), firmware_version),
+ts_updated = VALUES(ts_updated)"""
+            values = (
+                record["id"],
+                record["long_name"],
+                record["short_name"],
+                record["hw_model"],
+                record["role"],
+                record["firmware_version"]
+            )
+            cur = self.db.cursor()
+            cur.execute(sql, values)
+        self.db.commit()
+
     def import_chat(self, filename):
         fh = open(filename, "r")
         j = json.loads(fh.read())
@@ -761,6 +844,30 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         self.db.commit()
 
 
+def create_database():
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+
+    db = mysql.connector.connect(
+        host="db",
+        user="root",
+        password="passw0rd",
+    )
+    sqls = [
+        f"""CREATE DATABASE IF NOT EXISTS {config["database"]["database"]}""",
+        f"""CREATE USER IF NOT EXISTS '{config["database"]["username"]}'@'%'
+IDENTIFIED BY '{config["database"]["password"]}'""",
+        f"""GRANT ALL ON {config["database"]["username"]}.*
+TO '$DB_USER'@'%'""",
+        f"""ALTER DATABASE {config["database"]["database"]}
+CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"""
+    ]
+    for sql in sqls:
+        cur = db.cursor()
+        cur.execute(sql)
+        cur.close()
+    db.commit()
+
+
 if __name__ == "__main__":
-    md = MeshData()
-    md.setup_database()
+    pass

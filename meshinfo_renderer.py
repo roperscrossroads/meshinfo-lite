@@ -168,10 +168,10 @@ class StaticHTMLRenderer:
             datetime=datetime.datetime,
             timestamp=datetime.datetime.now(),
         )
-    
+
     def render_logs(self):
         self.render_html_and_save(
-            "mqtt_log.html",
+            "logs.html",
             config=self.config,
             logs=self.logs,
             utils=utils,
@@ -188,12 +188,12 @@ class StaticHTMLRenderer:
         self.render_traceroutes()
         self.render_telemetry()
         self.render_neighbors()
-        self.render_index()
         self.render_chat()
         self.render_nodes()
         self.render_nodes_each()
         self.render_graph()
         self.render_map()
+        self.render_index()
 
 
 def render():
@@ -208,3 +208,7 @@ def run():
     while True:
         render()
         time.sleep(interval)
+
+
+if __name__ == "__main__":
+    render()

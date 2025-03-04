@@ -17,8 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 HEALTHCHECK NONE
 
-EXPOSE 8000
-EXPOSE 9000
+EXPOSE 8080
 
 RUN chmod +x run.sh
 

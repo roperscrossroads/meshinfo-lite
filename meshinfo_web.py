@@ -1,5 +1,6 @@
 from flask import Flask, send_file, send_from_directory
 from waitress import serve
+import configparser
 import logging
 import os
 
@@ -22,6 +23,10 @@ def serve_static(filename):
 
 def run():
     # Enable Waitress logging
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    port = int(config["webserver"]["port"])
+
     waitress_logger = logging.getLogger("waitress")
     waitress_logger.setLevel(logging.DEBUG)  # Enable all logs from Waitress
-    serve(app, host="0.0.0.0", port=8080)
+    serve(app, host="0.0.0.0", port=port)
