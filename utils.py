@@ -134,6 +134,6 @@ def time_since(epoch_timestamp):
         ("second", elapsed_seconds % 60),
     ]
     return ", ".join(
-        f"{value} {unit}{'s' if value > 1 else ''}"
+        f"{int(value)} {unit}{'s' if value > 1 else ''}"
         for unit, value in time_units if value > 0
     ) or "Just now"
