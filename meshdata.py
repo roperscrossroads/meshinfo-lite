@@ -45,7 +45,7 @@ class MeshData:
     def connect_db(self):
         self.db = mysql.connector.connect(
             host=self.config["database"]["host"],
-            user=self.config["database"]["user"],
+            user=self.config["database"]["username"],
             password=self.config["database"]["password"],
             database=self.config["database"]["database"],
             charset="utf8mb4"
@@ -241,7 +241,7 @@ SELECT * FROM nodeinfo where ts_seen > FROM_UNIXTIME(%s)"""
             record["to"] = self.hex_id(record["to_id"])
             chats.append(record)
         return chats
-    
+
     def get_logs(self):
         logs = []
         sql = "SELECT * FROM meshlog ORDER BY ts_created DESC"
@@ -601,9 +601,9 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
             cur.execute(sql, param)
             cur.close()
         return id
-    
+
     def log_data(self, topic, data):
-        cur  = self.db.cursor()
+        cur = self.db.cursor()
         cur.execute(f"SELECT COUNT(*) FROM meshlog")
         count = cur.fetchone()[0]
         if count >= 1000:
@@ -640,7 +640,7 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
             self.store_telemetry(data)
         elif tp == "text":
             self.store_text(data)
-    
+
     def setup_database(self):
         creates = [
             """CREATE TABLE IF NOT EXISTS nodeinfo (
@@ -764,5 +764,3 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
 if __name__ == "__main__":
     md = MeshData()
     md.setup_database()
-    #  chats = md.get_logs()
-    #  print(json.dumps(chats, indent=4))

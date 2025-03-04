@@ -4,7 +4,6 @@ import logging
 import configparser
 import datetime
 import time
-import htmlmin
 from jinja2 import Environment, FileSystemLoader
 
 import utils
@@ -48,7 +47,7 @@ class StaticHTMLRenderer:
         """Render an HTML template and save the output."""
         logging.debug(f"Rendering {filename}")
         html = self.render_html(filename, **kwargs)
-        self.save_file(filename, htmlmin.minify(html, remove_empty_space=True))
+        self.save_file(filename, html)
 
     # Page Renderers
     def render_index(self):
