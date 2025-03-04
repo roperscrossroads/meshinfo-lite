@@ -280,6 +280,21 @@ SELECT * FROM nodeinfo where ts_seen > FROM_UNIXTIME(%s)"""
             logs.append(record)
         return logs
 
+    def get_latest_node(self):
+        sql = """select id, ts_created from nodeinfo
+order by ts_created desc limit 1"""
+        cur = self.db.cursor()
+        cur.execute(sql)
+        row = cur.fetchone()
+        latest = {}
+        if row:
+            latest = {
+                "id": row[0],
+                "ts_created": row[1].timestamp()
+            }
+        cur.close()
+        return latest
+
     def update_geocode(self, id, lat, lon):
         if self.config["geocoding"]["enabled"] != "true":
             return

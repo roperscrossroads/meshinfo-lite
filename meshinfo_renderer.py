@@ -25,6 +25,7 @@ class StaticHTMLRenderer:
         self.telemetry = md.get_telemetry_all()
         self.traceroutes = md.get_traceroutes()
         self.logs = md.get_logs()
+        self.latest = md.get_latest_node()
         self.active_nodes = {
             node: dict(self.nodes[node])
             for node in self.nodes if self.nodes[node]["active"]
@@ -76,6 +77,7 @@ class StaticHTMLRenderer:
             config=self.config,
             nodes=self.nodes,
             active_nodes=self.active_nodes,
+            latest=self.latest,
             hardware=meshtastic_support.HardwareModel,
             meshtastic_support=meshtastic_support,
             utils=utils,
