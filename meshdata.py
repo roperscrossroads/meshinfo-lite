@@ -282,7 +282,7 @@ SELECT * FROM nodeinfo where ts_seen > FROM_UNIXTIME(%s)"""
 
     def get_latest_node(self):
         sql = """select id, ts_created from nodeinfo
-order by ts_created desc limit 1"""
+where id <> 4294967295 order by ts_created desc limit 1"""
         cur = self.db.cursor()
         cur.execute(sql)
         row = cur.fetchone()

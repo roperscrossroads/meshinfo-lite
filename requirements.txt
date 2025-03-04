@@ -2,7 +2,6 @@ meshtastic
 paho-mqtt
 cryptography
 mysql-connector-python
-htmlmin
 flask
 waitress
 colorlog

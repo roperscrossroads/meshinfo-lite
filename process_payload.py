@@ -103,7 +103,9 @@ def get_data(msg):
             telemetry_pb2.Telemetry().FromString(msg.decoded.payload)
         )
     if "type" in j:
-        logging.debug(f"Received {j["type"]} from {j["from"]}")
+        msg_type = j["type"]
+        msg_from = j["from"]
+        logging.debug(f"Received {msg_type} from {msg_from}")
     return j
 
 
