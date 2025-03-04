@@ -1,0 +1,17 @@
+{% extends "templates/layout.html.j2" %}
+
+{% block title %}Welcome!{% endblock %}
+
+{% block content %}
+<div class="container pt-3">
+  <img src="/images/logo.png" alt="logo" style="height: 250px">
+  <h2>ZA MeshInfo</h2>
+  <p>
+    This site provides information on <a href="nodes.html"><span class="font-weight-bold">{{ active_nodes|length }}</span> active nodes</a> in the South African Meshtastic network.
+  </p>
+  <p>
+  Check out the '<a href="https://gadgeteer.co.za/hamradio/meshtastic-in-south-africa/">Meshtastic in South Africa</a>' blog post from GadgeteerZA for more information, or join our <a href="https://discord.gg/yUy4sEfQ">Discord</a> community.
+  </p>
+  <p>Last updated: {{ timestamp.strftime('%Y-%m-%d %H:%M:%S %z') }}</p>
+</div>
+{% endblock %}

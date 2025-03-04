@@ -31,3 +31,5 @@ bin/
 lib/
 lib64/
 pyenv.cfg
+config.ini
+

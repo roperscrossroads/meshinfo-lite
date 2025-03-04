@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>{% block title %}{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <link rel="icon" type="image/x-icon" href="/images/icons/favicon.ico">
+  <link href="/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    th {
+      background-color: #D7F9FF;
+      text-align: center;
+    }
+
+    nav {
+      background-color: #9fdef9;
+    }
+
+    .table-striped>tbody>tr:nth-child(2n+1)>td,
+    .table-striped>tbody>tr:nth-child(2n+1)>th {
+      background-color: #F9F9D7;
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <nav class="navbar navbar-expand-lg navbar-light">
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarToggler"
+      aria-controls="navbarToggler" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarToggler">
+      <a class="navbar-brand" href="{{  config.mesh.url }}">{{ config.mesh.name }}</a>
+      <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
+        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes"] %}
+        <li class="nav-item{% if page == this_page %} active{% endif %}">
+          <a class="nav-link" href="{{ page }}.html">{{ page.title() }}</a>
+        </li>
+        {% endfor %}
+        <li class="nav-item dropdown{% if this_page == "logs" %} active{% endif %}">
+          <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" data-toggle="dropdown"
+            aria-haspopup="true" aria-expanded="false">
+            Logs
+          </a>
+          <div class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+            <a class="dropdown-item" href="mesh_log.html">Mesh Messages</a>
+            <a class="dropdown-item" href="mqtt_log.html">MQTT Messages</a>
+          </div>
+        </li>
+        <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
+          <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/js/jquery-3.7.1.min.js"></script>
+  <script src="/js/popper.min.js"></script>
+  <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

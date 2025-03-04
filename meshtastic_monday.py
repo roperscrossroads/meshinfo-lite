@@ -1,34 +1,34 @@
 from time import strftime, localtime
 from datetime import datetime, timedelta
 import json
+import utils
 
 
 class MeshtasticMonday:
     def __init__(self, data):
         monday = []
         uniq = ""
-        for channel in data.chat["channels"]:
-            for message in data.chat["channels"][channel]["messages"]:
-                to = message["to"]
-                if (to != "ffffffff"):
-                    continue
-                ts = message["timestamp"]
-                day = strftime('%w', localtime(ts))
-                if day != "1":
-                    continue
-                text = message["text"]
-                if "meshtasticmonday" not in text.lower():
-                    continue
-                frm = message["from"]
-                current = frm + "." + text
-                if current == uniq:
-                    continue
-                dt = str(datetime.fromtimestamp(ts).date())
-                tmp = dict(message)
-                tmp["monday"] = dt
-                monday.append(tmp)
-                uniq = current
-        monday = sorted(monday, key=lambda x: x['timestamp'])
+        for chat in data:
+            to = chat["to"]
+            if (to != "ffffffff"):
+                continue
+            ts = chat["ts_created"]
+            day = strftime('%w', localtime(ts))
+            if day != "1":
+                continue
+            text = chat["text"]
+            if "meshtasticmonday" not in text.lower():
+                continue
+            frm = chat["from"]
+            current = frm + "." + text
+            if current == uniq:
+                continue
+            dt = str(datetime.fromtimestamp(ts).date())
+            tmp = dict(chat)
+            tmp["monday"] = dt
+            monday.append(tmp)
+            uniq = current
+        monday = sorted(monday, key=lambda x: x['ts_created'])
         self.monday = monday
 
     def check_ins(self):

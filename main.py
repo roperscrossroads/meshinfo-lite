@@ -1,64 +1,54 @@
-#!/usr/bin/env python3
+import meshinfo_web
+import meshinfo_mqtt
+import meshinfo_renderer
+import threading
+import logging
+import colorlog
+import sys
+#  logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+def setup_logger():
+    # Get the root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)  # Set to lowest level to capture all logs
 
-import asyncio
-import datetime
-import json
-from zoneinfo import ZoneInfo
-import os
-import discord
-from dotenv import load_dotenv
+    # Create a console handler
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
 
-from api import api
-from web import web
-from bot import discord as discord_bot
-from config import Config
-from memory_data_store import MemoryDataStore
-from mqtt import MQTT
+    # Define a formatter with colors
+    formatter = colorlog.ColoredFormatter(
+        "%(log_color)s%(asctime)s - %(levelname)s - [%(name)s] - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'bold_red',
+        }
+    )
 
-load_dotenv()
+    # Set the formatter for the handler
+    handler.setFormatter(formatter)
 
-config = Config.load()
-data = MemoryDataStore(config)
-data.update('mqtt_connect_time', datetime.datetime.now(ZoneInfo(config['server']['timezone'])))
+    # Avoid duplicate handlers
+    if not logger.hasHandlers():
+        logger.addHandler(handler)
 
-async def main():
-    global config
-    global data
+    return logger
 
-    # output app banner from file banner
-    banner = open('banner', 'r').read()
-    print(banner)
-
-    version = json.loads(open('version.json', 'r').read())
-    print(f"Version: {version['version']} (git sha: {version['git_sha']})")
-    print()
-
-    if not os.path.exists(config['paths']['output']):
-        os.makedirs(config['paths']['output'])
-    if not os.path.exists(config['paths']['data']):
-        os.makedirs(config['paths']['data'])
-
-    os.environ['TZ'] = config['server']['timezone']
-
-    data.load()
-    await data.save()
-    # await data.backup()
-
-    async with asyncio.TaskGroup() as tg:
-        loop = asyncio.get_event_loop()
-        api_server = api.API(config, data)
-        web_server = web.WEB()
-        tg.create_task(api_server.serve(loop))
-        tg.create_task(web_server.serve())
-        if config['broker']['enabled'] is True:
-            mqtt = MQTT(config, data)
-            tg.create_task(mqtt.connect())
-        if config['integrations']['discord']['enabled'] is True:
-            bot = discord_bot.DiscordBot(command_prefix="!", intents=discord.Intents.all(), config=config, data=data)
-            tg.create_task(bot.start_server())
 
 if __name__ == "__main__":
-    fh = open("meshinfo.pid", "w")
-    fh.write(str(os.getpid()))
-    fh.close()
-    asyncio.run(main())
+    logger = setup_logger()
+
+    thread_mqtt = threading.Thread(target=meshinfo_mqtt.run)
+    thread_web = threading.Thread(target=meshinfo_web.run)
+    thread_renderer = threading.Thread(target=meshinfo_renderer.run)
+
+    thread_mqtt.start()
+    thread_web.start()
+    thread_renderer.start()
+
+    thread_mqtt.join()
+    thread_web.join()
+    thread_renderer.join()

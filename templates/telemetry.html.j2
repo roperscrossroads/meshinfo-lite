@@ -1,0 +1,187 @@
+{% set this_page = "telemetry" %}
+{% extends "templates/layout.html.j2" %}
+
+{% block title %}Telemetry{% endblock %}
+
+{% block content %}
+<div class="container pt-3">
+  <h5>{{ this_page.title() }}</h5>
+  <table class="table table-striped table-bordered table-sm">
+    <thead>
+      <tr>
+        <th scope="col">Timestamp</th>
+        <th scope="col">Node</th>
+        <th scope="col">
+          <img src="images/icons/up.svg" alt="Air Util TX" title="Air Util TX" style="height:18px">
+        </th>
+        <th scope="col">
+          <img src="images/icons/down.svg" alt="Channel Util" title="Channel Util" style="height:18px">
+        </th>
+        <th scope="col">
+          <img src="images/icons/battery.svg" alt="Battery" title="Battery" style="height:18px">
+        </th>
+        <th scope="col">Uptime</th>
+        <th scope="col">
+          <img src="images/icons/voltage.svg" alt="Voltage" title="Voltage" style="height:18px">
+        </th>
+        <th scope="col">
+          <img src="images/icons/current.svg" alt="Current" title="Current" style="height:18px">
+        </th>
+        <th scope="col">
+          <img src="images/icons/pressure.svg" alt="Barometric Pressure" title="Barometric Pressure"
+            style="height:18px">
+        </th>
+        <th scope="col">
+          <img src="images/icons/relative-humidity.svg" alt="Relative Humidity" title="Relative Humidity"
+            style="height:18px">
+        </th>
+        <th scope="col">
+          <img src="images/icons/temperature.svg" alt="Temperature" title="Temperature" style="height:18px">
+        </th>
+        <th scope="col">
+          <img src="images/icons/resistance.svg" alt="Gas Resistance" title="Gas Resistance" style="height:18px">
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in telemetry[0:1000] %}
+      {% set inodeid = utils.convert_node_id_from_int_to_hex(item["id"]) %}
+      {% set inode = nodes[inodeid] %}
+      <tr>
+        <td>
+          {{ datetime.fromtimestamp(item.ts_created).strftime("%d-%m-%Y %H:%M:%S") }}
+        </td>
+        <td>
+          {% if inode %}
+          <a href="node_{{ inodeid }}.html">{{ inode.short_name }}</a>
+          {% else %}
+          <span>UNK</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.air_util_tx is not none %}
+          {{ item.air_util_tx | round(2) }}%
+          {% endif %}
+        </td>
+        <td>
+          {% if item.channel_utilization is not none %}
+          {{ item.channel_utilization | round(1) }}%
+          {% endif %}
+        </td>
+        <td>
+          {% if item.battery_level is not none %}
+          {{ item.battery_level | round(2) }}%
+          {% endif %}
+        </td>
+        <td>
+          {% if item.uptime_seconds is not none %}
+          {{ item.uptime_seconds }}
+          {% endif %}
+        </td>
+        <td>
+          {% if item.voltage is not none %}
+          {% if item.voltage is string %}
+          {{ item.voltage }}
+          {% else %}
+          {{ item.voltage | round(2) }} V
+          {% endif %}
+          {% endif %}
+          {% if item.voltage_ch1 is defined and item.voltage_ch2 is defined and item.voltage_ch3
+          is not none %}
+          <table>
+            <tr>
+              <td>
+                Ch1
+              </td>
+              <td>
+                {{ item.voltage_ch1 | round(2) }} V<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch2
+              </td>
+              <td>
+                {{ item.voltage_ch2 | round(2) }} V<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch3
+              </td>
+              <td>
+                {{ item.voltage_ch3 | round(2) }} V
+              </td>
+            </tr>
+          </table>
+          {% endif %}
+        </td>
+        <td>
+          {% if 'current' in item.payload and item.current is string %}
+          {{ item.current }}
+          {% elif 'current' in item.payload %}
+          {{ item.current | round(2) }} mA
+          {% endif %}
+          {% if 'current_ch1' in item.payload and 'current_ch2' in item.payload and 'current_ch3' in item.payload %}
+          <table>
+            <tr>
+              <td>
+                Ch1
+              </td>
+              <td>
+                {{ item.current_ch1 | round(2) }} mA<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch2
+              </td>
+              <td>
+                {{ item.current_ch2 | round(2) }} mA<br />
+              </td>
+            </tr>
+            <tr>
+              <td>
+                Ch3
+              </td>
+              <td>
+                {{ item.current_ch3 | round(2) }} mA
+              </td>
+            </tr>
+          </table>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.barometric_pressure is not none %}
+          {{ item.barometric_pressure | round(2) }} hPa
+          {% endif %}
+        </td>
+        <td>
+          {% if item.relative_humidity is not none and item.relative_humidity %}
+          {% if item.relative_humidity is string %}
+          {{ item.relative_humidity }}
+          {% else %}
+          {{ item.relative_humidity | round(2) }}%
+          {% endif %}
+          {% endif %}
+        </td>
+        <td>
+          {% if item.temperature is not none %}
+          {% if item.temperature is number %}
+          {{ item.temperature | round(2) }}&deg;C
+          {% else %}
+          {{ item.temperature }}
+          {% endif %}
+          {% endif %}
+        </td>
+        <td>
+          {% if item.gas_resistance is not none %}
+          {{ item.gas_resistance | round(2) }} Ohm
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

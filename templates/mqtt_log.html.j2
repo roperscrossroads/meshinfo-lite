@@ -1,0 +1,39 @@
+{% set this_page = "logs" %}
+{% extends "templates/layout.html.j2" %}
+
+{% block title %}MQTT Messages{% endblock %}
+
+{% block content %}
+<div class="container pt-3">
+  <h5>MQTT Messages</h5>
+  <p class="mb-2">
+    All messages received by MQTT. Only the messages received
+    since this server was last restarted are shown.
+  </p>
+
+  <table class="table table-striped table-bordered">
+    <thead>
+      <tr>
+        <th scope="col" class="border border-gray-500 bg-gray-400">Timestamp</th>
+        <th scope="col" class="border border-gray-500 bg-gray-400">Topic</th>
+        <th scope="col" class="border border-gray-500 bg-gray-400">Message</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for message in logs %}
+      <tr>
+        <td class="p-1 border text-secondary text-nowrap">
+          {% if message.ts_created %}
+          {{ datetime.fromtimestamp(message.ts_created).strftime('%Y-%m-%d %H:%M:%S') }}
+          {% endif %}
+        </td>
+        <td class="p-1 border text-secondary text-nowrap">
+          {{ message.topic }}
+        </td>
+        <td class="p-1 border text-secondary">{{ message.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
