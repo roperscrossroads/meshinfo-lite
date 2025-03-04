@@ -55,7 +55,7 @@
         {% else %}
         <td>{{ message["from"] }}</td>
         {% endif %}
-        <td>{{ message["text"] }}</td>
+        <td style="word-break: break-word;">{{ message["text"] }}</td>
       </tr>
       {% endfor %}
     </tbody>

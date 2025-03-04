@@ -32,7 +32,7 @@
         {% else %}
         <td>{{ message["to"] if message["to"] != "ffffffff" else "ALL"}}</td>
         {% endif %}
-        <td>{{ message["text"] }}</td>
+        <td style="word-break: break-word;">{{ message["text"] }}</td>
       </tr>
       {% endfor %}
     </tbody>
