@@ -1,18 +1,16 @@
-# MeshInfo
+# MeshInfo-Lite
 
 Realtime web UI to run against a Meshtastic regional or private mesh network.
 
-[![Docker Image](https://github.com/MeshAddicts/meshinfo/actions/workflows/docker.yml/badge.svg)](https://github.com/MeshAddicts/meshinfo/actions/workflows/docker.yml) ![GitHub Release](https://img.shields.io/github/v/release/meshaddicts/meshinfo) ![GitHub commit activity](https://img.shields.io/github/commit-activity/t/meshaddicts/meshinfo)
-
 ## Overview
 
-MeshInfo is written in Python and connects to an MQTT server that is receiving Meshtastic messages for the purpose of visualizing and inspecting traffic. It (currently) uses a filesystem to persist content, such as node info and telemetry. There are plans to optionally support Postgres and SQLite3 as optional persistance storage methods.
+MeshInfo-Lite is a highly customized version of [MeshInfo](https://github.com/MeshAddicts/meshinfo) written in Python and connects to an MQTT server that is receiving Meshtastic messages for the purpose of visualizing and inspecting traffic. It uses MariaDB to persist content.
 
 To make deployment to run an instance for your mesh easy, Docker support is included. We recommend using Docker Compose with a personalized version of the `docker-compose.yml` file to most easily deploy it, but any seasoned Docker user can also use the Docker image alone.
 
-If you use MeshInfo and have a publicly accessible instance, we'd like to know! Drop a note to kevin@airframes.io with details and we'll link it below.
+If you use MeshInfoLite and have a publicly accessible instance, we'd like to know! Drop a note to dade@dade.co.za with details and we'll link it below.
 
-See an example instance running on the [Sacramento Valley Mesh](https://svm1.meshinfo.network/nodes.html).
+See an example instance running on the [South African Mesh](https://mesh.zr1rf.za.net).
 
 If you are running a high elevation node, preferrably a `Router` or `Repeater` node, you might be interested in getting on the notification list for a [cavity filter](https://shop.airframes.io/products/lora-915mhz-filter) that Kevin and Trevor are having made.
 
@@ -20,11 +18,14 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 
 ## Screenshots
 
-[<img src="meshinfo1.png" alt="MeshInfo Screenshot 1" width="200" />](meshinfo1.png)
-[<img src="meshinfo2.png" alt="MeshInfo Screenshot 2" width="200" />](meshinfo2.png)
-[<img src="meshinfo3.png" alt="MeshInfo Screenshot 3" width="200" />](meshinfo3.png)
-[<img src="meshinfo4.png" alt="MeshInfo Screenshot 4" width="200" />](meshinfo4.png)
-[<img src="meshinfo5.png" alt="MeshInfo Screenshot 5" width="260" />](meshinfo5.png)
+[<img src="docs/meshinfo1.png" alt="MeshInfo Map" width="200" />](meshinfo1.png)
+[<img src="docs/meshinfo2.png" alt="MeshInfo Node" width="200" />](meshinfo2.png)
+[<img src="docs/meshinfo3.png" alt="MeshInfo Neighbors" width="200" />](meshinfo3.png)
+[<img src="docs/meshinfo4.png" alt="MeshInfo Node Details" width="200" />](meshinfo4.png)
+[<img src="docs/meshinfo6.png" alt="MeshInfo Graph" width="200" />](meshinfo6.png)
+[<img src="docs/meshinfo7.png" alt="#MeshtasticMonday" width="200" />](meshinfo7.png)
+[<img src="docs/meshinfo5.png" alt="Container running" width="260" />](meshinfo5.png)
+
 
 ## Supported Meshtastic Message Types
 
@@ -34,6 +35,7 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 - telemetry
 - text
 - traceroute
+- mapreport
 
 ## Features
 
@@ -55,7 +57,7 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 
 ## Chat
 
-If you're using this and have questions, or perhaps you want to join in on the dev effort and want to interact collaboratively, come chat with us on [#meshinfo on the SacValleyMesh Discord](https://discord.gg/tj6dADagDJ).
+If you're using this and have questions, or perhaps you want to join in on the dev effort and want to interact collaboratively, come chat with us on [#meshinfo on Meshtastic ZA Discord](https://discord.gg/cmFCKBxY).
 
 ## Running
 
@@ -66,29 +68,20 @@ If you're using this and have questions, or perhaps you want to join in on the d
 ##### Clone the repo
 
 ```sh
-git clone https://github.com/MeshAddicts/meshinfo.git
-cd meshinfo
+git clone https://github.com/dadecoza/meshinfo-lite.git
+cd meshinfo-lite
 ```
 
 ##### Edit Configuration
 
-1. Copy and then edit the `config.json.sample` to `config.json`. 
-2. Copy `Caddyfile.sample` to `Caddyfile` then edit the `Caddyfile` and be sure it is setup for your hostname (FQDN if requiring Let's Encrypt cert to be generated) and your email address for the TLS line.
-
- - Caddy will request a cert of the FQDN, be sure to specify any subdomain. For example: `https://meshinfo.domain.com`.  
-
- - If you only wish to use a self-signed certificate and are OK with the browser warnings about this, change the TLS line from your email address to `tls internal`.
-   
- - If you are using a reverse proxy other than Caddy, change the `FQDN` to `:80` then set your reverse proxy's upstream config to listen to port 80.
+1. Copy and then edit the `config.ini.sample` to `config.ini`. 
       
-3. Edit the `docker-compose.yml` (or `docker-compose-dev.yml` if you are going to use that one) and adjust any port mappings for caddy if you wish to have it run on anything other than 80/443. Keep in mind that if you are not using a FQDN and ports 80/443, Caddy will fail to provision a Let's Encrypt certificate. This is because Let's Encrypt requires 80/443 to be accessible and this is not a limitation of Caddy nor MeshInfo.
-
 #### To Run
 
 Change to the directory.
 
 ```sh
-cd meshinfo
+cd meshinfo-lite
 ```
 
 ```sh
@@ -105,7 +98,20 @@ git fetch && git pull && docker compose pull && docker compose down && docker co
 
 Be sure you have `Python 3.12.4` or higher installed.
 
+Install MariaDB and create the database and user permissions
+```
+sudo mysql -u root
+CREATE DATABASE IF NOT EXISTS meshdata;
+CREATE USER IF NOT EXISTS 'meshdata'@'localhost' IDENTIFIED BY 'passw0rd';
+GRANT ALL ON meshdata.* TO 'meshdata'@'localhost';
+ALTER DATABASE meshdata CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+COMMIT;
+```
+
+
 ```sh
+python -m venv .
+. bin/activate
 pip install -r requirements.txt
 python main.py
 ```
@@ -117,7 +123,7 @@ python main.py
 Clone the repository.
 
 ```sh
-git clone https://github.com/MeshAddicts/meshinfo.git
+git clone https://github.com/dadecoza/meshinfo-lite.git
 ```
 
 If already existing, be sure to pull updates.
@@ -141,13 +147,6 @@ docker compose -f docker-compose-dev.yml up --build --force-recreate
 You will need to CTRL-C and run again if you make any changes to the python code, but not if you only make changes to
 the templates.
 
-### Release
-
-Tag the release using git and push up the tag. The image will be build by GitHub automatically (see: https://github.com/MeshAddicts/meshinfo/actions/workflows/docker.yml).
-
-```sh
-git tag v0.0.0 && git push && git push --tags
-```
 
 ## Contributing
 
