@@ -129,7 +129,7 @@
         id: '{{ id }}',
         short_name: '{{ node.short_name }}',
         long_name: '{{ node.long_name }}',
-        last_seen: '{{ node.last_seen }} ago',
+        last_seen: '{{ node.last_seen }}',
         position: [{{ node.position.longitude_i / 10000000 }}, {{ node.position.latitude_i / 10000000 }}],
         online: {% if node.active %}true{% else %}false{% endif %}
       };

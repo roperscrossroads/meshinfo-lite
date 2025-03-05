@@ -113,7 +113,7 @@
           <td></td>
           {% endif %}
           <td>{{ datetime.fromtimestamp(node["ts_seen"]).strftime("%Y-%m-%d %H:%M:%S") }}</td>
-          <td>{{ node.last_seen }} ago</td>
+          <td>{{ node.last_seen }}</td>
         </tr>
         {% endfor %}
       </tbody>
