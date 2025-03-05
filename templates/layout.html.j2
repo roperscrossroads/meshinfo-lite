@@ -44,6 +44,16 @@
           <a class="nav-link" href="{{ page }}.html">{{ page.title() }}</a>
         </li>
         {% endfor %}
+         <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Tools
+          </a>
+          <div class="dropdown-menu" aria-labelledby="toolsDropdown">
+            <a class="dropdown-item" href="https://meshview.zr1rf.za.net/">MeshView</a>
+            <a class="dropdown-item" href="https://meshtastic.liamcottle.net/?lat=-33.952188819072816&lng=378.6568450927735&zoom=11">Liam's Map</a>
+            <a class="dropdown-item" href="https://meshmap.net/">MeshMap</a>
+          </div>
+        </li>
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
           <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
         </li>
