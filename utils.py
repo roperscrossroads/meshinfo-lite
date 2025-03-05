@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import datetime
+from datetime import timedelta
 import requests
 import time
 from math import asin, cos, radians, sin, sqrt
@@ -122,7 +123,7 @@ def filter_dict(data, whitelist):
     return data
 
 
-def time_since(epoch_timestamp):
+def time_since_bak(epoch_timestamp):
     """Convert an epoch timestamp to a human-readable duration."""
     elapsed_seconds = int(time.time()) - epoch_timestamp
     if elapsed_seconds < 0:
@@ -137,3 +138,11 @@ def time_since(epoch_timestamp):
         f"{int(value)} {unit}{'s' if value > 1 else ''}"
         for unit, value in time_units if value > 0
     ) or "Just now"
+
+def time_since(epoch_timestamp):
+    diff = epoch_timestamp - time.time()  # Calculate the difference
+    sign = "-" if diff < 0 else ""
+    diff = abs(diff)  # Work with absolute difference
+    td = timedelta(seconds=diff)
+    formatted_diff = f"{sign}{td.seconds // 3600:02}:{(td.seconds % 3600) // 60:02}:{td.seconds % 60:02}"
+    return formatted_diff
