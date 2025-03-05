@@ -1,11 +1,11 @@
 {% extends "templates/layout.html.j2" %}
 
-{% block title %}Welcome!{% endblock %}
+{% block title %}{{ config["mesh"]["name"] }}{% endblock %}
 
 {% block content %}
 <div class="container pt-3">
   <img src="/images/logo.png" alt="logo" style="height: 250px">
-  <h2>ZA MeshInfo</h2>
+  <h2>{{ config["mesh"]["name"] }}</h2>
   <p>
     This site provides information on <a href="nodes.html"><span class="font-weight-bold">{{ active_nodes|length }}</span> active nodes</a> in the South African Meshtastic network.
   </p>
