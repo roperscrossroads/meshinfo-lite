@@ -2,7 +2,7 @@
 name=ZA Mesh
 description=Serving Meshtastic to South Africa.
 contact=dade@dade.co.za
-url=http://localhost:8080
+url=https://mesh.zr1rf.za.net
 latitude=-33.918861
 longitude=18.423300
 
