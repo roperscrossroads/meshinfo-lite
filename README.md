@@ -18,13 +18,13 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 
 ## Screenshots
 
-[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo1.png" alt="MeshInfo Map" width="200" />](meshinfo1.png)
-[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo2.png" alt="MeshInfo Node" width="200" />](meshinfo2.png)
-[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo3.png" alt="MeshInfo Neighbors" width="200" />](meshinfo3.png)
-[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo4.png" alt="MeshInfo Node Details" width="200" />](meshinfo4.png)
-[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo6.png" alt="MeshInfo Graph" width="200" />](meshinfo6.png)
-[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo7.png" alt="#MeshtasticMonday" width="200" />](meshinfo7.png)
-[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo5.png" alt="Container running" width="260" />](meshinfo5.png)
+[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo1.png" alt="MeshInfo Map" width="200" />](https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo1.png)
+[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo2.png" alt="MeshInfo Node" width="200" />](https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo2.png)
+[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo3.png" alt="MeshInfo Neighbors" width="200" />](https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo3.png)
+[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo4.png" alt="MeshInfo Node Details" width="200" />](https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo4.png)
+[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo6.png" alt="MeshInfo Graph" width="200" />](https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo6.png)
+[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo7.png" alt="#MeshtasticMonday" width="200" />](https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo7.png)
+[<img src="https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo5.png" alt="Container running" width="260" />](https://raw.githubusercontent.com/dadecoza/meshinfo-lite/main/docs/meshinfo5.png)
 
 
 ## Supported Meshtastic Message Types
