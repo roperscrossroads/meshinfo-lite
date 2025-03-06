@@ -4,4 +4,5 @@ cryptography
 mysql-connector-python
 flask
 waitress
+paste
 colorlog

@@ -27,10 +27,14 @@ def connect_mqtt() -> mqtt_client:
                 logging.error(f"Reconnection failed: {e}")
                 time.sleep(5)  # Wait before retrying
     client = mqtt_client.Client()
-    client.username_pw_set(
-        config["mqtt"]["username"],
-        config["mqtt"]["password"]
-    )
+    if "username" in config["mqtt"] \
+            and config["mqtt"]["username"] \
+            and "password" in config["mqtt"] \
+            and config["mqtt"]["password"]:
+        client.username_pw_set(
+            config["mqtt"]["username"],
+            config["mqtt"]["password"]
+        )
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
     client.connect(config["mqtt"]["broker"], int(config["mqtt"]["port"]))

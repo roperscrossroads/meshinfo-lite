@@ -83,12 +83,9 @@ if __name__ == "__main__":
 
     thread_mqtt = threading.Thread(target=meshinfo_mqtt.run)
     thread_web = threading.Thread(target=meshinfo_web.run)
-    thread_renderer = threading.Thread(target=meshinfo_renderer.run)
 
     thread_mqtt.start()
     thread_web.start()
-    thread_renderer.start()
 
     thread_mqtt.join()
     thread_web.join()
-    thread_renderer.join()

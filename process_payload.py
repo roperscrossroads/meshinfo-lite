@@ -105,7 +105,7 @@ def get_data(msg):
     if "type" in j:
         msg_type = j["type"]
         msg_from = j["from"]
-        logging.debug(f"Received {msg_type} from {msg_from}")
+        logging.info(f"Received {msg_type} from {msg_from}")
     return j
 
 

@@ -17,7 +17,6 @@ services:
       - mariadb
     volumes:
       - ./config.ini:/app/config.ini
-      - ./www:/app/www
     environment:
       - PYTHONUNBUFFERED=1
     ports:

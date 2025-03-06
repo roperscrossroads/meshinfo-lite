@@ -139,6 +139,7 @@ def time_since_bak(epoch_timestamp):
         for unit, value in time_units if value > 0
     ) or "Just now"
 
+
 def time_since(epoch_timestamp):
     diff = epoch_timestamp - time.time()  # Calculate the difference
     sign = "-" if diff < 0 else ""
@@ -146,3 +147,10 @@ def time_since(epoch_timestamp):
     td = timedelta(seconds=diff)
     formatted_diff = f"{sign}{td.seconds // 3600:02}:{(td.seconds % 3600) // 60:02}:{td.seconds % 60:02}"
     return formatted_diff
+
+
+def active_nodes(nodes):
+    return {
+        node: dict(nodes[node])
+        for node in nodes if nodes[node]["active"]
+    }
