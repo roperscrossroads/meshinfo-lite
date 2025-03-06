@@ -1,6 +1,5 @@
 import meshinfo_web
 import meshinfo_mqtt
-import meshinfo_renderer
 from meshdata import MeshData, create_database
 import threading
 import logging
