@@ -6,3 +6,5 @@ flask
 waitress
 paste
 colorlog
+bcrypt
+pyjwt

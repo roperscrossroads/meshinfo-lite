@@ -5,6 +5,14 @@ from datetime import timedelta
 import requests
 import time
 from math import asin, cos, radians, sin, sqrt
+import string
+import random
+import bcrypt
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import configparser
+import logging
 
 
 def distance_between_two_points(lat1, lon1, lat2, lon2):
@@ -154,3 +162,64 @@ def active_nodes(nodes):
         node: dict(nodes[node])
         for node in nodes if nodes[node]["active"]
     }
+
+
+def get_owner_nodes(nodes, owner):
+    return {
+        node: dict(nodes[node])
+        for node in nodes if nodes[node]["owner"] == owner
+    }
+
+
+def generate_random_code(length=6):
+    characters = string.ascii_letters
+    return ''.join(random.choices(characters, k=length))
+
+
+def generate_random_otp(length=4):
+    characters = string.digits
+    return ''.join(random.choices(characters, k=length))
+
+
+def hash_password(password: str) -> str:
+    """Hashes a password using bcrypt."""
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password.encode(), salt)
+    print(hashed_password)
+    print(len(hashed_password))
+    return hashed_password
+
+
+def check_password(password: str, hashed_password: str) -> bool:
+    """Checks if a password matches its hashed version."""
+    return bcrypt.checkpw(password.encode(), hashed_password)
+
+
+def send_email(recipient_email, subject, message):
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    try:
+        # Set up the SMTP server (Gmail SMTP)
+        smtp_server = config["smtp"]["server"]
+        smtp_port = int(config["smtp"]["port"])
+        sender_email = config["smtp"]["email"]
+        sender_password = config["smtp"]["password"]
+
+        # Create message
+        msg = MIMEMultipart()
+        msg["From"] = sender_email
+        msg["To"] = recipient_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(message, "plain"))
+
+        # Connect to SMTP server
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()  # Secure the connection
+        server.login(sender_email, sender_password)  # Login to your email
+        server.send_message(msg)  # Send email
+        server.quit()  # Close connection
+
+        logging.info("Email sent successfully!")
+
+    except Exception as e:
+        logging.error(str(e))

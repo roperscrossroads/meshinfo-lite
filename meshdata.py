@@ -5,6 +5,7 @@ import json
 import time
 import utils
 import logging
+import re
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -196,9 +197,12 @@ FROM traceroute ORDER BY ts_created DESC"""
         active_threshold = int(
             self.config["server"]["node_activity_prune_threshold"]
         )
-        all_sql = "SELECT * FROM nodeinfo"
+        all_sql = """SELECT n.*, u.username owner_username
+FROM nodeinfo n LEFT OUTER JOIN meshuser u ON n.owner = u.email"""
         active_sql = """
-SELECT * FROM nodeinfo where ts_seen > FROM_UNIXTIME(%s)"""
+SELECT n.*, u.username owner_username FROM
+nodeinfo n LEFT OUTER JOIN meshuser u ON n.owner = u.email
+WHERE n.ts_seen > FROM_UNIXTIME(%s)"""
         cur = self.db.cursor()
         if not active:
             cur.execute(all_sql)
@@ -294,6 +298,24 @@ where id <> 4294967295 order by ts_created desc limit 1"""
             }
         cur.close()
         return latest
+
+    def get_user(self, username):
+        sql = "SELECT * FROM meshuser WHERE username=%s"
+        params = (username, )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description]
+        record = {}
+        if row:
+            for i in range(len(row)):
+                col = column_names[i]
+                if isinstance(row[i], datetime.datetime):
+                    record[col] = row[i].timestamp()
+                else:
+                    record[col] = row[i]
+        cur.close()
+        return record
 
     def update_geocode(self, id, lat, lon):
         if self.config["geocoding"]["enabled"] != "true":
@@ -625,6 +647,41 @@ VALUES (%s, %s, %s, %s, NOW())"""
         )
         self.db.cursor().execute(sql, params)
         self.db.commit()
+        match = re.search(r"meshinfo (\d{4})", payload["text"].decode())
+        if match:
+            otp = match.group(1)
+            node = from_id
+            self.claim_node(node, otp)
+
+    def claim_node(self, node, otp):
+        sql = """SELECT email FROM meshuser
+WHERE otp = %s"""
+        params = (otp, )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        owner = row[0] if row else None
+        cur.close()
+        if not owner:
+            return
+        sql = """UPDATE meshuser
+SET otp = NULL WHERE email = %s
+"""
+        params = (owner, )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        cur.close()
+
+        sql = """UPDATE nodeinfo
+SET owner = %s WHERE id = %s"""
+        params = (
+            owner,
+            node
+        )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        cur.close()
+        self.db.commit()
 
     def verify_node(self, id, via=None):
         query = "SELECT 1 FROM nodeinfo where id = %s"
@@ -690,6 +747,18 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
 
     def setup_database(self):
         creates = [
+            """CREATE TABLE IF NOT EXISTS  meshuser (
+    email VARCHAR(255) PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    password BINARY(60) NOT NULL,
+    verification CHAR(4),
+    otp CHAR(4),
+    status VARCHAR(12) DEFAULT 'CREATED',
+    ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ts_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (username),
+    INDEX idx_meshuser_username (username)
+)""",
             """CREATE TABLE IF NOT EXISTS nodeinfo (
     id INT UNSIGNED PRIMARY KEY,
     long_name VARCHAR(40) NOT NULL,
@@ -697,10 +766,12 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
     hw_model INT UNSIGNED,
     role INT UNSIGNED,
     firmware_version VARCHAR(40),
+    owner VARCHAR(255),
     updated_via INT UNSIGNED,
     ts_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ts_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ts_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner) REFERENCES meshuser(email)
 )""",
             """CREATE TABLE IF NOT EXISTS position (
     id INT UNSIGNED PRIMARY KEY,
@@ -758,9 +829,11 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
     message text,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )"""
+
         ]
         cur = self.db.cursor()
         for create in creates:
+            logging.debug(create)
             cur.execute(create)
         cur.close()
         self.db.commit()
@@ -885,4 +958,6 @@ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"""
 
 
 if __name__ == "__main__":
-    pass
+    md = MeshData()
+    md.setup_database()
+    print(md.get_user("dadecoza"))

@@ -7,24 +7,25 @@ import time
 
 config = configparser.ConfigParser()
 config.read("config.ini")
+logger = logging.getLogger(__name__)
 
 
 def connect_mqtt() -> mqtt_client:
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            logging.info("Connected to MQTT Broker!")
+            logger.info("Connected to MQTT Broker!")
         else:
-            logging.error("Failed to connect, return code %d\n", rc)
+            logger.error("Failed to connect, return code %d\n", rc)
 
     def on_disconnect(client, userdata, rc):
-        logging.warning(f"Disconnected with result code {rc}. Reconnecting...")
+        logger.warning(f"Disconnected with result code {rc}. Reconnecting...")
         while True:
             try:
                 client.reconnect()
-                logging.info("Reconnected successfully!")
+                logger.info("Reconnected successfully!")
                 break
             except Exception as e:
-                logging.error(f"Reconnection failed: {e}")
+                logger.error(f"Reconnection failed: {e}")
                 time.sleep(5)  # Wait before retrying
     client = mqtt_client.Client()
     if "username" in config["mqtt"] \
@@ -54,3 +55,7 @@ def run():
     client = connect_mqtt()
     subscribe(client)
     client.loop_forever()
+
+
+if __name__ == '__main__':
+    run()

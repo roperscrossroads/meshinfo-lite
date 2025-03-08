@@ -1,0 +1,16 @@
+{% set this_page = "link node" %}
+{% extends "layout.html.j2" %}
+
+{% block title %}Link Node | MeshInfo{% endblock %}
+
+{% block content %}
+<div class="container pt-3">
+<h5>{{ this_page.title() }}</h5>
+<div class="p-2 mb-3" style="background-color: #C3E0DC;">
+  <p>Please send the following message from your node to the default channel:</p>
+  <div style="padding: 5px; background: #f2f2f2; font-style: italic;">meshinfo {{ otp }}</div>
+  <p class="mt-2">Once the message has been sent and acknowledged, you can refresh the <a href="{{ url_for("mynodes") }}">My Nodes</a> page.
+  <p class="mt-2"><span style="font-weight: bold;">NOTE:</span> The OTP is only valid for a single node. You will need to refresh this page to generate a new OTP.</p>
+</div>
+</div>
+{% endblock %}

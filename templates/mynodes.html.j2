@@ -1,0 +1,16 @@
+{% set this_page = "my nodes" %}
+{% extends "layout.html.j2" %}
+
+{% block title %}My Nodes | MeshInfo{% endblock %}
+
+{% block content %}
+<div class="container pt-3">
+<h5>{{ this_page.title() }}</h5>
+{% if active_nodes %}
+  {% include 'node_table.html.j2' %}
+{% else %}
+  </p>You don't have any linked nodes.<p>
+{% endif %}
+<div><a href="{{ url_for("link_node") }}" class="btn btn-info" role="button">Link node</a></div>
+</div>
+{% endblock %}

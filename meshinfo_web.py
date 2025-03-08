@@ -1,4 +1,4 @@
-from flask import Flask, send_file, send_from_directory, render_template
+from flask import Flask, send_from_directory, render_template, request, make_response, redirect, url_for
 from waitress import serve
 from paste.translogger import TransLogger
 import configparser
@@ -8,6 +8,7 @@ import os
 import utils
 import meshtastic_support
 from meshdata import MeshData
+from meshinfo_register import Register
 from meshtastic_monday import MeshtasticMonday
 import json
 import datetime
@@ -20,17 +21,30 @@ config = configparser.ConfigParser()
 config.read("config.ini")
 
 
+def auth():
+    jwt = request.cookies.get('jwt')
+    if not jwt:
+        return None
+    reg = Register()
+    decoded_jwt = reg.auth(jwt)
+    logging.debug(json.dumps(decoded_jwt, indent=4))
+    return decoded_jwt
+
+
 # Serve static files from the root directory
 @app.route('/')
-def serve_index():
+def serve_index(success_message=None, error_message=None):
     md = MeshData()
     nodes = md.get_nodes()
     return render_template(
         "index.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         active_nodes=utils.active_nodes(nodes),
         timestamp=datetime.datetime.now(),
+        success_message=success_message,
+        error_message=error_message
     )
 
 
@@ -41,6 +55,7 @@ def nodes():
     latest = md.get_latest_node()
     return render_template(
         "nodes.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         active_nodes=utils.active_nodes(nodes),
@@ -60,6 +75,7 @@ def chat():
     chat = md.get_chat()
     return render_template(
         "chat.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         chat=chat,
@@ -76,6 +92,7 @@ def graph():
     graph = md.graph_nodes()
     return render_template(
         "graph.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         graph=graph,
@@ -91,6 +108,7 @@ def map():
     nodes = md.get_nodes()
     return render_template(
         "map.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         utils=utils,
@@ -110,6 +128,7 @@ def neighbors():
     }
     return render_template(
         "neighbors.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         active_nodes_with_neighbors=active_nodes_with_neighbors,
@@ -126,6 +145,7 @@ def telemetry():
     telemetry = md.get_telemetry_all()
     return render_template(
         "telemetry.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         telemetry=telemetry,
@@ -142,6 +162,7 @@ def traceroutes():
     traceroutes = md.get_traceroutes()
     return render_template(
         "traceroutes.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         traceroutes=traceroutes,
@@ -157,6 +178,7 @@ def logs():
     logs = md.get_logs()
     return render_template(
         "logs.html.j2",
+        auth=auth(),
         config=config,
         logs=logs,
         utils=utils,
@@ -174,6 +196,7 @@ def monday():
     monday = MeshtasticMonday(chat).get_data()
     return render_template(
         "monday.html.j2",
+        auth=auth(),
         config=config,
         nodes=nodes,
         monday=monday,
@@ -183,15 +206,126 @@ def monday():
     )
 
 
+@app.route('/mynodes.html')
+def mynodes():
+    md = MeshData()
+    nodes = md.get_nodes()
+    owner = auth()
+    if not owner:
+        return redirect(url_for('login'))
+    mynodes = utils.get_owner_nodes(nodes, owner["email"])
+    return render_template(
+        "mynodes.html.j2",
+        auth=owner,
+        config=config,
+        nodes=nodes,
+        active_nodes=mynodes,
+        hardware=meshtastic_support.HardwareModel,
+        meshtastic_support=meshtastic_support,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+    )
+
+
+@app.route('/linknode.html')
+def link_node():
+    owner = auth()
+    if not owner:
+        return redirect(url_for('login'))
+    reg = Register()
+    otp = reg.get_otp(
+        owner["email"]
+    )
+    return render_template(
+        "link_node.html.j2",
+        auth=owner,
+        otp=otp,
+        config=config
+    )
+
+
+@app.route('/register.html', methods=['GET', 'POST'])
+def register():
+    error_message = None
+    if request.method == 'POST':
+        email = request.form.get('email')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        reg = Register()
+        res = reg.register(username, email, password)
+        if "error" in res:
+            error_message = res["error"]
+        elif "success" in res:
+            return serve_index(success_message=res["success"])
+
+    return render_template(
+        "register.html.j2",
+        auth=auth(),
+        config=config,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        error_message=error_message
+    )
+
+
+@app.route('/login.html', methods=['GET', 'POST'])
+def login(success_message=None, error_message=None):
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        reg = Register()
+        res = reg.authenticate(email, password)
+        if "error" in res:
+            error_message = res["error"]
+        elif "success" in res:
+            jwt = res["success"]
+            resp = make_response(redirect(url_for('mynodes')))
+            resp.set_cookie("jwt", jwt)
+            return resp
+    return render_template(
+            "login.html.j2",
+            auth=auth(),
+            config=config,
+            datetime=datetime.datetime,
+            timestamp=datetime.datetime.now(),
+            success_message=success_message,
+            error_message=error_message
+        )
+
+
+@app.route('/logout.html')
+def logout():
+    resp = make_response(redirect(url_for('serve_index')))
+    resp.set_cookie('jwt', '', expires=0)
+    return resp
+
+
+@app.route('/verify')
+def verify():
+    code = request.args.get('c')
+    reg = Register()
+    res = reg.verify_account(code)
+    if "error" in res:
+        return serve_index(error_message=res["error"])
+    elif "success" in res:
+        return login(success_message=res["success"])
+    return serve_index()
+
+
 @app.route('/<path:filename>')
 def serve_static(filename):
     nodep = r"node\_\w{8}\.html"
+    userp = r"user\_(\w+)\.html"
+
     if re.match(nodep, filename):
         md = MeshData()
         nodes = md.get_nodes()
         node = filename.replace("node_", "").replace(".html", "")
         return render_template(
                 f"node.html.j2",
+                auth=auth(),
                 config=config,
                 node=nodes[node],
                 nodes=nodes,
@@ -201,6 +335,26 @@ def serve_static(filename):
                 datetime=datetime.datetime,
                 timestamp=datetime.datetime.now(),
             )
+    if re.match(userp, filename):
+        match = re.match(userp, filename)
+        username = match.group(1)
+        md = MeshData()
+        nodes = md.get_nodes()
+        owner = md.get_user(username)
+        owner_nodes = utils.get_owner_nodes(nodes, owner["email"])
+        return render_template(
+            "user.html.j2",
+            auth=auth(),
+            username=username,
+            config=config,
+            nodes=nodes,
+            active_nodes=owner_nodes,
+            hardware=meshtastic_support.HardwareModel,
+            meshtastic_support=meshtastic_support,
+            utils=utils,
+            datetime=datetime.datetime,
+            timestamp=datetime.datetime.now(),
+        )
 
     return send_from_directory("www", filename)
 
@@ -214,7 +368,14 @@ def run():
     waitress_logger = logging.getLogger("waitress")
     waitress_logger.setLevel(logging.DEBUG)  # Enable all logs from Waitress
     #  serve(app, host="0.0.0.0", port=port)
-    serve(TransLogger(app, setup_console_handler=False), port=port)
+    serve(
+        TransLogger(
+            app,
+            setup_console_handler=False,
+            logger=waitress_logger
+        ),
+        port=port
+    )
 
 
 if __name__ == '__main__':

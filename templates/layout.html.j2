@@ -44,6 +44,11 @@
           <a class="nav-link" href="{{ page }}.html">{{ page.title() }}</a>
         </li>
         {% endfor %}
+        {% if auth %}
+        <li class="nav-item{% if this_page == "my nodes" %} active{% endif %}">
+          <a class="nav-link" href="{{ url_for("mynodes") }}">My Nodes</a>
+        </li>
+        {% endif %}
          <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             Tools
@@ -58,8 +63,15 @@
           <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
         </li>
       </ul>
+      {% if not auth %}
+      <a href="{{ url_for("login") }}" class="btn btn-info" role="button">Login</a>
+      {% else %}
+      <a href="{{ url_for("logout") }}" class="btn btn-info" role="button">Logout</a>
+      {% endif %}
     </div>
   </nav>
+  {% if success_message %}<div class="p-3 mt-1 fw-bold" style="background: #94D19B;">{{ success_message }}</div>{% endif %}
+  {% if error_message %}<div class="p-3 mt-1 fw-bold" style="background: #E57373;">{{ error_message }}</div>{% endif %}
   <main>
     {% block content %}{% endblock %}
   </main>

@@ -70,7 +70,7 @@ if __name__ == "__main__":
             break
         except Exception as e:
             logger.warning(f"Waiting for database to become ready.")
-            #  logger.error(str(e))
+            logger.error(str(e))
             time.sleep(10)
     if not db_connected:
         logger.error("Giving up. Bye.")

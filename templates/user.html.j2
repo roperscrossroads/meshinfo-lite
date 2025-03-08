@@ -1,0 +1,11 @@
+{% set this_page = "user" %}
+{% extends "layout.html.j2" %}
+
+{% block title %}User | MeshInfo{% endblock %}
+
+{% block content %}
+<div class="container pt-3">
+<h5>Nodes linked to {{ username }}</h5>
+{% include 'node_table.html.j2' %}
+</div>
+{% endblock %}

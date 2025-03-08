@@ -4,11 +4,14 @@ from cryptography.hazmat.backends import default_backend
 from meshtastic import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
 from google.protobuf.json_format import MessageToJson
 from meshdata import MeshData
+import configparser
 import json
 import logging
 
+config = configparser.ConfigParser()
+config.read("config.ini")
 
-DEFAULT_KEY = "1PG7OiApB1nwvP+rz05pAQ=="
+DEFAULT_KEY = config["mesh"]["channel_key"]
 
 
 def decrypt_packet(mp):
