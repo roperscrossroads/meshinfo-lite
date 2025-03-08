@@ -8,3 +8,4 @@ paste
 colorlog
 bcrypt
 pyjwt
+matplotlib
