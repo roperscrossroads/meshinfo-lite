@@ -92,9 +92,31 @@ ORDER BY telemetry_time DESC LIMIT 1"""
     def get_telemetry_all(self):
         telemetry = []
         sql = """SELECT * FROM telemetry
-ORDER BY telemetry_time DESC LIMIT 1000"""
+ORDER BY ts_created DESC LIMIT 1000"""
         cur = self.db.cursor()
         cur.execute(sql)
+        rows = cur.fetchall()
+        for row in rows:
+            record = {}
+            column_names = [desc[0] for desc in cur.description]
+            for i in range(0, len(row)):
+                if isinstance(row[i], datetime.datetime):
+                    record[column_names[i]] = row[i].timestamp()
+                else:
+                    record[column_names[i]] = row[i]
+            telemetry.append(record)
+        cur.close()
+        return telemetry
+
+    def get_node_telemetry(self, node_id):
+        telemetry = []
+        sql = """SELECT * FROM telemetry
+WHERE ts_created >= NOW() - INTERVAL 1 DAY
+AND id = %s AND battery_level IS NOT NULL
+ORDER BY ts_created"""
+        params = (node_id, )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
         rows = cur.fetchall()
         for row in rows:
             record = {}
@@ -576,7 +598,7 @@ ts_updated = VALUES(ts_updated)"""
         cur = self.db.cursor()
         cur.execute(f"SELECT COUNT(*) FROM telemetry")
         count = cur.fetchone()[0]
-        if count >= 1000:
+        if count >= 20000:
             cur.execute(f"""DELETE FROM telemetry
 ORDER BY ts_created ASC LIMIT 1""")
         cur.close()
@@ -959,4 +981,4 @@ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"""
 if __name__ == "__main__":
     md = MeshData()
     md.setup_database()
-    print(md.get_user("dadecoza"))
+    print(md.get_node_telemetry(3201996251))

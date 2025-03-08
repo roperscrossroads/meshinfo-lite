@@ -10,6 +10,7 @@ import meshtastic_support
 from meshdata import MeshData
 from meshinfo_register import Register
 from meshtastic_monday import MeshtasticMonday
+from meshinfo_telemetry_graph import draw_graph
 import json
 import datetime
 import time
@@ -321,8 +322,12 @@ def serve_static(filename):
 
     if re.match(nodep, filename):
         md = MeshData()
-        nodes = md.get_nodes()
         node = filename.replace("node_", "").replace(".html", "")
+        node_id = utils.convert_node_id_from_hex_to_int(node)
+        nodes = md.get_nodes()
+        node_telemetry = md.get_node_telemetry(node_id)
+        print(json.dumps(node_telemetry, indent=4))
+        telemetry_graph = draw_graph(node_telemetry)
         return render_template(
                 f"node.html.j2",
                 auth=auth(),
@@ -331,6 +336,7 @@ def serve_static(filename):
                 nodes=nodes,
                 hardware=meshtastic_support.HardwareModel,
                 meshtastic_support=meshtastic_support,
+                telemetry_graph=telemetry_graph,
                 utils=utils,
                 datetime=datetime.datetime,
                 timestamp=datetime.datetime.now(),

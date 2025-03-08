@@ -318,6 +318,13 @@
         </tbody>
       </table>
     </div>
+    {% if node.telemetry %}
+    <div class="row">
+      <div class="col-sm p-2">
+        <img src="data:image/jpeg;base64,{{ telemetry_graph }}" style="width: 100%">
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 <script type="module">
