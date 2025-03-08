@@ -833,7 +833,6 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
         ]
         cur = self.db.cursor()
         for create in creates:
-            logging.debug(create)
             cur.execute(create)
         cur.close()
         self.db.commit()
