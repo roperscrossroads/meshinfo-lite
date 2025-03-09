@@ -28,7 +28,6 @@ def auth():
         return None
     reg = Register()
     decoded_jwt = reg.auth(jwt)
-    logging.debug(json.dumps(decoded_jwt, indent=4))
     return decoded_jwt
 
 
