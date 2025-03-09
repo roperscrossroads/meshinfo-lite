@@ -224,10 +224,30 @@
             </td>
           </tr>
           <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">First Seen</th>
+            <td class="text-left">
+              {% if node.ts_created %}
+              {{ datetime.fromtimestamp(node["ts_created"]).strftime('%Y-%m-%d %H:%M:%S') }}
+              {% else %}
+              Unknown
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
             <th scope="row" style="background: #F2F6F9; text-align: left;">Last Seen</th>
             <td class="text-left">
               {% if node.ts_seen %}
               {{ datetime.fromtimestamp(node["ts_seen"]).strftime('%Y-%m-%d %H:%M:%S') }}
+              {% else %}
+              Unknown
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Owner</th>
+            <td class="text-left">
+              {% if node.owner_username %}
+              <a href='user_{{ node.owner_username }}.html'>{{ node.owner_username }}</a>
               {% else %}
               Unknown
               {% endif %}
