@@ -70,6 +70,7 @@
       {% if node.position and node.position.latitude_i and node.position.longitude_i %}
       <div id="map" class="map"></div>
       {% endif %}
+      <img class="w-100" src="data:image/jpeg;base64,{{ telemetry_graph }}">
       <div class="w-100 mt-2 text-center fw-bold p-2" style="background: #D7F9FF;">Elsewhere</div>
       <div>
         <a href="https://meshview.zr1rf.za.net/packet_list/{{ node.id }}"
@@ -320,8 +321,8 @@
     </div>
     {% if node.telemetry %}
     <div class="row">
-      <div class="col-sm p-2">
-        <img src="data:image/jpeg;base64,{{ telemetry_graph }}" style="width: 100%">
+      <div class="col">
+        
       </div>
     </div>
     {% endif %}
