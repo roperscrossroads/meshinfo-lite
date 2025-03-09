@@ -10,7 +10,6 @@ import sys
 import os
 
 
-#  logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 def setup_logger():
     config = configparser.ConfigParser()
     config.read('config.ini')
@@ -47,44 +46,77 @@ def setup_logger():
     return logger
 
 
-if __name__ == "__main__":
-    config_file = "config.ini"
+def check_pid(pid):
+    """ Check For the existence of a unix pid. """
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    else:
+        return True
 
-    if not os.path.isfile(config_file):
-        print(f"Error: Configuration file '{config_file}' not found!")
-        sys.exit(1)
 
-    logger = setup_logger()
+def threadwrap(threadfunc):
+    def wrapper():
+        while True:
+            try:
+                threadfunc()
+            except BaseException as e:
+                logger.error('{!r}; restarting thread'.format(e))
+            else:
+                logger.error('exited normally, bad thread; restarting')
+    return wrapper
 
-    fh = open("banner", "r")
-    logger.info(fh.read())
+
+pidfile = "meshinfo.pid"
+pid = None
+try:
+    fh = open(pidfile, "r")
+    pid = int(fh.read())
     fh.close()
+except Exception as e:
+    pass
 
-    logger.info("Setting up database")
-    db_connected = False
-    for i in range(10):
-        try:
-            md = MeshData()
-            md.setup_database()
-            db_connected = True
-            break
-        except Exception as e:
-            logger.warning(f"Waiting for database to become ready.")
-            logger.error(str(e))
-            time.sleep(10)
-    if not db_connected:
-        logger.error("Giving up. Bye.")
-        sys.exit(1)
+if pid and check_pid(pid):
+    print("already running")
+    sys.exit(0)
 
-    fh = open("meshinfo.pid", "w")
-    fh.write(str(os.getpid()))
-    fh.close()
+fh = open(pidfile, "w")
+fh.write(str(os.getpid()))
+fh.close()
 
-    thread_mqtt = threading.Thread(target=meshinfo_mqtt.run)
-    thread_web = threading.Thread(target=meshinfo_web.run)
+logger = setup_logger()
+config_file = "config.ini"
 
-    thread_mqtt.start()
-    thread_web.start()
+if not os.path.isfile(config_file):
+    print(f"Error: Configuration file '{config_file}' not found!")
+    sys.exit(1)
 
-    thread_mqtt.join()
-    thread_web.join()
+fh = open("banner", "r")
+logger.info(fh.read())
+fh.close()
+
+logger.info("Setting up database")
+db_connected = False
+for i in range(10):
+    try:
+        md = MeshData()
+        md.setup_database()
+        db_connected = True
+        break
+    except Exception as e:
+        logger.warning(f"Waiting for database to become ready.")
+        logger.error(str(e))
+        time.sleep(10)
+if not db_connected:
+    logger.error("Giving up. Bye.")
+    sys.exit(1)
+
+thread_mqtt = threading.Thread(target=threadwrap(meshinfo_mqtt.run))
+thread_web = threading.Thread(target=threadwrap(meshinfo_web.run))
+
+thread_mqtt.start()
+thread_web.start()
+
+thread_mqtt.join()
+thread_web.join()
