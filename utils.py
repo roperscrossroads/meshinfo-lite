@@ -185,8 +185,6 @@ def hash_password(password: str) -> str:
     """Hashes a password using bcrypt."""
     salt = bcrypt.gensalt()
     hashed_password = bcrypt.hashpw(password.encode(), salt)
-    print(hashed_password)
-    print(len(hashed_password))
     return hashed_password
 
 

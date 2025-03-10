@@ -981,4 +981,3 @@ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"""
 if __name__ == "__main__":
     md = MeshData()
     md.setup_database()
-    print(md.get_node_telemetry(3201996251))

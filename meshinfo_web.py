@@ -325,7 +325,6 @@ def serve_static(filename):
         node_id = utils.convert_node_id_from_hex_to_int(node)
         nodes = md.get_nodes()
         node_telemetry = md.get_node_telemetry(node_id)
-        print(json.dumps(node_telemetry, indent=4))
         telemetry_graph = draw_graph(node_telemetry)
         return render_template(
                 f"node.html.j2",
