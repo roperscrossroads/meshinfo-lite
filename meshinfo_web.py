@@ -1,4 +1,13 @@
-from flask import Flask, send_from_directory, render_template, request, make_response, redirect, url_for
+from flask import (
+    Flask,
+    send_from_directory,
+    render_template,
+    request,
+    make_response,
+    redirect,
+    url_for,
+    abort
+)
 from waitress import serve
 from paste.translogger import TransLogger
 import configparser
@@ -29,6 +38,15 @@ def auth():
     reg = Register()
     decoded_jwt = reg.auth(jwt)
     return decoded_jwt
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template(
+        "404.html.j2",
+        auth=auth,
+        config=config
+    )
 
 
 # Serve static files from the root directory
@@ -316,14 +334,18 @@ def verify():
 
 @app.route('/<path:filename>')
 def serve_static(filename):
-    nodep = r"node\_\w{8}\.html"
+    nodep = r"node\_(\w{8})\.html"
     userp = r"user\_(\w+)\.html"
 
     if re.match(nodep, filename):
         md = MeshData()
-        node = filename.replace("node_", "").replace(".html", "")
-        node_id = utils.convert_node_id_from_hex_to_int(node)
+        match = re.match(nodep, filename)
+        hexid = match.group(1)
         nodes = md.get_nodes()
+        if hexid not in nodes:
+            abort(404)
+        node = filename.replace("node_", "").replace(".html", "")
+        node_id = utils.convert_node_id_from_hex_to_int(hexid)
         node_telemetry = md.get_node_telemetry(node_id)
         telemetry_graph = draw_graph(node_telemetry)
         return render_template(
@@ -343,8 +365,10 @@ def serve_static(filename):
         match = re.match(userp, filename)
         username = match.group(1)
         md = MeshData()
-        nodes = md.get_nodes()
         owner = md.get_user(username)
+        if not owner:
+            abort(404)
+        nodes = md.get_nodes()
         owner_nodes = utils.get_owner_nodes(nodes, owner["email"])
         return render_template(
             "user.html.j2",
