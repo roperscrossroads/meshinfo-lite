@@ -340,12 +340,11 @@ def serve_static(filename):
     if re.match(nodep, filename):
         md = MeshData()
         match = re.match(nodep, filename)
-        hexid = match.group(1)
+        node = match.group(1)
         nodes = md.get_nodes()
-        if hexid not in nodes:
+        if node not in nodes:
             abort(404)
-        node = filename.replace("node_", "").replace(".html", "")
-        node_id = utils.convert_node_id_from_hex_to_int(hexid)
+        node_id = utils.convert_node_id_from_hex_to_int(node)
         node_telemetry = md.get_node_telemetry(node_id)
         telemetry_graph = draw_graph(node_telemetry)
         return render_template(
