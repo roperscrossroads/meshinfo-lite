@@ -5,37 +5,39 @@
 
 {% block content %}
 <div class="container pt-3">
-<h5>🗨️Chat</h5>
-<div class="table-responsive">
-  <table class="table table-striped table-bordered">
-    <thead>
-      <tr>
-        <th scope="col">Channel</th>
-        <th scope="col">Time</th>
-        <th scope="col">From</th>
-        <th scope="col" style="word-wrap: break-word;min-width: 50px;">To</th>
-        <th scope="col" style="word-wrap: break-word;min-width: 400px;">Message</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for message in chat %}
-      <tr>
-        <td style="max-width: 10px;">{{ message.channel }}</td>
-        <td>{{ datetime.fromtimestamp(message['ts_created']).strftime('%Y-%m-%d %H:%M:%S') }}</td>
-        {% if message["from"] in nodes %}
-        <td><a href="node_{{ message['from'] }}.html">{{ nodes[message["from"]].long_name+" (" + nodes[message["from"]].short_name + ")" }}</a></td>
-        {% else %}
-        <td>{{ message["from"] }}</td>
-        {% endif %}
-        {% if message["to"] in nodes and message["to"] != "ffffffff" %}
-        <td><a href="node_{{ message['to'] }}.html">{{ nodes[message["to"]].long_name+" (" + nodes[message["to"]].short_name + ")" }}</a></td>
-        {% else %}
-        <td>{{ message["to"] if message["to"] != "ffffffff" else "ALL"}}</td>
-        {% endif %}
-        <td style="word-break: break-word;">{{ message["text"] }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-</div>
-</div>
-{% endblock %}
+  <h5>🗨️Chat</h5>
+  <div class="table-responsive">
+    <table class="table table-striped table-bordered">
+      <thead>
+        <tr>
+          <th scope="col">Channel</th>
+          <th scope="col">Time</th>
+          <th scope="col">From</th>
+          <th scope="col" style="word-wrap: break-word;min-width: 50px;">To</th>
+          <th scope="col" style="word-wrap: break-word;min-width: 400px;">Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for message in chat %}
+        <tr>
+          <td style="max-width: 10px;">{{ message.channel }}</td>
+          <td>{{ datetime.fromtimestamp(message['ts_created']).strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          {% if message["from"] in nodes %}
+          <td><a href="node_{{ message['from'] }}.html">{{ nodes[message["from"]].long_name+" (" +
+              nodes[message["from"]].short_name + ")" }}</a></td>
+          {% else %}
+          <td>{{ message["from"] }}</td>
+          {% endif %}
+          {% if message["to"] in nodes and message["to"] != "ffffffff" %}
+          <td><a href="node_{{ message['to'] }}.html">{{ nodes[message["to"]].long_name+" (" +
+              nodes[message["to"]].short_name + ")" }}</a></td>
+          {% else %}
+          <td>{{ message["to"] if message["to"] != "ffffffff" else "ALL"}}</td>
+          {% endif %}
+          <td style="word-break: break-word;">{{ message["text"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endblock %}
