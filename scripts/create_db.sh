@@ -39,4 +39,4 @@ COMMIT;
 END
 )
 
-echo $SQL | mysql -u root
+echo "$SQL" | mysql -u root
