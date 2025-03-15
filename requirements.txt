@@ -9,3 +9,7 @@ colorlog
 bcrypt
 pyjwt
 matplotlib
+rasterio
+scipy
+geopy
+boto3

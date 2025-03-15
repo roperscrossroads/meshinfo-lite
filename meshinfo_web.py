@@ -20,6 +20,7 @@ from meshdata import MeshData
 from meshinfo_register import Register
 from meshtastic_monday import MeshtasticMonday
 from meshinfo_telemetry_graph import draw_graph
+from meshinfo_los_profile import LOSProfile
 import json
 import datetime
 import time
@@ -347,6 +348,7 @@ def serve_static(filename):
         node_id = utils.convert_node_id_from_hex_to_int(node)
         node_telemetry = md.get_node_telemetry(node_id)
         telemetry_graph = draw_graph(node_telemetry)
+        lp = LOSProfile(nodes, node_id)
         return render_template(
                 f"node.html.j2",
                 auth=auth(),
@@ -355,6 +357,7 @@ def serve_static(filename):
                 nodes=nodes,
                 hardware=meshtastic_support.HardwareModel,
                 meshtastic_support=meshtastic_support,
+                los_profiles = lp.get_profiles(),
                 telemetry_graph=telemetry_graph,
                 utils=utils,
                 datetime=datetime.datetime,

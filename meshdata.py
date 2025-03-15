@@ -769,7 +769,7 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
 
     def setup_database(self):
         creates = [
-            """CREATE TABLE IF NOT EXISTS  meshuser (
+            """CREATE TABLE IF NOT EXISTS meshuser (
     email VARCHAR(255) PRIMARY KEY,
     username VARCHAR(255) NOT NULL,
     password BINARY(60) NOT NULL,
@@ -851,7 +851,6 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
     message text,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )"""
-
         ]
         cur = self.db.cursor()
         for create in creates:
