@@ -11,7 +11,14 @@ ENV PYTHONUNBUFFERED=1
 RUN mkdir /app
 WORKDIR /app
 
-COPY . .
+RUN apt-get update && apt-get -y install \
+    libexpat1 libexpat1-dev
+
+COPY requirements.txt banner run.sh ./
+COPY *.py ./
+COPY www  ./www
+COPY templates ./templates
+
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
