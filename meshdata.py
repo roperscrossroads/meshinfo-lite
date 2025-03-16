@@ -259,7 +259,7 @@ WHERE n.ts_seen > FROM_UNIXTIME(%s)"""
             record["role"] = record["role"] or 0
             record["active"] = is_active
             record["last_seen"] = utils.time_since(record["ts_seen"])
-            node_id = self.hex_id(row[0])
+            node_id = utils.convert_node_id_from_int_to_hex(row[0])
             nodes[node_id] = record
         cur.close()
         return nodes
