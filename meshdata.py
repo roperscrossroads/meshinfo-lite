@@ -43,7 +43,7 @@ class MeshData:
         return None
 
     def hex_id(self, id):
-        return format(id, 'x')
+        return utils.convert_node_id_from_int_to_hex(id)
 
     def unknown(self, id):
         hexid = self.hex_id(id)
