@@ -12,7 +12,7 @@ services:
     networks:
       - backend
   meshinfo:
-    image: ghcr.io/dadecoza/meshinfo-lite:0.1.4-za
+    image: ghcr.io/dadecoza/meshinfo-lite:0.1.5-za
     depends_on:
       - mariadb
     volumes:
