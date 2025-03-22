@@ -74,6 +74,16 @@ VALUES (%s, %s, %s, %s)"""
             f"Please visit {base_url}/verify?c={code} to verify your account."
         )
         return {"success": "Please check your email to verify your account."}
+    
+    def update_password(self, email, newpass):
+        hashed = utils.hash_password(newpass)
+        sql = """UPDATE meshuser SET password = %s
+WHERE email = %s"""
+        params = (hashed, email.lower())
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        cur.close()
+        self.db.commit()
 
     def authenticate(self, email, password):
         sql = """SELECT password, username FROM meshuser
