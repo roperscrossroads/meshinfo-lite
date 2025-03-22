@@ -77,7 +77,26 @@ def nodes():
         auth=auth(),
         config=config,
         nodes=nodes,
-        active_nodes=utils.active_nodes(nodes),
+        latest=latest,
+        hardware=meshtastic_support.HardwareModel,
+        meshtastic_support=meshtastic_support,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+    )
+
+
+@app.route('/allnodes.html')
+def allnodes():
+    md = MeshData()
+    nodes = md.get_nodes()
+    latest = md.get_latest_node()
+    return render_template(
+        "allnodes.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=nodes,
+        show_inactive=True,
         latest=latest,
         hardware=meshtastic_support.HardwareModel,
         meshtastic_support=meshtastic_support,
@@ -357,7 +376,7 @@ def serve_static(filename):
                 nodes=nodes,
                 hardware=meshtastic_support.HardwareModel,
                 meshtastic_support=meshtastic_support,
-                los_profiles = lp.get_profiles(),
+                los_profiles=lp.get_profiles(),
                 telemetry_graph=telemetry_graph,
                 utils=utils,
                 datetime=datetime.datetime,

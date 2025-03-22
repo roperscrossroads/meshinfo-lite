@@ -37,8 +37,9 @@
         <th scope="col"></th>
       </tr>
     <tbody>
-      {% for id, node in active_nodes.items()|sort(attribute='1.short_name') %}
-      <tr>
+      {% for id, node in nodes.items()|sort(attribute='1.short_name') %}
+      {% if node.active or show_inactive %}
+      <tr style="{% if not node.active %}opacity: 0.5;{% endif %}">
         <td class="p-0" style="width:50px;">
           <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed={{ id }}" alt="Avatar"
             style="height: 50px; width: 50px;">
@@ -169,6 +170,7 @@
             {% endif %}
           </td>
       </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
 
