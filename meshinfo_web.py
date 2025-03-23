@@ -47,7 +47,7 @@ def not_found(e):
         "404.html.j2",
         auth=auth,
         config=config
-    )
+    ), 404
 
 
 # Serve static files from the root directory
