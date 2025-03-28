@@ -669,7 +669,11 @@ VALUES (%s, %s, %s, %s, NOW())"""
         )
         self.db.cursor().execute(sql, params)
         self.db.commit()
-        match = re.search(r"meshinfo (\d{4})", payload["text"].decode())
+        match = re.search(
+            r"meshinfo (\d{4})",
+            payload["text"].decode(),
+            re.IGNORECASE
+        )
         if match:
             otp = match.group(1)
             node = from_id
