@@ -366,6 +366,7 @@ def serve_static(filename):
             abort(404)
         node_id = utils.convert_node_id_from_hex_to_int(node)
         node_telemetry = md.get_node_telemetry(node_id)
+        node_route = md.get_route_coordinates(node_id)
         telemetry_graph = draw_graph(node_telemetry)
         lp = LOSProfile(nodes, node_id)
         return render_template(
@@ -378,6 +379,7 @@ def serve_static(filename):
                 meshtastic_support=meshtastic_support,
                 los_profiles=lp.get_profiles(),
                 telemetry_graph=telemetry_graph,
+                node_route=node_route,
                 utils=utils,
                 datetime=datetime.datetime,
                 timestamp=datetime.datetime.now(),

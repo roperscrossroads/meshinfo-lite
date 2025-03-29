@@ -288,6 +288,23 @@ WHERE n.ts_seen > FROM_UNIXTIME(%s)"""
                 prev_key = msg_key
         return chats
 
+    def get_route_coordinates(self, id):
+        sql = """SELECT longitude_i, latitude_i
+FROM positionlog WHERE id = %s
+AND ts_created >= NOW() - INTERVAL 1 DAY
+ORDER BY ts_created DESC LIMIT 20"""
+        params = (id, )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        coords = []
+        for row in cur.fetchall():
+            coords.append([
+                row[0] / 10000000,
+                row[1] / 10000000
+            ])
+        cur.close()
+        return list(reversed(coords))
+
     def get_logs(self):
         logs = []
         sql = "SELECT * FROM meshlog ORDER BY ts_created DESC"
@@ -1020,4 +1037,3 @@ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"""
 if __name__ == "__main__":
     md = MeshData()
     md.setup_database()
-    print(json.dumps(md.get_nodes(), indent=4))

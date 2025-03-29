@@ -404,6 +404,35 @@
     },
     active: {{ node.active | tojson }},
     };
+  
+  const coordinates = {{ node_route|tojson|safe }};
+
+
+  // Convert coordinates to OpenLayers format
+  const route = new ol.geom.LineString(coordinates.map(coord => ol.proj.fromLonLat(coord)));
+
+  // Create a feature for the route
+  const routeFeature = new ol.Feature({
+      geometry: route
+  });
+
+  // Style the route line
+  routeFeature.setStyle(new ol.style.Style({
+      stroke: new ol.style.Stroke({
+          color: 'cyan',
+          width: 2
+      })
+  }));
+
+  // Create a vector source and layer
+  const vectorSource = new ol.source.Vector({
+      features: [routeFeature]
+  });
+
+  const vectorLayer = new ol.layer.Vector({
+      source: vectorSource
+  });
+
 
   {% if node.position and node.position.longitude_i and node.position.latitude_i %}
   node.position.latitude = {{ node.position.latitude_i / 1e7 }};
@@ -447,6 +476,7 @@
     })
   });
   map.addLayer(layer);
+  map.addLayer(vectorLayer);
   {% endif %}
 
 </script>
