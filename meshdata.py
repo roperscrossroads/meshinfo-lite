@@ -757,13 +757,13 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
             return
         moved = True
         sql = """SELECT latitude_i, longitude_i FROM positionlog
-WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
+WHERE id = %s ORDER BY ts_created DESC LIMIT 2"""
         params = (id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
-        row = cur.fetchone()
-        if row and row[0] == lat and row[1] == lon:
-            moved = False
+        for row in cur.fetchall():
+            if row and row[0] == lat and row[1] == lon:
+                moved = False
         cur.close()
         if not moved:
             return
