@@ -292,7 +292,7 @@ WHERE n.ts_seen > FROM_UNIXTIME(%s)"""
         sql = """SELECT longitude_i, latitude_i
 FROM positionlog WHERE id = %s
 AND ts_created >= NOW() - INTERVAL 1 DAY
-ORDER BY ts_created DESC LIMIT 20"""
+ORDER BY ts_created DESC"""
         params = (id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
