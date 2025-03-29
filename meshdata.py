@@ -551,6 +551,11 @@ ts_updated = VALUES(ts_updated)"""
         )
         cur = self.db.cursor()
         cur.execute(sql, values)
+        self.log_position(
+            data["from"],
+            payload["latitude_i"],
+            payload["longitude_i"]
+        )
         self.db.commit()
 
     def store_mapreport(self, data):
@@ -747,6 +752,30 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
         self.db.commit()
         logging.debug(json.dumps(data, indent=4, cls=CustomJSONEncoder))
 
+    def log_position(self, id, lat, lon):
+        if not lat or not lon:
+            return
+        moved = True
+        sql = """SELECT latitude_i, longitude_i FROM positionlog
+WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
+        params = (id, )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        if row and row[0] == lat and row[1] == lon:
+            moved = False
+        cur.close()
+        if not moved:
+            return
+        sql = """INSERT INTO positionlog
+(id, latitude_i, longitude_i) VALUES (%s, %s, %s)"""
+        params = (id, lat, lon)
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        cur.close()
+        self.db.commit()
+        logging.info(f"Position updated for {id}")
+
     def store(self, data, topic):
         if not data:
             return
@@ -854,6 +883,13 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
     topic varchar(255) not null,
     message text,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)""",
+            """CREATE TABLE IF NOT EXISTS  positionlog (
+    id INT UNSIGNED NOT NULL,
+    latitude_i INT NOT NULL,
+    longitude_i INT NOT NULL,
+    ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id, ts_created)
 )"""
         ]
         cur = self.db.cursor()
