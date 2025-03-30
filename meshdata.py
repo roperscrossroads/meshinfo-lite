@@ -291,7 +291,6 @@ WHERE n.ts_seen > FROM_UNIXTIME(%s)"""
     def get_route_coordinates(self, id):
         sql = """SELECT longitude_i, latitude_i
 FROM positionlog WHERE id = %s
-AND ts_created >= NOW() - INTERVAL 1 DAY
 ORDER BY ts_created DESC"""
         params = (id, )
         cur = self.db.cursor()
@@ -509,7 +508,7 @@ ts_updated = VALUES(ts_updated)"""
         cur.execute(sql, values)
         self.db.commit()
 
-    def store_position(self, data):
+    def store_position(self, data, source="position"):
         payload = dict(data["decoded"]["json_payload"])
         expected = [
             "altitude",
@@ -571,13 +570,14 @@ ts_updated = VALUES(ts_updated)"""
         self.log_position(
             data["from"],
             payload["latitude_i"],
-            payload["longitude_i"]
+            payload["longitude_i"],
+            source
         )
         self.db.commit()
 
     def store_mapreport(self, data):
         self.store_node(data)
-        self.store_position(data)
+        self.store_position(data, "mapreport")
 
     def store_neighborinfo(self, data):
         node_id = self.verify_node(data["from"])
@@ -769,24 +769,32 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
         self.db.commit()
         logging.debug(json.dumps(data, indent=4, cls=CustomJSONEncoder))
 
-    def log_position(self, id, lat, lon):
+    def log_position(self, id, lat, lon, source):
         if not lat or not lon:
             return
-        moved = True
-        sql = """SELECT latitude_i, longitude_i FROM positionlog
-WHERE id = %s ORDER BY ts_created DESC LIMIT 2"""
+        sql = """DELETE FROM positionlog
+WHERE ts_created < NOW() - INTERVAL 1 DAY
+AND id = %s"""
         params = (id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
-        for row in cur.fetchall():
-            if row and row[0] == lat and row[1] == lon:
-                moved = False
+        cur.close()
+        self.db.commit()
+        moved = True
+        sql = """SELECT latitude_i, longitude_i FROM positionlog
+WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
+        params = (id, )
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        if row and row[0] == lat and row[1] == lon:
+            moved = False
         cur.close()
         if not moved:
             return
         sql = """INSERT INTO positionlog
-(id, latitude_i, longitude_i) VALUES (%s, %s, %s)"""
-        params = (id, lat, lon)
+(id, latitude_i, longitude_i, source) VALUES (%s, %s, %s, %s)"""
+        params = (id, lat, lon, source)
         cur = self.db.cursor()
         cur.execute(sql, params)
         cur.close()
@@ -905,6 +913,7 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 2"""
     id INT UNSIGNED NOT NULL,
     latitude_i INT NOT NULL,
     longitude_i INT NOT NULL,
+    source VARCHAR(35) NOT NULL,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, ts_created)
 )"""
