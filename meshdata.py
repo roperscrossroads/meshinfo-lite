@@ -291,6 +291,7 @@ WHERE n.ts_seen > FROM_UNIXTIME(%s)"""
     def get_route_coordinates(self, id):
         sql = """SELECT longitude_i, latitude_i
 FROM positionlog WHERE id = %s
+AND source = 'position'
 ORDER BY ts_created DESC"""
         params = (id, )
         cur = self.db.cursor()
