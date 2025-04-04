@@ -161,6 +161,7 @@ FROM neighborinfo a
 LEFT OUTER JOIN position p1 ON p1.id = a.id
 LEFT OUTER JOIN position p2 ON p2.id = a.neighbor_id
 WHERE a.id = %s
+AND a.ts_created < NOW() - INTERVAL 1 DAY
 """
         params = (id, )
         cur = self.db.cursor()
