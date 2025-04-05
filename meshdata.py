@@ -317,9 +317,14 @@ WHERE a.id = %s
         cur.close()
         return nodes
 
-    def get_chat(self):
-        chats = []
-        # Modified SQL to ensure GROUP_CONCAT is working and aliased properly
+    def get_chat(self, page=1, per_page=50):
+        """Get paginated chat messages with reception data."""
+        # Get total count first
+        cur = self.db.cursor()
+        cur.execute("SELECT COUNT(DISTINCT t.message_id) FROM text t")
+        total = cur.fetchone()[0]
+        
+        # Get paginated results with reception data
         sql = """
         SELECT t.*,
             GROUP_CONCAT(
@@ -330,16 +335,18 @@ WHERE a.id = %s
         LEFT JOIN message_reception r ON t.message_id = r.message_id
         GROUP BY t.message_id, t.from_id, t.to_id, t.text, t.ts_created
         ORDER BY t.ts_created DESC
+        LIMIT %s OFFSET %s
         """
+        
+        offset = (page - 1) * per_page
         cur = self.db.cursor()
-        cur.execute(sql)
+        cur.execute(sql, (per_page, offset))
         rows = cur.fetchall()
         column_names = [desc[0] for desc in cur.description]
-        logging.debug(f"Column names: {column_names}")
         
+        chats = []
         prev_key = ""
         for row in rows:
-            logging.debug(f"Processing row: {row}")
             record = {}
             for i in range(len(row)):
                 col = column_names[i]
@@ -352,9 +359,8 @@ WHERE a.id = %s
             record["receptions"] = []
             receptions_str = record.get("reception_data")
             if receptions_str:
-                logging.debug(f"Raw receptions string: {receptions_str}")
                 for reception in receptions_str.split("|"):
-                    if reception and reception.count(':') >= 2:  # Ensure at least SNR and RSSI
+                    if reception and reception.count(':') >= 2:
                         try:
                             parts = reception.split(":")
                             node_id = parts[0]
@@ -371,23 +377,29 @@ WHERE a.id = %s
                                 "hop_start": int(hop_start) if hop_start and hop_start != "None" else None
                             }
                             record["receptions"].append(reception_data)
-                            logging.debug(f"Parsed reception: {reception_data}")
-                        except (ValueError, TypeError) as e:
-                            logging.warning(f"Failed to parse reception data: {reception}, error: {e}")
+                        except (ValueError, TypeError):
                             continue
-            else:
-                logging.debug(f"No receptions found for message_id: {record.get('message_id')}")
-                    
+                            
             record["from"] = self.hex_id(record["from_id"])
             record["to"] = self.hex_id(record["to_id"])
             msg_key = f"{record['from']}{record['to']}{record['text']}{record['message_id']}"
             if msg_key != prev_key:
                 chats.append(record)
                 prev_key = msg_key
-                logging.debug(f"Added chat record with {len(record['receptions'])} receptions")
         
-        logging.debug(f"Returning {len(chats)} chat records")
-        return chats
+        cur.close()
+        
+        return {
+            "items": chats,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": (total + per_page - 1) // per_page,
+            "has_prev": page > 1,
+            "has_next": page * per_page < total,
+            "prev_num": page - 1,
+            "next_num": page + 1
+        }
 
     def get_route_coordinates(self, id):
         sql = """SELECT longitude_i, latitude_i

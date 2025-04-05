@@ -33,7 +33,8 @@ app = Flask(__name__)
 app.jinja_env.globals.update(convert_to_local=convert_to_local)
 app.jinja_env.globals.update(format_timestamp=format_timestamp)
 app.jinja_env.globals.update(time_ago=time_ago)
-app.jinja_env.globals.update(min=min)  # Add this line
+app.jinja_env.globals.update(min=min)
+app.jinja_env.globals.update(max=max)
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -115,15 +116,49 @@ def allnodes():
 
 @app.route('/chat.html')
 def chat():
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    
     md = MeshData()
     nodes = md.get_nodes()
-    chat = md.get_chat()
+    chat_data = md.get_chat(page=page, per_page=per_page)
+    
+    # start_item and end_item for pagination
+    chat_data['start_item'] = (page - 1) * per_page + 1 if chat_data['total'] > 0 else 0
+    chat_data['end_item'] = min(page * per_page, chat_data['total'])
+    
     return render_template(
         "chat.html.j2",
         auth=auth(),
         config=config,
         nodes=nodes,
-        chat=chat,
+        chat=chat_data["items"],
+        pagination=chat_data,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        debug=False,
+    )
+
+@app.route('/chat2.html')
+def chat2():
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    
+    md = MeshData()
+    nodes = md.get_nodes()
+    chat_data = md.get_chat(page=page, per_page=per_page)
+    
+    chat_data['start_item'] = (page - 1) * per_page + 1 if chat_data['total'] > 0 else 0
+    chat_data['end_item'] = min(page * per_page, chat_data['total'])
+    
+    return render_template(
+        "chat2.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=nodes,
+        chat=chat_data["items"],
+        pagination=chat_data,
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
