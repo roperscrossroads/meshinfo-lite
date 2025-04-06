@@ -197,7 +197,7 @@ nav {
 .message-receptions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid rgba(0, 0, 0, 0.1);
@@ -209,12 +209,13 @@ nav {
     background: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 12px;
-    padding: 2px 8px;
+    padding: 4px 10px;
     font-size: 0.85em;
-    gap: 4px;
+    gap: 6px;
     text-decoration: none;
     color: inherit;
     transition: background-color 0.2s;
+    margin: 2px;
 }
 
 .reception-badge:hover {
