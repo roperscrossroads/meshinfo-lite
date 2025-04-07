@@ -156,7 +156,13 @@ def time_since(epoch_timestamp):
     sign = "-" if diff < 0 else ""
     diff = abs(diff)  # Work with absolute difference
     td = timedelta(seconds=diff)
-    formatted_diff = f"{sign}{td.seconds // 3600:02}:{(td.seconds % 3600) // 60:02}:{td.seconds % 60:02}"
+
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    formatted_diff = f"{sign}{hours:02}:{minutes:02}:{seconds:02}"
     return formatted_diff
 
 
