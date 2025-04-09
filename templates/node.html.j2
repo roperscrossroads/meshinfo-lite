@@ -517,7 +517,7 @@
   var node = {
     id: '{{ node.id }}',
     short_name: '{{ node.short_name }}',
-    long_name: '{{ node.long_name }}',
+    long_name: '{{ node.long_name | e }}',
     last_seen: '{{ node.last_seen }}',
     position: {
       latitude: 38.575764,
