@@ -8,6 +8,7 @@ from flask import (
     url_for,
     abort
 )
+from flask_caching import Cache
 from waitress import serve
 from paste.translogger import TransLogger
 import configparser
@@ -29,7 +30,9 @@ import re
 
 app = Flask(__name__)
 
-# Make timezone utilities available to templates
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+
+# Make globals available to templates
 app.jinja_env.globals.update(convert_to_local=convert_to_local)
 app.jinja_env.globals.update(format_timestamp=format_timestamp)
 app.jinja_env.globals.update(time_ago=time_ago)
@@ -60,6 +63,7 @@ def not_found(e):
 
 # Serve static files from the root directory
 @app.route('/')
+@cache.cached(timeout=60)  # Cache for 60 seconds
 def serve_index(success_message=None, error_message=None):
     md = MeshData()
     nodes = md.get_nodes()
@@ -76,6 +80,7 @@ def serve_index(success_message=None, error_message=None):
 
 
 @app.route('/nodes.html')
+@cache.cached(timeout=60)  # Cache for 60 seconds
 def nodes():
     md = MeshData()
     nodes = md.get_nodes()
@@ -95,6 +100,7 @@ def nodes():
     )
 
 @app.route('/allnodes.html')
+@cache.cached(timeout=60)  # Cache for 60 seconds
 def allnodes():
     md = MeshData()
     nodes = md.get_nodes()
@@ -294,6 +300,7 @@ def traceroute_map():
     )
 
 @app.route('/graph.html')
+@cache.cached(timeout=60)  # Cache for 60 seconds
 def graph():
     md = MeshData()
     nodes = md.get_nodes()

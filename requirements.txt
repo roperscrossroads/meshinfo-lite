@@ -14,3 +14,4 @@ scipy
 geopy
 boto3
 pytz
+Flask-Caching
