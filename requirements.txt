@@ -17,4 +17,3 @@ boto3
 pytz
 Flask-Caching
 pandas
-atexit

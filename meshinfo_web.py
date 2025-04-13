@@ -120,7 +120,7 @@ def allnodes():
     )
 
 
-@app.route('/chat.html')
+@app.route('/chat-classic.html')
 def chat():
     page = request.args.get('page', 1, type=int)
     per_page = 50
@@ -146,7 +146,7 @@ def chat():
         debug=False,
     )
 
-@app.route('/chat2.html')
+@app.route('/chat.html')
 def chat2():
     page = request.args.get('page', 1, type=int)
     per_page = 50
@@ -168,6 +168,7 @@ def chat2():
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
+        meshtastic_support=meshtastic_support,
         debug=False,
     )
 
