@@ -30,7 +30,36 @@ import re
 
 app = Flask(__name__)
 
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+cache_dir = os.path.join(os.path.dirname(__file__), 'runtime_cache')
+
+# Ensure the cache directory exists
+if not os.path.exists(cache_dir):
+    try:
+        os.makedirs(cache_dir)
+        logging.info(f"Created cache directory: {cache_dir}")
+    except OSError as e:
+        logging.error(f"Could not create cache directory {cache_dir}: {e}")
+        cache_dir = None # Indicate failure
+
+# Configure Flask-Caching
+cache_config = {
+    'CACHE_TYPE': 'SimpleCache', # Default fallback
+    'CACHE_DEFAULT_TIMEOUT': 300 # Default timeout 5 minutes
+}
+if cache_dir:
+    cache_config = {
+        'CACHE_TYPE': 'FileSystemCache',
+        'CACHE_DIR': cache_dir,
+        'CACHE_THRESHOLD': 1000,  # Max number of items (optional, adjust as needed)
+        'CACHE_DEFAULT_TIMEOUT': 60 # Keep your 60 second default timeout
+    }
+    logging.info(f"Using FileSystemCache with directory: {cache_dir}")
+else:
+    logging.warning("Falling back to SimpleCache due to directory creation issues.")
+
+
+# Initialize Cache with the chosen config
+cache = Cache(app, config=cache_config)
 
 # Make globals available to templates
 app.jinja_env.globals.update(convert_to_local=convert_to_local)
