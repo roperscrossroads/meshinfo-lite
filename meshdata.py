@@ -160,6 +160,52 @@ ORDER BY ts_created"""
         cur.close()
         return position
 
+    def get_position_at_time(self, node_id, target_timestamp):
+        """
+        Retrieves the position record from positionlog for a node
+        that is closest to, but not after, the target timestamp.
+        """
+        position = {}
+        # Convert Unix timestamp to datetime object for SQL comparison
+        target_dt = datetime.datetime.fromtimestamp(target_timestamp)
+
+        # Query positionlog for the latest entry at or before the target time
+        sql = """SELECT latitude_i, longitude_i, ts_created
+                 FROM positionlog
+                 WHERE id = %s
+                 ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
+                 LIMIT 1"""
+        params = (node_id, target_dt)
+        cur = None
+        try:
+            cur = self.db.cursor(dictionary=True)
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            if row:
+                position = {
+                    "latitude_i": row["latitude_i"],
+                    "longitude_i": row["longitude_i"],
+                    "position_time": row["ts_created"].timestamp() # Still store the actual timestamp of the position found
+                }
+                # Add derived lat/lon
+                if position["latitude_i"]:
+                    position["latitude"] = position["latitude_i"] / 10000000
+                else:
+                    position["latitude"] = None
+                if position["longitude_i"]:
+                    position["longitude"] = position["longitude_i"] / 10000000
+                else:
+                    position["longitude"] = None
+
+        except mysql.connector.Error as err:
+            logging.error(f"Database error fetching nearest position for {node_id}: {err}")
+        except Exception as e:
+            logging.error(f"Error fetching nearest position for {node_id}: {e}")
+        finally:
+            if cur:
+                cur.close()
+        return position
+
     def get_neighbors(self, id):
         neighbors = []
         sql = """SELECT

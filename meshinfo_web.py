@@ -6,7 +6,8 @@ from flask import (
     make_response,
     redirect,
     url_for,
-    abort
+    abort,
+    g
 )
 from flask_caching import Cache
 from waitress import serve
@@ -70,6 +71,32 @@ app.jinja_env.globals.update(max=max)
 
 config = configparser.ConfigParser()
 config.read("config.ini")
+
+
+# --- Add these MeshData Management functions ---
+def get_meshdata():
+    """Opens a new MeshData connection if there is none yet for the
+    current application context.
+    """
+    if 'meshdata' not in g:
+        try:
+            g.meshdata = MeshData()
+            logging.debug("MeshData instance created for request context.")
+        except Exception as e:
+            logging.error(f"Failed to create MeshData for request context: {e}")
+            # Indicate failure
+            g.meshdata = None
+    return g.meshdata
+
+@app.teardown_appcontext
+def teardown_meshdata(exception):
+    """Closes the MeshData connection at the end of the request."""
+    md = g.pop('meshdata', None)
+    if md is not None:
+        # MeshData.__del__ should handle closing connection if implemented
+        # Add explicit md.db.close() if __del__ doesn't or isn't reliable
+        logging.debug("MeshData instance removed from request context.")
+# --- End MeshData Management functions ---
 
 
 def auth():
@@ -206,60 +233,110 @@ def message_map():
     message_id = request.args.get('id')
     if not message_id:
         abort(404)
-        
-    md = MeshData()
-    nodes = md.get_nodes()
-    
-    # Get message and reception data
+
+    md = get_meshdata() # Use application context
+    if not md: abort(503, description="Database connection unavailable")
+
+    nodes = md.get_nodes() # Still get latest node info for names etc.
+
+    # Get message and basic reception data
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
-        SELECT t.*, r.*
+        SELECT t.*, GROUP_CONCAT(r.received_by_id) as receiver_ids
         FROM text t
         LEFT JOIN message_reception r ON t.message_id = r.message_id
         WHERE t.message_id = %s
+        GROUP BY t.message_id
     """, (message_id,))
-    
-    message_data = cursor.fetchall()
-    if not message_data:
-        abort(404)
-        
-    # Process message data
-    message = {
-        'id': message_id,
-        'from_id': message_data[0]['from_id'],
-        'text': message_data[0]['text'],
-        'ts_created': message_data[0]['ts_created'],
-        'receptions': []
-    }
-    
-    # Only process receptions if they exist
-    for reception in message_data:
-        if reception['received_by_id'] is not None:  # Add this check
-            message['receptions'].append({
-                'node_id': reception['received_by_id'],
-                'rx_snr': reception['rx_snr'],
-                'rx_rssi': reception['rx_rssi'],
-                'hop_start': reception['hop_start'],
-                'hop_limit': reception['hop_limit'],
-                'rx_time': reception['rx_time']
-            })
-    
+
+    message_base = cursor.fetchone()
     cursor.close()
 
+    if not message_base:
+        abort(404)
+
+    # Get the precise message time (assuming ts_created is Unix timestamp)
+    message_time = message_base['ts_created'].timestamp() # Convert from DB datetime to Unix timestamp
+
+    # Fetch historical position for the sender
+    sender_position = md.get_position_at_time(message_base['from_id'], message_time)
+
+    # Fetch historical positions for receivers
+    receiver_positions = {}
+    receiver_details = {} # Store SNR etc. associated with the position
+    if message_base['receiver_ids']:
+        receiver_ids_list = [int(r_id) for r_id in message_base['receiver_ids'].split(',')]
+
+        # Fetch full reception details for these receivers for THIS message
+        # Need a separate query as GROUP_CONCAT loses details
+        query_placeholders = ', '.join(['%s'] * len(receiver_ids_list))
+        sql_reception = f"""
+            SELECT * FROM message_reception
+            WHERE message_id = %s AND received_by_id IN ({query_placeholders})
+        """
+        params_reception = [message_id] + receiver_ids_list
+        cursor = md.db.cursor(dictionary=True)
+        cursor.execute(sql_reception, params_reception)
+        receptions = cursor.fetchall()
+        cursor.close()
+
+        for reception in receptions: # Iterate through detailed reception info
+            receiver_id = reception['received_by_id']
+            logging.info(f"Attempting to find position for receiver: {receiver_id} at time {message_time}") # Log attempt
+            pos = md.get_position_at_time(receiver_id, message_time)
+            logging.info(f"Position found for receiver {receiver_id}: {pos}") # Log result
+            if pos: # Only store if position was actually found
+                receiver_positions[receiver_id] = pos
+                # Store details associated with this reception
+                receiver_details[receiver_id] = {
+                    'rx_snr': reception['rx_snr'],
+                    'rx_rssi': reception['rx_rssi'],
+                    'hop_start': reception['hop_start'],
+                    'hop_limit': reception['hop_limit'],
+                    'rx_time': reception['rx_time']
+                }
+            else:
+                logging.warning(f"No position found for receiver {receiver_id} near time {message_time}")
+
+
+    # Prepare message object for template
+    message = {
+        'id': message_id,
+        'from_id': message_base['from_id'],
+        'text': message_base['text'],
+        'ts_created': message_time, # Pass Unix timestamp
+        # Pass receiver IDs and their corresponding details
+        'receiver_ids': receiver_ids_list if message_base['receiver_ids'] else []
+    }
+
+
     # Check if sender has position data before rendering map
-    from_id = utils.convert_node_id_from_int_to_hex(message['from_id'])
-    if from_id not in nodes or not nodes[from_id].get('position'):
-        abort(404, description="Sender position data not available")
-    
+    if not sender_position:
+         # Decide how to handle - show map without sender? Show error?
+         # For now, let's allow rendering but template must handle missing sender pos
+         logging.warning(f"Sender position at time {message_time} not found for node {message['from_id']}")
+         # abort(404, description="Sender position data not available for message time")
+
+    # --- Add this logging ---
+    logging.debug(f"Data for message {message_id} map:")
+    logging.debug(f"  Sender Position: {sender_position}")
+    logging.debug(f"  Receiver Positions Dict: {receiver_positions}")
+    logging.debug(f"  Receiver Details Dict: {receiver_details}")
+    logging.debug(f"  Receiver IDs List: {message.get('receiver_ids', [])}")
+    # --- End logging ---
+
     return render_template(
         "message_map.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes,
+        nodes=nodes, # Pass current node info for names
         message=message,
+        sender_position=sender_position, # Pass historical sender position
+        receiver_positions=receiver_positions, # Pass dict of historical receiver positions
+        receiver_details=receiver_details, # Pass dict of receiver SNR/hop details
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now() # Page generation time
     )
 
 @app.route('/traceroute_map.html')
