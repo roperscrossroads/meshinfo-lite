@@ -19,6 +19,7 @@ services:
       - mariadb
     volumes:
       - ./config.ini:/app/config.ini
+      - ./srtm_data:/app/srtm_data
     environment:
       - PYTHONUNBUFFERED=1
     ports:

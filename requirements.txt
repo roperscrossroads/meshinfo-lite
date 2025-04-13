@@ -9,9 +9,12 @@ colorlog
 bcrypt
 pyjwt
 matplotlib
+cairocffi
 rasterio
 scipy
 geopy
 boto3
 pytz
 Flask-Caching
+pandas
+atexit

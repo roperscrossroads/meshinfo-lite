@@ -797,8 +797,14 @@ def serve_static(filename):
         node_telemetry = md.get_node_telemetry(node_id)
         node_route = md.get_route_coordinates(node_id)
         telemetry_graph = draw_graph(node_telemetry)
-        lp = LOSProfile(nodes, node_id)
-        
+        lp = LOSProfile(nodes, node_id, config, cache)
+
+        # Get the max_distance from config, default to 5000 meters (5 km)
+        max_distance_km = int(config.get("los", "max_distance", fallback=5000)) / 1000  # Convert to kilometers
+
+        # Check if LOS Profile rendering is enabled
+        los_enabled = config.getboolean("los", "enabled", fallback=False)
+
         # Get timeout from config
         zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))  # Default 12 hours
         cutoff_time = int(time.time()) - zero_hop_timeout
@@ -859,23 +865,24 @@ def serve_static(filename):
         cursor.close()
         
         return render_template(
-                f"node.html.j2",
-                auth=auth(),
-                config=config,
-                node=nodes[node],
-                nodes=nodes,
-                hardware=meshtastic_support.HardwareModel,
-                meshtastic_support=meshtastic_support,
-                los_profiles=lp.get_profiles(),
-                telemetry_graph=telemetry_graph,
-                node_route=node_route,
-                utils=utils,
-                datetime=datetime.datetime,
-                timestamp=datetime.datetime.now(),
-                zero_hop_heard=zero_hop_heard,
-                zero_hop_heard_by=zero_hop_heard_by,
-                zero_hop_timeout=zero_hop_timeout,
-            )
+            f"node.html.j2",
+            auth=auth(),
+            config=config,
+            node=nodes[node],
+            nodes=nodes,
+            hardware=meshtastic_support.HardwareModel,
+            meshtastic_support=meshtastic_support,
+            los_profiles=lp.get_profiles() if los_enabled else {},  # Render only if enabled
+            telemetry_graph=telemetry_graph,
+            node_route=node_route,
+            utils=utils,
+            datetime=datetime.datetime,
+            timestamp=datetime.datetime.now(),
+            zero_hop_heard=zero_hop_heard,
+            zero_hop_heard_by=zero_hop_heard_by,
+            zero_hop_timeout=zero_hop_timeout,
+            max_distance=max_distance_km
+        )
 
     if re.match(userp, filename):
         match = re.match(userp, filename)
