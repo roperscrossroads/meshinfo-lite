@@ -169,7 +169,7 @@
         // Transform sender's projected coords back to LonLat for fromCoord
         var fromCoordLonLat = ol.proj.transform(senderCoords, 'EPSG:3857', 'EPSG:4326');
         var fromCoord = fromCoordLonLat; // Use LonLat for distance calculation
-        
+
         var toCoord = [lon, lat];
         var distance = calculateDistance(fromCoord[1], fromCoord[0], toCoord[1], toCoord[0]);
         var hops = nodeData.hops; // Use hops from nodeData
@@ -308,7 +308,6 @@
         }, 600); // Wait slightly longer than duration
     } else {
         console.warn("Calculated extent is invalid or empty. Cannot fit view. Extent:", extent);
-        // ... (Fallback logic remains the same) ...
     }
   } else {
       console.log("No point features found to fit view.");
