@@ -65,23 +65,77 @@ class MeshData:
         
         for attempt in range(max_retries):
             try:
+                # Ensure any existing connection is closed before creating a new one
+                if self.db and self.db.is_connected():
+                    try:
+                        self.db.close()
+                        logging.debug("Closed existing DB connection before reconnecting.")
+                    except mysql.connector.Error as close_err:
+                            logging.warning(f"Error closing existing DB connection: {close_err}")
+
                 self.db = mysql.connector.connect(
                     host=self.config["database"]["host"],
                     user=self.config["database"]["username"],
                     password=self.config["database"]["password"],
                     database=self.config["database"]["database"],
-                    charset="utf8mb4"
+                    charset="utf8mb4",
+                    # Add connection timeout (e.g., 10 seconds)
+                    connection_timeout=10
                 )
-                cur = self.db.cursor()
-                cur.execute("SET NAMES utf8mb4;")
-                cur.close()
-                return
+                if self.db.is_connected():
+                    cur = self.db.cursor()
+                    cur.execute("SET NAMES utf8mb4;")
+                    cur.close()
+                    logging.info(f"Database connection successful (Attempt {attempt + 1}).")
+                    return
+                else:
+                    # This case might not be reached if connect throws error, but good practice
+                    raise mysql.connector.Error("Connection attempt returned but not connected.")
+
             except mysql.connector.Error as err:
+                logging.warning(f"Database connection attempt {attempt + 1}/{max_retries} failed: {err}")
                 if attempt < max_retries - 1:
-                    logging.warning(f"Waiting for database to become ready. Attempt {attempt + 1}/{max_retries}")
+                    logging.info(f"Retrying connection in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:
-                    raise
+                    logging.error("Maximum database connection retries reached. Raising error.")
+                    raise # Re-raise the last error after all retries fail
+
+    def ping_db(self):
+        """Checks connection and attempts reconnect if needed."""
+        if self.db is None:
+            logging.warning("Database object is None. Attempting reconnect.")
+            try:
+                self.connect_db()
+                return self.db is not None and self.db.is_connected()
+            except Exception as e:
+                logging.error(f"Reconnect failed during ping: {e}")
+                return False
+
+        try:
+            # Check if connected first, then try ping with reconnect=True
+            if not self.db.is_connected():
+                    logging.warning("DB connection reported as not connected. Attempting ping/reconnect.")
+            # The ping=True argument attempts to reconnect if connection is lost.
+            self.db.ping(reconnect=True, attempts=3, delay=2)
+            logging.debug("Database connection verified via ping.")
+            return True
+        except mysql.connector.Error as err:
+            logging.error(f"Database ping/reconnect failed: {err}")
+            # Attempt a full reconnect as a final measure if ping fails
+            try:
+                logging.warning("Ping failed. Attempting full database reconnect...")
+                self.connect_db() # Use the existing connect method
+                # Check connection status again after attempting connect_db
+                if self.db and self.db.is_connected():
+                    logging.info("Full database reconnect successful.")
+                    return True
+                else:
+                    logging.error("Full database reconnect attempt failed to establish connection.")
+                    return False
+            except Exception as e:
+                    logging.error(f"Full database reconnect attempt raised an exception: {e}")
+                    return False
 
     def get_telemetry(self, id):
         telemetry = {}
@@ -1061,6 +1115,9 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
         logging.info(f"Position updated for {id}")
 
     def store(self, data, topic):
+        if not self.ping_db():
+            logging.error("Database connection is not active. Skipping store operation.")
+            return # Stop processing if DB is unavailable
         if not data:
             return
         self.log_data(topic, data)

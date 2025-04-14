@@ -9,6 +9,7 @@ services:
       MYSQL_PASSWORD: passw0rd
     volumes:
       - ./mysql_data:/var/lib/mysql
+      - ./custom.cnf:/etc/mysql/conf.d/custom.cnf
     networks:
       - backend
   meshinfo:
