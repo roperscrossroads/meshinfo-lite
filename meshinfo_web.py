@@ -497,6 +497,32 @@ def graph3():
         timestamp=datetime.datetime.now(),
     )
 
+@app.route('/graph4.html')
+@cache.cached(timeout=60, query_string=True)  # Cache based on query string (view type)
+def graph4():
+    view_type = request.args.get('view', 'merged')  # Default to merged view
+    md = get_meshdata()
+    if not md:
+        abort(503, description="Database connection unavailable")
+
+    # Get graph data using the new method
+    graph_data = md.get_graph_data(view_type=view_type)
+
+    # Log graph data size for debugging
+    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
+
+    return render_template(
+        "graph4.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
+        graph=graph_data,
+        view_type=view_type,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+    )
+
 @app.route('/map.html')
 def map():
     md = get_meshdata()

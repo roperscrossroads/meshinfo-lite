@@ -7,15 +7,15 @@
   <h5>{{ this_page.title() }}</h5>
 
   <div class="btn-group mb-3" role="group" aria-label="View type">
-    <a href="{{ url_for('graph3', view='neighbor_info') }}"
+    <a href="{{ url_for('graph4', view='neighbor_info') }}"
        class="btn btn-{{ 'primary' if view_type == 'neighbor_info' else 'outline-primary' }}">
       Neighbor Info
     </a>
-    <a href="{{ url_for('graph3', view='zero_hop') }}"
+    <a href="{{ url_for('graph4', view='zero_hop') }}"
        class="btn btn-{{ 'primary' if view_type == 'zero_hop' else 'outline-primary' }}">
       Zero Hop
     </a>
-    <a href="{{ url_for('graph3', view='merged') }}"
+    <a href="{{ url_for('graph4', view='merged') }}"
        class="btn btn-{{ 'primary' if view_type == 'merged' else 'outline-primary' }}">
       Merged
     </a>
@@ -29,20 +29,21 @@
   <div id="cy" style="width: 100%; height: 85vh;"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
-  <script src="https://unpkg.com/layout-base/layout-base.js"></script>
-  <script src="https://unpkg.com/cose-base/cose-base.js"></script>
-  <script src="https://unpkg.com/cytoscape-fcose/cytoscape-fcose.js"></script>
+  <script src="https://unpkg.com/webcola/WebCola/cola.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-cola/cytoscape-cola.js"></script>
   <script src="https://unpkg.com/@popperjs/core@2"></script>
   <script src="https://unpkg.com/tippy.js@6"></script>
   <script src="https://unpkg.com/cytoscape-popper@2.0.0/cytoscape-popper.js"></script>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape-panzoom/2.5.3/cytoscape.js-panzoom.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape-panzoom/2.5.3/cytoscape-panzoom.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/themes/light-border.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cytoscape-panzoom/2.5.3/cytoscape.js-panzoom.min.css">
 
   <script>
-    // Wait for all extensions to load
     document.addEventListener('DOMContentLoaded', function() {
+      // Register Cola layout
+      cytoscape.use(cytoscapeCola);
+
       var graphData = {{ graph|tojson|safe }};
 
       // Transform data into Cytoscape format
@@ -134,7 +135,89 @@
               'z-index': 9999
             }
           }
-        ]
+        ],
+        layout: {
+            name: 'cola',
+            animate: true,
+            refresh: 1,
+            maxSimulationTime: 15000,
+            nodeDimensionsIncludeLabels: true,
+            fit: true,
+            padding: 50,
+            centerGraph: true,
+            // Calculate bounding box from container
+            boundingBox: {
+            x1: 0,
+            y1: 0,
+            w: document.getElementById('cy').offsetWidth,
+            h: document.getElementById('cy').offsetHeight
+            },
+            
+            // Layout settings
+            avoidOverlap: true,
+            handleDisconnected: true,
+            randomize: true,
+            convergenceThreshold: 0.0001,
+            flow: { axis: 'y', minSeparation: 50 },
+            
+            // More iterations for better optimization
+            unconstrIter: 1000,
+            userConstIter: 1000,
+            allConstIter: 1000,
+            gridSnapIterations: 100,
+
+            // Faster initial layout
+            initialUnconstrainedIterations: 100,
+            initialUserConstraintIterations: 100,
+            initialAllConstraintsIterations: 100,
+
+            groups: function() {
+                // Create groups of nodes based on their connectivity
+                const groups = [];
+                const processed = new Set();
+                
+                cy.nodes().forEach(function(node) {
+                    if (!processed.has(node.id())) {
+                        const connections = node.degree();
+                        if (connections > 2) {
+                            // Group highly connected nodes with their immediate neighbors
+                            const group = [node].concat(node.neighborhood('node').toArray());
+                            groups.push(group);
+                            group.forEach(n => processed.add(n.id()));
+                        }
+                    }
+                });
+                
+                return groups;
+            },
+            
+            // Edge length function - differentiate between heard vs hearing connections
+            edgeLength: function(edge) {
+                const sourceConnections = edge.source().degree();
+                const targetConnections = edge.target().degree();
+                const edgeType = edge.data('edgeData').source_type;
+                const maxConnections = Math.max(sourceConnections, targetConnections);
+                
+                // Base length multiplier - shorter for neighbor_info (heard others), longer for zero_hop (were heard)
+                const multiplier = edgeType === 'neighbor_info' ? 0.8 : 1.2;
+                
+                // Calculate base length based on connectivity
+                let baseLength;
+                if (maxConnections <= 1) {
+                    baseLength = 50;  // Single connection
+                } else if (maxConnections <= 2) {
+                    baseLength = 75;  // Two connections
+                } else if (maxConnections <= 5) {
+                    baseLength = 100; // 3-5 connections
+                } else if (maxConnections >= 8) {
+                    baseLength = 250; // 8+ connections
+                } else {
+                    baseLength = 125; // 6-7 connections
+                }
+                
+                return baseLength * multiplier;
+            }
+        }
       });
 
       // Initialize tooltips storage
@@ -153,12 +236,10 @@
           </div>
         `;
 
-        // Create a reference element
         var ref = document.createElement('div');
         ref.style.position = 'absolute';
         document.body.appendChild(ref);
 
-        // Create the tippy instance
         var tip = tippy(ref, {
           content: content,
           trigger: 'manual',
@@ -170,7 +251,6 @@
           offset: [0, 200]
         });
 
-        // Update position on node movement
         function updatePosition() {
           var pos = node.renderedPosition();
           var zoom = cy.zoom();
@@ -199,24 +279,18 @@
       cy.on('mouseover', 'node', function(e) {
         var node = e.target;
         
-        // Show tooltip if Tippy is loaded
         if (window.tippy && window.tippies[node.id()]) {
           window.tippies[node.id()].updatePosition();
           window.tippies[node.id()].tip.show();
         }
         
-        // Highlight the node and its connections
         node.addClass('highlighted-node');
-        
-        // Get connected edges and their connected nodes
         var connectedEdges = node.connectedEdges();
         var connectedNodes = connectedEdges.connectedNodes();
         
-        // Highlight edges and connected nodes
         connectedEdges.addClass('highlighted');
         connectedNodes.addClass('highlighted-node');
         
-        // Fade other elements
         cy.elements()
           .difference(connectedEdges.union(connectedNodes).union(node))
           .addClass('faded');
@@ -225,12 +299,10 @@
       cy.on('mouseout', 'node', function(e) {
         var node = e.target;
         
-        // Hide tooltip if Tippy is loaded
         if (window.tippy && window.tippies[node.id()]) {
           window.tippies[node.id()].tip.hide();
         }
         
-        // Remove all highlighting and fading
         cy.elements()
           .removeClass('highlighted')
           .removeClass('highlighted-node')
@@ -244,92 +316,14 @@
         window.location.href = "node_" + nodeId.replace("!", "") + ".html";
       });
 
-      // Then apply the layout
-      var layout = cy.layout({
-        name: 'fcose',
-        quality: 'proof',
-        animate: true,
-        animationDuration: 1000,
-        fit: false,
-        padding: 100,
-        nodeDimensionsIncludeLabels: true,
-        
-        // Increase repulsion to prevent overlap
-        nodeRepulsion: function(node) {
-          const baseRepulsion = 35000;
-          const connectionCount = node.degree();
-          // Less repulsion for single-connection nodes
-          if (connectionCount <= 1) {
-            return baseRepulsion * 0.6;
-          }
-          // Significantly more repulsion for hub nodes
-          return baseRepulsion * Math.pow(1.3, Math.min(connectionCount, 6));
-        },
-        // Increase edge lengths in dense areas
-        idealEdgeLength: function(edge) {
-          const sourceConnections = edge.source().degree();
-          const targetConnections = edge.target().degree();
-          // Shorter edges for nodes with single connections
-          if (sourceConnections <= 1 || targetConnections <= 1) {
-            return 75;
-          }
-          // Much longer edges between highly connected nodes
-          const maxConnections = Math.max(sourceConnections, targetConnections);
-          return 100 + (maxConnections * 10);
-        },
-        edgeElasticity: 0.35,
-        gravity: 0.15,
-        gravityRange: 6.0,
-        gravityCompound: 1.2,
-        numIter: 4000,
-        tile: false,
-        tilingPaddingVertical: 10,
-        tilingPaddingHorizontal: 10,
-        randomize: false,
-        packComponents: true,
-        componentSpacing: 150,
-        // Improved spacing parameters
-        samplingType: true,
-        sampleSize: 100,
-        nodeSeparation: function(node) {
-          const connectionCount = node.degree();
-          // Much more separation for highly connected nodes
-          return connectionCount <= 1 ? 100 : 200 + (connectionCount * 15);
-        },
-        uniformNodeDimensions: true,
-        // Additional clustering parameters
-        step: 'all',
-        fixedNodeConstraint: undefined,
-        alignmentConstraint: undefined,
-        relativePlacementConstraint: undefined,
-        // Improved convergence
-        convergenceThreshold: 0.0001
+      // Adjust initial viewport after layout is done
+      cy.on('layoutstop', function() {
+        cy.zoom(1);
+        cy.center();
       });
 
-      // Run the layout
-      layout.run();
-
-      // Add pan and zoom controls after layout is complete
-      layout.one('layoutstop', function() {
-        // Initialize panzoom after ensuring jQuery and panzoom are loaded
-        if (typeof jQuery !== 'undefined' && typeof jQuery.fn.cytoscapePanzoom !== 'undefined') {
-          cy.panzoom({
-            minZoom: 0.2,
-            maxZoom: 3,
-            zoomFactor: 0.05,
-            fitPadding: 50,
-            panSpeed: 10,
-            panDistance: 10,
-            zoomDelay: 45
-          });
-
-          // Initial viewport adjustment
-          cy.zoom(0.7);
-          cy.center();
-        } else {
-          console.warn('Panzoom or jQuery not loaded properly');
-        }
-      });
+      // Add panzoom controls
+      cy.panzoom();
     });
   </script>
 {% endblock %}
