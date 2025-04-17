@@ -420,24 +420,82 @@ def traceroute_map():
     )
 
 @app.route('/graph.html')
-@cache.cached(timeout=60)  # Cache for 60 seconds
+@cache.cached(timeout=60, query_string=True) # Cache based on query string (view type)
 def graph():
+    view_type = request.args.get('view', 'merged') # Default to merged view
     md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
+    if not md:
         abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
-    graph = md.graph_nodes()
+
+    # Get graph data using the new method
+    graph_data = md.get_graph_data(view_type=view_type)
+
+    # Log graph data size for debugging
+    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
+
     return render_template(
         "graph.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes,
-        graph=graph,
+        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
+        graph=graph_data,
+        view_type=view_type,
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
     )
 
+@app.route('/graph2.html')
+@cache.cached(timeout=60, query_string=True)  # Cache based on query string (view type)
+def graph2():
+    view_type = request.args.get('view', 'merged')  # Default to merged view
+    md = get_meshdata()
+    if not md:
+        abort(503, description="Database connection unavailable")
+
+    # Get graph data using the new method
+    graph_data = md.get_graph_data(view_type=view_type)
+
+    # Log graph data size for debugging
+    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
+
+    return render_template(
+        "graph2.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
+        graph=graph_data,
+        view_type=view_type,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+    )
+
+@app.route('/graph3.html')
+@cache.cached(timeout=60, query_string=True)  # Cache based on query string (view type)
+def graph3():
+    view_type = request.args.get('view', 'merged')  # Default to merged view
+    md = get_meshdata()
+    if not md:
+        abort(503, description="Database connection unavailable")
+
+    # Get graph data using the new method
+    graph_data = md.get_graph_data(view_type=view_type)
+
+    # Log graph data size for debugging
+    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
+
+    return render_template(
+        "graph3.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
+        graph=graph_data,
+        view_type=view_type,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+    )
 
 @app.route('/map.html')
 def map():
@@ -538,175 +596,8 @@ def neighbors():
             utils=utils, datetime=datetime.datetime, timestamp=datetime.datetime.now()
         )
 
-
-    zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))
-    cutoff_time = int(time.time()) - zero_hop_timeout
-
-    # Dictionary to hold the final data for active nodes
-    active_nodes_data = {}
-
-    # --- Pre-fetch and process Neighbor Info ---
-    neighbor_info_links = {} # {node_id: {'heard': {neighbor_id: {data}}, 'heard_by': {neighbor_id: {data}}} }
-
-    # Fetch all recent neighbor info links once
-    cursor = md.db.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT
-            ni.id, ni.neighbor_id, ni.snr,
-            p1.latitude_i as lat1_i, p1.longitude_i as lon1_i,
-            p2.latitude_i as lat2_i, p2.longitude_i as lon2_i
-        FROM neighborinfo ni
-        LEFT OUTER JOIN position p1 ON p1.id = ni.id
-        LEFT OUTER JOIN position p2 ON p2.id = ni.neighbor_id
-        WHERE ni.ts_created >= NOW() - INTERVAL 1 DAY
-    """)
-
-    for row in cursor.fetchall():
-        node_id = row['id']
-        neighbor_id = row['neighbor_id']
-        distance = None
-        if (row['lat1_i'] and row['lon1_i'] and row['lat2_i'] and row['lon2_i']):
-            distance = round(utils.distance_between_two_points(
-                row['lat1_i'] / 10000000, row['lon1_i'] / 10000000,
-                row['lat2_i'] / 10000000, row['lon2_i'] / 10000000
-            ), 2)
-
-        link_data = {'snr': row['snr'], 'distance': distance, 'neighbor_id': neighbor_id}
-        heard_by_data = {'snr': row['snr'], 'distance': distance, 'neighbor_id': node_id}
-
-        # Add to node_id's 'heard' list
-        if node_id not in neighbor_info_links: neighbor_info_links[node_id] = {'heard': {}, 'heard_by': {}}
-        neighbor_info_links[node_id]['heard'][neighbor_id] = link_data
-
-        # Add to neighbor_id's 'heard_by' list
-        if neighbor_id not in neighbor_info_links: neighbor_info_links[neighbor_id] = {'heard': {}, 'heard_by': {}}
-        neighbor_info_links[neighbor_id]['heard_by'][node_id] = heard_by_data
-    cursor.close()
-
-
-    # --- Pre-fetch and process Zero Hop Info ---
-    zero_hop_links = {} # {node_id: {'heard': {neighbor_id: {data}}, 'heard_by': {neighbor_id: {data}}} }
-    zero_hop_last_heard = {} # Keep track of last heard time for sorting
-
-    if view_type in ['zero_hop', 'merged']:
-        cursor = md.db.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT
-                m.from_id,
-                m.received_by_id,
-                MAX(m.rx_snr) as snr,
-                COUNT(*) as message_count,
-                MAX(m.rx_time) as last_heard_time,
-                p_sender.latitude_i as lat_sender_i,
-                p_sender.longitude_i as lon_sender_i,
-                p_receiver.latitude_i as lat_receiver_i,
-                p_receiver.longitude_i as lon_receiver_i
-            FROM message_reception m
-            LEFT OUTER JOIN position p_sender ON p_sender.id = m.from_id
-            LEFT OUTER JOIN position p_receiver ON p_receiver.id = m.received_by_id
-            WHERE m.rx_time > %s
-            AND (
-                (m.hop_limit IS NULL AND m.hop_start IS NULL)
-                OR
-                (m.hop_start - m.hop_limit = 0)
-            )
-            GROUP BY m.from_id, m.received_by_id,
-                     p_sender.latitude_i, p_sender.longitude_i,
-                     p_receiver.latitude_i, p_receiver.longitude_i
-        """, (cutoff_time,))
-
-        for row in cursor.fetchall():
-            sender_id = row['from_id']
-            receiver_id = row['received_by_id']
-            last_heard_dt = datetime.datetime.fromtimestamp(row['last_heard_time'])
-
-            # Update last heard time for involved nodes
-            zero_hop_last_heard[sender_id] = max(zero_hop_last_heard.get(sender_id, datetime.datetime.min), last_heard_dt)
-            zero_hop_last_heard[receiver_id] = max(zero_hop_last_heard.get(receiver_id, datetime.datetime.min), last_heard_dt)
-
-            distance = None
-            if (row['lat_sender_i'] and row['lon_sender_i'] and
-                row['lat_receiver_i'] and row['lon_receiver_i']):
-                distance = round(utils.distance_between_two_points(
-                    row['lat_sender_i'] / 10000000, row['lon_sender_i'] / 10000000,
-                    row['lat_receiver_i'] / 10000000, row['lon_receiver_i'] / 10000000
-                ), 2)
-
-            link_data = {
-                'snr': row['snr'],
-                'message_count': row['message_count'],
-                'distance': distance,
-                'last_heard': last_heard_dt,
-                'neighbor_id': sender_id # For receiver, neighbor is sender
-            }
-            heard_by_data = {
-                'snr': row['snr'],
-                'message_count': row['message_count'],
-                'distance': distance,
-                'last_heard': last_heard_dt,
-                'neighbor_id': receiver_id # For sender, neighbor is receiver
-            }
-
-            # Add to receiver's 'heard' list
-            if receiver_id not in zero_hop_links: zero_hop_links[receiver_id] = {'heard': {}, 'heard_by': {}}
-            zero_hop_links[receiver_id]['heard'][sender_id] = link_data
-
-            # Add to sender's 'heard_by' list
-            if sender_id not in zero_hop_links: zero_hop_links[sender_id] = {'heard': {}, 'heard_by': {}}
-            zero_hop_links[sender_id]['heard_by'][receiver_id] = heard_by_data
-
-        cursor.close()
-
-
-    # --- Combine data for active nodes based on view type ---
-    for node_id_hex, node_base_data in nodes.items():
-        if not node_base_data.get("active"):
-            continue # Skip inactive nodes
-
-        node_id_int = utils.convert_node_id_from_hex_to_int(node_id_hex)
-        final_node_data = dict(node_base_data) # Start with base data
-
-        # Initialize lists
-        final_node_data['neighbors'] = []
-        final_node_data['heard_by_neighbors'] = []
-        final_node_data['zero_hop_neighbors'] = []
-        final_node_data['heard_by_zero_hop'] = []
-
-        has_neighbor_info = node_id_int in neighbor_info_links
-        has_zero_hop_info = node_id_int in zero_hop_links
-
-        # Determine overall last heard time for sorting
-        last_heard_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
-        last_heard_by_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard_by'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
-        last_heard_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
-        last_heard_by_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard_by'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
-
-        node_ts_seen = datetime.datetime.fromtimestamp(node_base_data['ts_seen']) if node_base_data.get('ts_seen') else datetime.datetime.min
-
-        final_node_data['last_heard'] = max(
-            node_ts_seen,
-            zero_hop_last_heard.get(node_id_int, datetime.datetime.min) # Use precalculated zero hop time
-            # We don't need to include neighbor info times here as they aren't distinct per-link
-        )
-
-
-        include_node = False
-        if view_type in ['neighbor_info', 'merged']:
-            if has_neighbor_info:
-                 final_node_data['neighbors'] = list(neighbor_info_links[node_id_int]['heard'].values())
-                 final_node_data['heard_by_neighbors'] = list(neighbor_info_links[node_id_int]['heard_by'].values())
-                 if final_node_data['neighbors'] or final_node_data['heard_by_neighbors']:
-                     include_node = True
-
-        if view_type in ['zero_hop', 'merged']:
-             if has_zero_hop_info:
-                 final_node_data['zero_hop_neighbors'] = list(zero_hop_links[node_id_int]['heard'].values())
-                 final_node_data['heard_by_zero_hop'] = list(zero_hop_links[node_id_int]['heard_by'].values())
-                 if final_node_data['zero_hop_neighbors'] or final_node_data['heard_by_zero_hop']:
-                      include_node = True
-
-        if include_node:
-            active_nodes_data[node_id_hex] = final_node_data
+    # Get neighbors data using the new method
+    active_nodes_data = md.get_neighbors_data(view_type=view_type)
 
     # Sort final results by last heard time
     active_nodes_data = dict(sorted(
