@@ -1,5 +1,6 @@
 [mesh]
 name=ZA Mesh
+short_name=ZA Mesh
 description=Serving Meshtastic to South Africa.
 contact=dade@dade.co.za
 url=https://mesh.zr1rf.za.net
@@ -29,6 +30,7 @@ render_interval=15
 debug=true
 timezone=America/Los_Angeles
 zero_hop_timeout=43200
+telemetry_retention_days = 30
 
 [geocoding]
 enabled=false

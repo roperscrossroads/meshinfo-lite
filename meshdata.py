@@ -911,12 +911,26 @@ ts_updated = VALUES(ts_updated)"""
         return results
 
     def store_telemetry(self, data):
+        # Use class-level config that's already loaded
+        retention_days = self.config.getint("server", "telemetry_retention_days", fallback=None) if self.config else None
+        
+        # Only check for cleanup every N records (using modulo on auto-increment ID or timestamp)
         cur = self.db.cursor()
-        cur.execute(f"SELECT COUNT(*) FROM telemetry")
-        count = cur.fetchone()[0]
-        if count >= 20000:
-            cur.execute(f"""DELETE FROM telemetry
-ORDER BY ts_created ASC LIMIT 1""")
+        cur.execute("SELECT COUNT(*) FROM telemetry WHERE ts_created > DATE_SUB(NOW(), INTERVAL 1 HOUR)")
+        recent_count = cur.fetchone()[0]
+        
+        # Only run cleanup if we have accumulated enough recent records
+        if recent_count > 200:  # Adjust threshold as needed
+            if retention_days:
+                cur.execute("""DELETE FROM telemetry 
+                    WHERE ts_created < DATE_SUB(NOW(), INTERVAL %s DAY)""", 
+                    (retention_days,))
+            else:
+                # More efficient count-based cleanup
+                cur.execute("""DELETE FROM telemetry WHERE ts_created <= 
+                    (SELECT ts_created FROM 
+                        (SELECT ts_created FROM telemetry ORDER BY ts_created DESC LIMIT 1 OFFSET 20000) t)""")
+        
         cur.close()
         self.db.commit()
 

@@ -7,7 +7,8 @@ from flask import (
     redirect,
     url_for,
     abort,
-    g
+    g,
+    jsonify
 )
 from flask_caching import Cache
 from waitress import serve
@@ -599,7 +600,7 @@ def map():
         zero_hop_data=zero_hop_data,
         zero_hop_timeout=zero_hop_timeout,
         utils=utils,
-        datetime=datetime,
+        datetime=datetime.datetime,
         timestamp=datetime.datetime.now()
     )
 
@@ -987,6 +988,456 @@ def serve_static(filename):
 
     return send_from_directory("www", filename)
 
+
+@app.route('/metrics.html')
+@cache.cached(timeout=60)  # Cache for 60 seconds
+def metrics():
+    md = get_meshdata()
+    if not md: # Check if MeshData failed to initialize
+        abort(503, description="Database connection unavailable")
+    return render_template(
+        "metrics.html.j2",
+        auth=auth(),
+        config=config,
+        this_page="metrics",
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now()
+    )
+
+@app.route('/api/metrics')
+def get_metrics():
+    md = get_meshdata()
+    if not md: # Check if MeshData failed to initialize
+        abort(503, description="Database connection unavailable")
+    
+    try:
+        # Get time range from request parameters
+        time_range = request.args.get('time_range', 'day')  # day, week, month, year, all
+        
+        # Set time range based on parameter
+        end_time = datetime.datetime.now()
+        if time_range == 'week':
+            start_time = end_time - datetime.timedelta(days=7)
+            bucket_size = 180  # 3 hours in minutes
+        elif time_range == 'month':
+            start_time = end_time - datetime.timedelta(days=30)
+            bucket_size = 720  # 12 hours in minutes
+        elif time_range == 'year':
+            start_time = end_time - datetime.timedelta(days=365)
+            bucket_size = 2880  # 2 days in minutes
+        elif time_range == 'all':
+            # For 'all', we'll first check the data range in the database
+            cursor = md.db.cursor(dictionary=True)
+            cursor.execute("SELECT MIN(ts_created) as min_time FROM telemetry")
+            min_time = cursor.fetchone()['min_time']
+            cursor.close()
+            
+            if min_time:
+                start_time = min_time
+            else:
+                # Default to 1 year if no data
+                start_time = end_time - datetime.timedelta(days=365)
+            
+            bucket_size = 10080  # 7 days in minutes
+        else:  # Default to 'day'
+            start_time = end_time - datetime.timedelta(hours=24)
+            bucket_size = 30  # 30 minutes
+        
+        logging.info(f"Fetching metrics data from {start_time} to {end_time} with bucket size {bucket_size} minutes")
+        
+        # Check if we have any data in the tables
+        cursor = md.db.cursor(dictionary=True)
+        
+        # Get the actual time range of data in the database
+        cursor.execute("SELECT MIN(ts_created) as min_time, MAX(ts_created) as max_time FROM telemetry")
+        telemetry_time_range = cursor.fetchone()
+        logging.info(f"Telemetry data time range: {telemetry_time_range['min_time']} to {telemetry_time_range['max_time']}")
+        
+        cursor.execute("SELECT MIN(ts_created) as min_time, MAX(ts_created) as max_time FROM text")
+        text_time_range = cursor.fetchone()
+        logging.info(f"Text data time range: {text_time_range['min_time']} to {text_time_range['max_time']}")
+        
+        cursor.execute("SELECT MIN(ts_created) as min_time, MAX(ts_created) as max_time FROM message_reception")
+        reception_time_range = cursor.fetchone()
+        logging.info(f"Message reception data time range: {reception_time_range['min_time']} to {reception_time_range['max_time']}")
+        
+        # Check if tables exist and have data
+        cursor.execute("SELECT COUNT(*) as count FROM telemetry")
+        telemetry_count = cursor.fetchone()['count']
+        logging.info(f"Telemetry table has {telemetry_count} records")
+        
+        cursor.execute("SELECT COUNT(*) as count FROM text")
+        text_count = cursor.fetchone()['count']
+        logging.info(f"Text table has {text_count} records")
+        
+        cursor.execute("SELECT COUNT(*) as count FROM message_reception")
+        reception_count = cursor.fetchone()['count']
+        logging.info(f"Message_reception table has {reception_count} records")
+        
+        # Add warnings for metrics with incomplete data
+        warnings = []
+        if telemetry_time_range['min_time'] and telemetry_time_range['min_time'] > start_time:
+            warnings.append(
+                f"Telemetry data (nodes online, channel utilization, battery, temperature) "
+                f"only available from {telemetry_time_range['min_time'].strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        
+        # Convert timestamps to the correct format for MySQL
+        start_timestamp = start_time.strftime('%Y-%m-%d %H:%M:%S')
+        end_timestamp = end_time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        logging.info(f"Querying with timestamps: {start_timestamp} to {end_timestamp}")
+        
+        # Format string for time buckets based on bucket size
+        if bucket_size >= 10080:  # 7 days or more
+            time_format = '%Y-%m-%d'  # Daily format
+        elif bucket_size >= 1440:  # 1 day or more
+            time_format = '%Y-%m-%d %H:00'  # Hourly format
+        else:
+            time_format = '%Y-%m-%d %H:%i'  # Minute format
+        
+        # Nodes Online
+        nodes_online_query = f"""
+            SELECT 
+                DATE_FORMAT(
+                    DATE_ADD(
+                        ts_created,
+                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                    ),
+                    '{time_format}'
+                ) as time_slot,
+                COUNT(DISTINCT id) as node_count
+            FROM telemetry
+            WHERE ts_created >= %s AND ts_created <= %s
+            GROUP BY time_slot
+            ORDER BY time_slot
+        """
+        logging.debug(f"Executing nodes online query with params: {start_timestamp}, {end_timestamp}")
+        cursor.execute(nodes_online_query, (start_timestamp, end_timestamp))
+        nodes_online = cursor.fetchall()
+        logging.debug(f"Nodes online query returned {len(nodes_online)} records. First record: {nodes_online[0] if nodes_online else 'None'}")
+        
+        # Message Traffic
+        # First, generate a series of time slots
+        time_slots_query = f"""
+            WITH RECURSIVE time_slots AS (
+                SELECT DATE_FORMAT(
+                    DATE_ADD(%s, INTERVAL -MOD(MINUTE(%s), {bucket_size}) MINUTE),
+                    '{time_format}'
+                ) as time_slot
+                UNION ALL
+                SELECT DATE_FORMAT(
+                    DATE_ADD(
+                        STR_TO_DATE(time_slot, '{time_format}'),
+                        INTERVAL {bucket_size} MINUTE
+                    ),
+                    '{time_format}'
+                )
+                FROM time_slots
+                WHERE STR_TO_DATE(time_slot, '{time_format}') < %s
+            )
+            SELECT t.time_slot,
+                   COALESCE(m.message_count, 0) as message_count
+            FROM time_slots t
+            LEFT JOIN (
+                SELECT DATE_FORMAT(
+                    DATE_ADD(
+                        ts_created,
+                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                    ),
+                    '{time_format}'
+                ) as time_slot,
+                COUNT(*) as message_count
+                FROM text
+                WHERE ts_created >= %s AND ts_created <= %s
+                GROUP BY time_slot
+            ) m ON t.time_slot = m.time_slot
+            ORDER BY t.time_slot;
+        """
+        logging.debug(f"Executing message traffic query with params: {start_timestamp}, {end_timestamp}")
+        cursor.execute(time_slots_query, (start_timestamp, start_timestamp, end_timestamp, start_timestamp, end_timestamp))
+        message_traffic = cursor.fetchall()
+        logging.debug(f"Message traffic query returned {len(message_traffic)} records. First record: {message_traffic[0] if message_traffic else 'None'}")
+        
+        # Channel Utilization
+        channel_util_query = f"""
+            SELECT 
+                DATE_FORMAT(
+                    DATE_ADD(
+                        ts_created,
+                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                    ),
+                    '{time_format}'
+                ) as time_slot,
+                AVG(channel_utilization) as avg_util
+            FROM telemetry
+            WHERE ts_created >= %s AND ts_created <= %s
+            GROUP BY time_slot
+            ORDER BY time_slot
+        """
+        logging.debug(f"Executing channel utilization query with params: {start_timestamp}, {end_timestamp}")
+        cursor.execute(channel_util_query, (start_timestamp, end_timestamp))
+        channel_util = cursor.fetchall()
+        logging.debug(f"Channel utilization query returned {len(channel_util)} records. First record: {channel_util[0] if channel_util else 'None'}")
+        
+        # Average Battery Level
+        battery_query = f"""
+            SELECT 
+                DATE_FORMAT(
+                    DATE_ADD(
+                        ts_created,
+                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                    ),
+                    '{time_format}'
+                ) as time_slot,
+                AVG(battery_level) as avg_battery
+            FROM telemetry
+            WHERE ts_created >= %s AND ts_created <= %s
+            GROUP BY time_slot
+            ORDER BY time_slot
+        """
+        logging.debug(f"Executing battery level query with params: {start_timestamp}, {end_timestamp}")
+        cursor.execute(battery_query, (start_timestamp, end_timestamp))
+        battery_levels = cursor.fetchall()
+        logging.debug(f"Battery level query returned {len(battery_levels)} records. First record: {battery_levels[0] if battery_levels else 'None'}")
+        
+        # Average Temperature
+        temperature_query = f"""
+            SELECT 
+                DATE_FORMAT(
+                    DATE_ADD(
+                        ts_created,
+                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                    ),
+                    '{time_format}'
+                ) as time_slot,
+                AVG(temperature) as avg_temp
+            FROM telemetry
+            WHERE ts_created >= %s AND ts_created <= %s
+            GROUP BY time_slot
+            ORDER BY time_slot
+        """
+        logging.debug(f"Executing temperature query with params: {start_timestamp}, {end_timestamp}")
+        cursor.execute(temperature_query, (start_timestamp, end_timestamp))
+        temperature = cursor.fetchall()
+        logging.debug(f"Temperature query returned {len(temperature)} records. First record: {temperature[0] if temperature else 'None'}")
+        
+        # Signal Strength (SNR)
+        snr_query = f"""
+            SELECT 
+                DATE_FORMAT(
+                    DATE_ADD(
+                        ts_created,
+                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                    ),
+                    '{time_format}'
+                ) as time_slot,
+                AVG(rx_snr) as avg_snr
+            FROM message_reception
+            WHERE ts_created >= %s AND ts_created <= %s
+            GROUP BY time_slot
+            ORDER BY time_slot
+        """
+        logging.debug(f"Executing SNR query with params: {start_timestamp}, {end_timestamp}")
+        cursor.execute(snr_query, (start_timestamp, end_timestamp))
+        snr = cursor.fetchall()
+        logging.debug(f"SNR query returned {len(snr)} records. First record: {snr[0] if snr else 'None'}")
+        
+        cursor.close()
+        
+        # If we have no data, return a more informative response
+        if not any([nodes_online, message_traffic, channel_util, battery_levels, temperature, snr]):
+            logging.warning("No data found for any metrics in the specified time range")
+            return jsonify({
+                'error': 'No data available for the specified time range',
+                'time_range': {
+                    'start': start_time.isoformat(),
+                    'end': end_time.isoformat(),
+                    'selected': time_range
+                },
+                'table_counts': {
+                    'telemetry': telemetry_count,
+                    'text': text_count,
+                    'message_reception': reception_count
+                },
+                'data_ranges': {
+                    'telemetry': {
+                        'min': telemetry_time_range['min_time'].isoformat() if telemetry_time_range['min_time'] else None,
+                        'max': telemetry_time_range['max_time'].isoformat() if telemetry_time_range['max_time'] else None
+                    },
+                    'text': {
+                        'min': text_time_range['min_time'].isoformat() if text_time_range['min_time'] else None,
+                        'max': text_time_range['max_time'].isoformat() if text_time_range['max_time'] else None
+                    },
+                    'message_reception': {
+                        'min': reception_time_range['min_time'].isoformat() if reception_time_range['min_time'] else None,
+                        'max': reception_time_range['max_time'].isoformat() if reception_time_range['max_time'] else None
+                    }
+                }
+            })
+        
+        return jsonify({
+            'nodes_online': {
+                'labels': [row['time_slot'] for row in nodes_online],
+                'data': [row['node_count'] for row in nodes_online]
+            },
+            'message_traffic': {
+                'labels': [row['time_slot'] for row in message_traffic],
+                'data': [row['message_count'] for row in message_traffic]
+            },
+            'channel_util': {
+                'labels': [row['time_slot'] for row in channel_util],
+                'data': [row['avg_util'] for row in channel_util]
+            },
+            'battery_levels': {
+                'labels': [row['time_slot'] for row in battery_levels],
+                'data': [row['avg_battery'] for row in battery_levels]
+            },
+            'temperature': {
+                'labels': [row['time_slot'] for row in temperature],
+                'data': [row['avg_temp'] for row in temperature]
+            },
+            'snr': {
+                'labels': [row['time_slot'] for row in snr],
+                'data': [row['avg_snr'] for row in snr]
+            },
+            'time_range': {
+                'start': start_time.isoformat(),
+                'end': end_time.isoformat(),
+                'selected': time_range,
+                'data_ranges': {
+                    'telemetry': {
+                        'min': telemetry_time_range['min_time'].isoformat() if telemetry_time_range['min_time'] else None,
+                        'max': telemetry_time_range['max_time'].isoformat() if telemetry_time_range['max_time'] else None
+                    },
+                    'text': {
+                        'min': text_time_range['min_time'].isoformat() if text_time_range['min_time'] else None,
+                        'max': text_time_range['max_time'].isoformat() if text_time_range['max_time'] else None
+                    },
+                    'message_reception': {
+                        'min': reception_time_range['min_time'].isoformat() if reception_time_range['min_time'] else None,
+                        'max': reception_time_range['max_time'].isoformat() if reception_time_range['max_time'] else None
+                    }
+                }
+            },
+            'warnings': warnings
+        })
+    except Exception as e:
+        logging.error(f"Error fetching metrics data: {str(e)}")
+        return jsonify({
+            'error': f'Error fetching metrics data: {str(e)}'
+        }), 500
+
+@app.route('/api/chattiest-nodes')
+def get_chattiest_nodes():
+    md = get_meshdata()
+    if not md:  # Check if MeshData failed to initialize
+        abort(503, description="Database connection unavailable")
+    
+    # Get filter parameters from request
+    time_frame = request.args.get('time_frame', 'day')  # day, week, month, year, all
+    message_type = request.args.get('message_type', 'all')  # all, text, position, telemetry
+    
+    try:
+        cursor = md.db.cursor(dictionary=True)
+        
+        # Build the time frame condition
+        time_condition = ""
+        if time_frame == 'year':
+            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 1 YEAR)"
+        elif time_frame == 'month':
+            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 1 MONTH)"
+        elif time_frame == 'week':
+            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+        elif time_frame == 'day':
+            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 24 HOUR)"
+        
+        # Build the message type query based on the selected type
+        if message_type == 'all':
+            message_query = """
+                SELECT from_id as node_id, ts_created
+                FROM message_reception
+                {time_condition}
+            """.format(time_condition=time_condition)
+        elif message_type == 'text':
+            message_query = """
+                SELECT from_id as node_id, ts_created
+                FROM text
+                {time_condition}
+            """.format(time_condition=time_condition)
+        elif message_type == 'position':
+            message_query = """
+                SELECT id as node_id, ts_created
+                FROM positionlog
+                {time_condition}
+            """.format(time_condition=time_condition)
+        elif message_type == 'telemetry':
+            message_query = """
+                SELECT id as node_id, ts_created
+                FROM telemetry
+                {time_condition}
+            """.format(time_condition=time_condition)
+        else:
+            return jsonify({
+                'error': f'Invalid message type: {message_type}'
+            }), 400
+        
+        # Query to get the top 20 nodes by message count, including node names
+        query = """
+            WITH messages AS ({message_query})
+            SELECT 
+                m.node_id as from_id,
+                n.long_name,
+                n.short_name,
+                COUNT(*) as message_count,
+                COUNT(DISTINCT DATE_FORMAT(m.ts_created, '%Y-%m-%d')) as active_days,
+                MIN(m.ts_created) as first_message,
+                MAX(m.ts_created) as last_message
+            FROM 
+                messages m
+            LEFT JOIN
+                nodeinfo n ON m.node_id = n.id
+            GROUP BY 
+                m.node_id, n.long_name
+            ORDER BY 
+                message_count DESC
+            LIMIT 20
+        """.format(message_query=message_query)
+        
+        cursor.execute(query)
+        chattiest_nodes = cursor.fetchall()
+        cursor.close()
+        
+        # Format the data for the response
+        formatted_nodes = []
+        for node in chattiest_nodes:
+            # Convert node ID to hex format for the link
+            node_id_hex = utils.convert_node_id_from_int_to_hex(node['from_id'])
+            
+            formatted_nodes.append({
+                'node_id': node['from_id'],
+                'node_id_hex': node_id_hex,
+                'long_name': node['long_name'] or f"Node {node['from_id']}",  # Fallback if no long name
+                'short_name': node['short_name'] or f"Node {node['from_id']}",  # Fallback if no short name
+                'message_count': node['message_count'],
+                'active_days': node['active_days'],
+                'first_message': node['first_message'].isoformat() if node['first_message'] else None,
+                'last_message': node['last_message'].isoformat() if node['last_message'] else None
+            })
+        
+        return jsonify({
+            'chattiest_nodes': formatted_nodes,
+            'filters': {
+                'time_frame': time_frame,
+                'message_type': message_type
+            }
+        })
+    except Exception as e:
+        logging.error(f"Error fetching chattiest nodes: {str(e)}")
+        return jsonify({
+            'error': f'Error fetching chattiest nodes: {str(e)}'
+        }), 500
 
 def run():
     # Enable Waitress logging

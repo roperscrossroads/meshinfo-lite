@@ -36,7 +36,7 @@
     <div class="collapse navbar-collapse" id="navbarToggler">
       <a class="navbar-brand" href="{{  config["mesh"]["url"] }}">{{ config["mesh"]["name"] }}</a>
       <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
-        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs"] %}
+        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs","metrics"] %}
         <li class="nav-item{% if page == this_page %} active{% endif %}">
           <a class="nav-link" href="{{ page }}.html">{{ page.title() }}</a>
         </li>
