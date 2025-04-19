@@ -26,6 +26,10 @@
         <br>
         <strong>Time:</strong> {{ format_timestamp(message.ts_created) }}<br>
         <strong>Message:</strong> {{ message.text }}
+        {% if sender_position and sender_position.position_time %}
+        <br>
+        <strong>Sender Position Updated:</strong> {{ format_timestamp(sender_position.position_time) }}
+        {% endif %}
       </p>
     </div>
   </div>
@@ -89,6 +93,13 @@
       Math.pow(lat1 - lat2, 2) +
       Math.pow(lon1 - lon2, 2)
     ) * 111.32 * 100) / 100;  // Convert to km and round to 2 decimal places
+  }
+
+  // Add function to format timestamp
+  function formatTimestamp(timestamp) {
+    if (!timestamp) return 'Unknown';
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleString();
   }
 
   const features = [];
@@ -396,6 +407,11 @@
             html += `<strong>Distance from Sender:</strong> ${distance} km<br>`;
             }
         }
+        }
+        
+        // Add position time information
+        if (node.positionTime) {
+            html += `<strong>Position Updated:</strong> ${formatTimestamp(node.positionTime)}<br>`;
         }
         
         html += '</div>';
