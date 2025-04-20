@@ -13,6 +13,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import configparser
 import logging
+from meshtastic_support import Role
 
 
 def distance_between_two_points(lat1, lon1, lat2, lon2):
@@ -172,6 +173,25 @@ def active_nodes(nodes):
         for node in nodes if nodes[node]["active"]
     }
 
+def get_role_name(role_value):
+    """
+    Get the human-readable name for a role value.
+    
+    Args:
+        role_value (int): The numeric role value from the database
+        
+    Returns:
+        str: The human-readable role name or "Unknown (value)" if not recognized
+    """
+    if role_value is None:
+        return "Client"
+    
+    try:
+        # Get the role name, replace underscores with spaces, and capitalize each word
+        role_name = Role(role_value).name.replace('_', ' ')
+        return ' '.join(word.capitalize() for word in role_name.split())
+    except (ValueError, AttributeError):
+        return f"Unknown ({role_value})"
 
 def get_owner_nodes(nodes, owner):
     return {

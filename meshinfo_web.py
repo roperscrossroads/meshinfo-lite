@@ -1383,13 +1383,14 @@ def get_chattiest_nodes():
                 'error': f'Invalid message type: {message_type}'
             }), 400
         
-        # Query to get the top 20 nodes by message count, including node names
+        # Query to get the top 20 nodes by message count, including node names and role
         query = """
             WITH messages AS ({message_query})
             SELECT 
                 m.node_id as from_id,
                 n.long_name,
                 n.short_name,
+                n.role,
                 COUNT(*) as message_count,
                 COUNT(DISTINCT DATE_FORMAT(m.ts_created, '%Y-%m-%d')) as active_days,
                 MIN(m.ts_created) as first_message,
@@ -1399,7 +1400,7 @@ def get_chattiest_nodes():
             LEFT JOIN
                 nodeinfo n ON m.node_id = n.id
             GROUP BY 
-                m.node_id, n.long_name
+                m.node_id, n.long_name, n.short_name, n.role
             ORDER BY 
                 message_count DESC
             LIMIT 20
@@ -1415,15 +1416,23 @@ def get_chattiest_nodes():
             # Convert node ID to hex format for the link
             node_id_hex = utils.convert_node_id_from_int_to_hex(node['from_id'])
             
+            # Convert timestamps to local time
+            first_message = convert_to_local(node['first_message']) if node['first_message'] else None
+            last_message = convert_to_local(node['last_message']) if node['last_message'] else None
+            
+            # Get the role name from the role value
+            role_name = utils.get_role_name(node['role'])
+            
             formatted_nodes.append({
                 'node_id': node['from_id'],
                 'node_id_hex': node_id_hex,
                 'long_name': node['long_name'] or f"Node {node['from_id']}",  # Fallback if no long name
                 'short_name': node['short_name'] or f"Node {node['from_id']}",  # Fallback if no short name
+                'role': role_name,
                 'message_count': node['message_count'],
                 'active_days': node['active_days'],
-                'first_message': node['first_message'].isoformat() if node['first_message'] else None,
-                'last_message': node['last_message'].isoformat() if node['last_message'] else None
+                'first_message': first_message.isoformat() if first_message else None,
+                'last_message': last_message.isoformat() if last_message else None
             })
         
         return jsonify({

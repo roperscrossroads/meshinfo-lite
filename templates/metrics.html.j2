@@ -240,6 +240,7 @@ Mesh Metrics
             <tr>
                 <th>Rank</th>
                 <th>Node</th>
+                <th>Role</th>
                 <th>Messages</th>
                 <th>Active Days</th>
                 <th>First Message</th>
@@ -753,6 +754,7 @@ Mesh Metrics
                                 }
                                 <span class="node-details">${node.short_name || ''} (!${node.node_id_hex})</span>
                             </td>
+                            <td>${node.role}</td>
                             <td>${node.message_count}</td>
                             <td>${node.active_days}</td>
                             <td>${firstMessage}</td>

@@ -81,6 +81,39 @@ class HardwareModel(Enum):
     XIAO = 81
 
 
+class Role(Enum):
+    """
+    Meshtastic node roles
+    """
+    CLIENT = 0
+    CLIENT_MUTE = 1
+    ROUTER = 2
+    ROUTER_CLIENT = 3
+    REPEATER = 4
+    TRACKER = 5
+    SENSOR = 6
+    ATAK = 7
+    CLIENT_HIDDEN = 8
+    LOST_AND_FOUND = 9
+    ATAK_TRACKER = 10
+
+class ShortRole(Enum):
+    """
+    Meshtastic node short roles
+    """
+    C = 0
+    CM = 1
+    R = 2
+    RC = 3
+    RE = 4
+    T = 5
+    S = 6
+    A = 7
+    CH = 8
+    LF = 9
+    AT = 10
+
+
 HARDWARE_PHOTOS = {
     HardwareModel.HELTEC_HT62: "HELTEC_HT62.png",
     HardwareModel.HELTEC_V2_0: "HELTEC_V2_0.png",
