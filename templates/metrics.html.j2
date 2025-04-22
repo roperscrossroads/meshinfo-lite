@@ -182,6 +182,12 @@ Mesh Metrics
             <!-- <option value="year">Last Year</option> -->
             <!-- <option value="all">All Time</option> -->
         </select>
+        <select id="channelFilter" onchange="updateMetrics()">
+            <option value="all" selected>All Channels</option>
+            <option value="8">Long Fast (8)</option>
+            <option value="31">Medium Fast (31)</option>
+            <option value="112">Short Fast (112)</option>
+        </select>
         <button class="refresh-button" onclick="refreshData()">Refresh Data</button>
     </div>
 </div>
@@ -219,36 +225,45 @@ Mesh Metrics
 </div>
 
 <div class="chattiest-nodes">
-    <h2>Top 20 Chattiest Nodes</h2>
+    <h2>Chattiest Nodes</h2>
     <div class="filter-controls">
         <select id="timeFrameFilter" onchange="updateChattiestNodes()">
             <option value="day" selected>Last 24 Hours</option>
             <option value="week">Last Week</option>
             <option value="month">Last Month</option>
-            <!-- <option value="year">Last Year</option> -->
-            <!-- <option value="all">All Time</option> -->
+            <option value="year">Last Year</option>
+            <option value="all">All Time</option>
         </select>
         <select id="messageTypeFilter" onchange="updateChattiestNodes()">
-            <option value="all">All Packets</option>
+            <option value="all" selected>All Messages</option>
             <option value="text">Text Messages</option>
             <option value="position">Position Updates</option>
             <option value="telemetry">Telemetry</option>
         </select>
+        <select id="nodeChannelFilter" onchange="updateChattiestNodes()">
+            <option value="all" selected>All Channels</option>
+            {% for channel in Channel %}
+                <option value="{{ channel.value }}">{{ utils.get_channel_name(channel.value) }} ({{ channel.value }})</option>
+            {% endfor %}
+        </select>
     </div>
-    <table id="chattiestNodesTable">
+    <table>
         <thead>
             <tr>
-                <th>Rank</th>
+                <th>#</th>
                 <th>Node</th>
                 <th>Role</th>
                 <th>Messages</th>
                 <th>Active Days</th>
                 <th>First Message</th>
                 <th>Last Message</th>
+                <th>Channels</th>
             </tr>
         </thead>
         <tbody id="chattiestNodesBody">
-            <!-- Data will be populated by JavaScript -->
+            <tr>
+                <td colspan="8" style="text-align: center;">Loading...</td>
+            </tr>
         </tbody>
     </table>
 </div>
@@ -523,6 +538,7 @@ Mesh Metrics
     // Update metrics based on selected time range
     function updateMetrics() {
         const timeRange = document.getElementById('timeRangeFilter').value;
+        const channel = document.getElementById('channelFilter').value;
         
         // Show loading state
         document.querySelectorAll('.chart-container').forEach(container => {
@@ -530,7 +546,7 @@ Mesh Metrics
         });
         
         // Fetch data from API
-        fetch(`/api/metrics?time_range=${timeRange}`)
+        fetch(`/api/metrics?time_range=${timeRange}&channel=${channel}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -703,6 +719,7 @@ Mesh Metrics
     function updateChattiestNodes() {
         const timeFrame = document.getElementById('timeFrameFilter').value;
         const messageType = document.getElementById('messageTypeFilter').value;
+        const channel = document.getElementById('nodeChannelFilter').value;
         
         // Add loading indicator to the table without clearing it
         const tableBody = document.getElementById('chattiestNodesBody');
@@ -711,14 +728,14 @@ Mesh Metrics
         loadingRow.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
         loadingRow.style.position = 'absolute';
         loadingRow.style.width = '100%';
-        loadingRow.innerHTML = '<td colspan="6" style="text-align: center; padding: 20px;">Loading...</td>';
+        loadingRow.innerHTML = '<td colspan="8" style="text-align: center; padding: 20px;">Loading...</td>';
         
         // Make the table container relative for absolute positioning of loading indicator
         tableBody.parentElement.style.position = 'relative';
         tableBody.parentElement.appendChild(loadingRow);
         
         // Fetch data from API
-        fetch(`/api/chattiest-nodes?time_frame=${timeFrame}&message_type=${messageType}`)
+        fetch(`/api/chattiest-nodes?time_frame=${timeFrame}&message_type=${messageType}&channel=${channel}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -728,15 +745,15 @@ Mesh Metrics
             .then(data => {
                 if (data.error) {
                     console.error('Error fetching chattiest nodes:', data.error);
-                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Error: ' + data.error + '</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Error: ' + data.error + '</td></tr>';
                     return;
                 }
                 
-                // Only clear and update the table once we have new data
+                // Clear the table body
                 tableBody.innerHTML = '';
                 
                 if (!data.chattiest_nodes || data.chattiest_nodes.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No data available</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No data available</td></tr>';
                 } else {
                     data.chattiest_nodes.forEach((node, index) => {
                         const row = document.createElement('tr');
@@ -744,6 +761,14 @@ Mesh Metrics
                         // Format timestamps
                         const firstMessage = new Date(node.first_message).toLocaleString();
                         const lastMessage = new Date(node.last_message).toLocaleString();
+                        
+                        // Format channels
+                        const channelsText = node.channels && node.channels.length > 0 
+                            ? node.channels.map(ch => {
+                                const channelName = ch.name || `Channel ${ch.id}`;
+                                return `<span style="background-color: ${getChannelColor(ch.id)}; color: white; padding: 2px 6px; border-radius: 4px; margin-right: 4px;" title="Channel ${ch.id} (${channelName})">${channelName}</span>`;
+                            }).join('')
+                            : '-';
                         
                         row.innerHTML = `
                             <td>${index + 1}</td>
@@ -759,6 +784,7 @@ Mesh Metrics
                             <td>${node.active_days}</td>
                             <td>${firstMessage}</td>
                             <td>${lastMessage}</td>
+                            <td>${channelsText}</td>
                         `;
                         
                         tableBody.appendChild(row);
@@ -767,7 +793,7 @@ Mesh Metrics
             })
             .catch(error => {
                 console.error('Error fetching chattiest nodes:', error);
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Error loading data</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Error loading data</td></tr>';
             })
             .finally(() => {
                 // Remove loading indicator
@@ -776,6 +802,19 @@ Mesh Metrics
                     loadingIndicator.remove();
                 }
             });
+    }
+
+    // Add this function to get channel colors
+    function getChannelColor(channelId) {
+        // Define channel colors based on the same logic used in utils.get_channel_color
+        const channelColors = {
+            8: '#4CAF50',   // Long Fast
+            31: '#2196F3',  // Medium Fast
+            112: '#FF9800',  // Short Fast
+            // Add more channels as needed
+        };
+        
+        return channelColors[channelId] || '#9E9E9E'; // Default gray for unknown channels
     }
 </script>
 {% endblock %} 

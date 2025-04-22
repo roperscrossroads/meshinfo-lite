@@ -435,7 +435,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             ) AS reception_data
         FROM text t
         LEFT JOIN message_reception r ON t.message_id = r.message_id
-        GROUP BY t.message_id, t.from_id, t.to_id, t.text, t.ts_created
+        GROUP BY t.message_id, t.from_id, t.to_id, t.text, t.ts_created, t.channel
         ORDER BY t.ts_created DESC
         LIMIT %s OFFSET %s
         """
@@ -937,6 +937,9 @@ ts_updated = VALUES(ts_updated)"""
         node_id = self.verify_node(data["from"])
         payload = dict(data["decoded"]["json_payload"])
 
+        # Extract channel from the root of the telemetry data
+        channel = data.get("channel")
+
         data = {
             "air_util_tx": None,
             "battery_level": None,
@@ -947,7 +950,8 @@ ts_updated = VALUES(ts_updated)"""
             "relative_humidity": None,
             "barometric_pressure": None,
             "gas_resistance": None,
-            "current": None
+            "current": None,
+            "channel": channel
         }
 
         metrics = [
@@ -964,8 +968,8 @@ ts_updated = VALUES(ts_updated)"""
         sql = """INSERT INTO telemetry
 (id, air_util_tx, battery_level, channel_utilization,
 uptime_seconds, voltage, temperature, relative_humidity,
-barometric_pressure, gas_resistance, current, telemetry_time)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s))
+barometric_pressure, gas_resistance, current, telemetry_time, channel)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s), %s)
 """
         params = (
             node_id,
@@ -979,7 +983,8 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s))
             data["barometric_pressure"],
             data["gas_resistance"],
             data["current"],
-            payload["time"]
+            payload["time"],
+            data["channel"]
         )
         self.db.cursor().execute(sql, params)
         self.db.commit()
@@ -1312,7 +1317,13 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             migrations_path = os.path.join(os.path.dirname(__file__), 'migrations')
             sys.path.insert(0, os.path.dirname(__file__))
             import migrations.add_message_reception as add_message_reception
+            import migrations.add_traceroute_snr as add_traceroute_snr
+            import migrations.add_traceroute_id as add_traceroute_id
+            import migrations.add_channel_info as add_channel_info
             add_message_reception.migrate(self.db)
+            add_traceroute_snr.migrate(self.db)
+            add_traceroute_id.migrate(self.db)
+            add_channel_info.migrate(self.db)
         except ImportError as e:
             logging.error(f"Failed to import migration module: {e}")
             # Continue with database setup even if migration fails
@@ -1320,16 +1331,6 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
         except Exception as e:
             logging.error(f"Failed to run migration: {e}")
             raise
-        try:
-            import migrations.add_message_reception as add_message_reception
-            import migrations.add_traceroute_snr as add_traceroute_snr
-            import migrations.add_traceroute_id as add_traceroute_id
-            add_message_reception.migrate(self.db)
-            add_traceroute_snr.migrate(self.db)
-            add_traceroute_id.migrate(self.db)
-        except ImportError as e:
-            logging.error(f"Failed to import migration module: {e}")
-            pass
 
         self.db.commit()
 
