@@ -36,7 +36,7 @@
 
   <div id="map" style="height: 70vh; width: 100%;"></div>
   
-  <div id="legend" class="p-2" style="background-color: #ffffff;">
+  <div id="legend" class="p-2 mt-3" style="background-color: #ffffff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2);">
     <div>LEGEND</div>
     <div>
       <div style="background-color: #FF6666; height: 4px; width: 25px; display: inline-flex;"></div> Direct Reception
@@ -429,17 +429,12 @@
     height: 70vh;
     width: 100%;
     }
-    #legend {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
-    }
+    
     .ol-popup {
     position: absolute;
     background-color: white;
     box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-    padding: 0;  // Removed padding as it's now in the content div
+    padding: 0;
     border-radius: 10px;
     border: 1px solid #cccccc;
     bottom: 12px;
