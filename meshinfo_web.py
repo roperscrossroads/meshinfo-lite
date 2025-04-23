@@ -382,15 +382,15 @@ def traceroute_map():
     if traceroute_data['route_back']:
         route_back = [int(hop) for hop in traceroute_data['route_back'].split(';')]
     
-    # Format the forward SNR values
+    # Format the forward SNR values and scale by dividing by 4
     snr_towards = []
     if traceroute_data['snr_towards']:
-        snr_towards = [float(s) for s in traceroute_data['snr_towards'].split(';')]
+        snr_towards = [float(s)/4.0 for s in traceroute_data['snr_towards'].split(';')]
     
-    # Format the return SNR values
+    # Format the return SNR values and scale by dividing by 4
     snr_back = []
     if traceroute_data['snr_back']:
-        snr_back = [float(s) for s in traceroute_data['snr_back'].split(';')]
+        snr_back = [float(s)/4.0 for s in traceroute_data['snr_back'].split(';')]
     
     # Create a clean traceroute object for the template
     traceroute = {

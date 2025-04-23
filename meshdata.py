@@ -335,8 +335,8 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 "to_id": row[2],
                 "route": [int(a) for a in row[3].split(";")] if row[3] else [],
                 "route_back": [int(a) for a in row[4].split(";")] if row[4] else [],
-                "snr_towards": [float(s) for s in row[5].split(";")] if row[5] else [],
-                "snr_back": [float(s) for s in row[6].split(";")] if row[6] else [],
+                "snr_towards": [float(s)/4.0 for s in row[5].split(";")] if row[5] else [],
+                "snr_back": [float(s)/4.0 for s in row[6].split(";")] if row[6] else [],
                 "success": row[7],
                 "channel": row[8],
                 "hop_limit": row[9],
@@ -825,7 +825,8 @@ ts_updated = VALUES(ts_updated)"""
         if "route" in payload:
             route = ";".join(str(r) for r in payload["route"])
         if "snr_towards" in payload:
-            snr_towards = ";".join(str(s) for s in payload["snr_towards"])
+            # Store raw SNR values directly
+            snr_towards = ";".join(str(float(s)) for s in payload["snr_towards"])
         
         # Process return route and SNR
         route_back = None
@@ -833,7 +834,8 @@ ts_updated = VALUES(ts_updated)"""
         if "route_back" in payload:
             route_back = ";".join(str(r) for r in payload["route_back"])
         if "snr_back" in payload:
-            snr_back = ";".join(str(s) for s in payload["snr_back"])
+            # Store raw SNR values directly
+            snr_back = ";".join(str(float(s)) for s in payload["snr_back"])
 
         # A traceroute is successful if we have either:
         # 1. A direct connection with SNR data in both directions
@@ -883,7 +885,7 @@ ts_updated = VALUES(ts_updated)"""
             t.to_id,
             t.route,
             t.route_back,
-            t.snr,
+            t.snr_towards,
             t.snr_back,
             t.ts_created,
             n1.short_name as from_name,
@@ -891,8 +893,7 @@ ts_updated = VALUES(ts_updated)"""
         FROM traceroute t
         JOIN nodeinfo n1 ON t.from_id = n1.id
         JOIN nodeinfo n2 ON t.to_id = n2.id
-        WHERE t.route_back IS NOT NULL
-        AND t.route_back != ''
+        WHERE t.success = TRUE
         ORDER BY t.ts_created DESC
         """
         cur = self.db.cursor()
@@ -905,6 +906,15 @@ ts_updated = VALUES(ts_updated)"""
             # Convert timestamp to Unix timestamp if needed
             if isinstance(result['ts_created'], datetime.datetime):
                 result['ts_created'] = result['ts_created'].timestamp()
+            # Parse route and SNR data
+            if result['route']:
+                result['route'] = [int(a) for a in result['route'].split(";")]
+            if result['route_back']:
+                result['route_back'] = [int(a) for a in result['route_back'].split(";")]
+            if result['snr_towards']:
+                result['snr_towards'] = [float(s) for s in result['snr_towards'].split(";")]
+            if result['snr_back']:
+                result['snr_back'] = [float(s) for s in result['snr_back'].split(";")]
             results.append(result)
         
         cur.close()

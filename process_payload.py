@@ -124,11 +124,30 @@ def get_data(msg):
             )
         elif portnum == portnums_pb2.TRACEROUTE_APP:
             j["type"] = "traceroute"
+            
+            # Log the raw payload before parsing
+            logging.info(f"Raw traceroute payload before parsing: {msg.decoded.payload[:100]}...")
+            
             route_discovery = mesh_pb2.RouteDiscovery().FromString(msg.decoded.payload)
+            
+            # Log the entire route_discovery object
+            logging.info(f"Full RouteDiscovery object: {route_discovery}")
+            
+            # Log the raw protobuf object before conversion
+            #logging.info("Raw RouteDiscovery protobuf values:")
+            #if hasattr(route_discovery, 'snr_towards'):
+            #    logging.info(f"  snr_towards (raw protobuf): {route_discovery.snr_towards}")
+            #if hasattr(route_discovery, 'snr_back'):
+            #    logging.info(f"  snr_back (raw protobuf): {route_discovery.snr_back}")
+            
             route_data = to_json(route_discovery)
             
-            # Log the raw route data for debugging
-            logging.debug(f"Raw traceroute data: {json.dumps(route_data, indent=2)}")
+            # Log SNR values
+            #logging.info("SNR values from protobuf:")
+            #if "snr_towards" in route_data:
+            #    logging.info(f"  snr_towards: {route_data['snr_towards']}")
+            #if "snr_back" in route_data:
+            #    logging.info(f"  snr_back: {route_data['snr_back']}")
             
             # Ensure we have all required fields with proper defaults
             route_data.setdefault("route", [])
@@ -146,8 +165,8 @@ def get_data(msg):
             
             j["decoded"]["json_payload"] = route_data
             
-            # Log the processed payload
-            logging.debug(f"Processed traceroute payload: {json.dumps(j['decoded']['json_payload'], indent=2)}")
+            # Log the final data that will be stored
+            #logging.info(f"Final traceroute data to be stored: {json.dumps(j['decoded']['json_payload'], indent=2)}")
 
         elif portnum == portnums_pb2.POSITION_APP:
             j["type"] = "position"
