@@ -211,11 +211,14 @@ nav {
     border-radius: 12px;
     padding: 4px 10px;
     font-size: 0.85em;
-    gap: 6px;
     text-decoration: none;
     color: inherit;
     transition: background-color 0.2s;
     margin: 2px;
+}
+
+.reception-badge .snr-indicator {
+    margin-right: 6px;
 }
 
 .reception-badge:hover {

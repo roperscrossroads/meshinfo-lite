@@ -70,6 +70,14 @@ app.jinja_env.globals.update(time_ago=time_ago)
 app.jinja_env.globals.update(min=min)
 app.jinja_env.globals.update(max=max)
 
+# Add template filters
+@app.template_filter('safe_hw_model')
+def safe_hw_model(value):
+    try:
+        return meshtastic_support.HardwareModel(value).name.replace('_', ' ')
+    except (ValueError, AttributeError):
+        return f"Unknown ({value})"
+
 config = configparser.ConfigParser()
 config.read("config.ini")
 
@@ -416,6 +424,7 @@ def traceroute_map():
         nodes=nodes,
         traceroute=traceroute,
         utils=utils,
+        meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now()
     )
@@ -703,6 +712,7 @@ def traceroutes():
         traceroutes=traceroute_data['items'],
         pagination=pagination,
         utils=utils,
+        meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
     )

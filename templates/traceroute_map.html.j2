@@ -4,6 +4,47 @@
 {% block head %}
   <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.css" rel="stylesheet">
+  
+  <script>
+  // Function to initialize popovers
+  function initializePopovers() {
+      if (typeof jQuery !== 'undefined') {
+          // Only initialize popovers on desktop
+          if (window.innerWidth > 768) {
+              $('[data-toggle="popover"]').popover({
+                  html: true,
+                  trigger: 'hover',
+                  placement: 'bottom',
+                  container: 'body',
+                  delay: { show: 50, hide: 100 }
+              });
+          } else {
+              // Destroy any existing popovers on mobile
+              $('[data-toggle="popover"]').popover('dispose');
+          }
+      }
+  }
+
+  // Initialize on DOM content loaded
+  document.addEventListener('DOMContentLoaded', initializePopovers);
+
+  // Re-initialize on window resize
+  let resizeTimer;
+  window.addEventListener('resize', function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() {
+          $('[data-toggle="popover"]').popover('dispose');
+          initializePopovers();
+      }, 250);
+  });
+
+  // Backup initialization if jQuery loads late
+  window.addEventListener('load', function() {
+      if (typeof jQuery !== 'undefined' && !$('[data-toggle="popover"]').data('bs.popover')) {
+          initializePopovers();
+      }
+  });
+  </script>
 {% endblock %}
 
 {% block content %}
@@ -15,146 +56,214 @@
 <div class="card mb-3">
     <div class="card-body">
       <h5 class="card-title">Traceroute Details</h5>
-      <p class="card-text">
-        <strong>From:</strong> 
-        {% if traceroute.from_id_hex in nodes %}
-          <a href="node_{{ traceroute.from_id_hex }}.html">{{ nodes[traceroute.from_id_hex].long_name }} ({{ nodes[traceroute.from_id_hex].short_name }})</a>
-        {% else %}
-          Unknown
-        {% endif %}
-        <br>
-        <strong>To:</strong> 
-        {% if traceroute.to_id_hex in nodes %}
-          <a href="node_{{ traceroute.to_id_hex }}.html">{{ nodes[traceroute.to_id_hex].long_name }} ({{ nodes[traceroute.to_id_hex].short_name }})</a>
-        {% else %}
-          Unknown
-        {% endif %}
-        <br>
-        <strong>Time:</strong> {{ format_timestamp(traceroute.ts_created) }}<br>
-        <strong>Forward Route:</strong>
-        <div class="d-flex align-items-center flex-wrap mt-2">
-          {# Source node #}
-          <div class="d-inline-flex align-items-center me-2 mb-1">
-            <div class="position-relative">
-              {% if traceroute.from_id_hex in nodes %}
-                <a href="node_{{ traceroute.from_id_hex }}.html" class="text-decoration-none fw-bold">
-                  {{ nodes[traceroute.from_id_hex].short_name }}
-                </a>
-                {% if traceroute.route|length == 0 and traceroute.snr_towards %}
-                  {{ snr_badge(traceroute.snr_towards[0]) }}
-                {% endif %}
-              {% else %}
-                <span class="fw-bold">UNK</span>
-              {% endif %}
-            </div>
-            <span class="mx-2">⇢</span>
-          </div>
+      <div class="card-text">
+        <div class="d-flex align-items-center flex-wrap mb-1">
+          <span class="text-muted me-2" style="min-width: 70px;">Outbound:</span>
+          <div class="d-flex align-items-center flex-wrap">
+            {# Source node #}
+            {% if traceroute.from_id_hex in nodes %}
+              <a href="/node_{{ traceroute.from_id_hex }}.html" 
+                 class="reception-badge {% if traceroute.route|length == 0 and traceroute.snr_towards %}{% if traceroute.snr_towards[0] > 0 %}snr-good{% elif traceroute.snr_towards[0] > -5 %}snr-adequate{% elif traceroute.snr_towards[0] > -10 %}snr-poor{% else %}snr-very-poor{% endif %}{% endif %}"
+                 data-toggle="popover"
+                 data-content="<div class='receiver-popover'>
+                     <strong>{{ nodes[traceroute.from_id_hex].long_name }}</strong><br>
+                     {% if traceroute.route|length == 0 and traceroute.snr_towards %}
+                       SNR: {{ '%.1f'|format(traceroute.snr_towards[0]) }}dB<br>
+                     {% endif %}
+                     {% if nodes[traceroute.from_id_hex].hw_model %}
+                       HW: {{ nodes[traceroute.from_id_hex].hw_model | safe_hw_model }}<br>
+                     {% endif %}
+                     {% if nodes[traceroute.from_id_hex].firmware_version %}
+                       FW: {{ nodes[traceroute.from_id_hex].firmware_version }}<br>
+                     {% endif %}
+                     {% if nodes[traceroute.from_id_hex].role is not none %}
+                       Role: {{ utils.get_role_name(nodes[traceroute.from_id_hex].role) }}<br>
+                     {% endif %}
+                     {% if nodes[traceroute.from_id_hex].owner_username %}
+                       Owner: {{ nodes[traceroute.from_id_hex].owner_username }}<br>
+                     {% endif %}
+                     Last Seen: {{ time_ago(nodes[traceroute.from_id_hex].ts_seen) }}
+                 </div>">
+                 {% if traceroute.route|length == 0 and traceroute.snr_towards %}<span class="snr-indicator"></span>{% endif %}
+                 {{ nodes[traceroute.from_id_hex].short_name }}
+              </a>
+            {% else %}
+              <span class="reception-badge">UNK</span>
+            {% endif %}
 
-          {# Forward hop nodes - only if there are hops #}
-          {% if traceroute.route|length > 0 %}
+            {# Forward hops #}
             {% for hop in traceroute.route %}
-              <div class="d-inline-flex align-items-center me-2 mb-1">
-                {% set hnodeid = utils.convert_node_id_from_int_to_hex(hop) %}
-                {% set hnode = nodes[hnodeid] if hnodeid in nodes else None %}
-                <div class="position-relative">
-                  {% if hnode %}
-                    <a href="node_{{ hnodeid }}.html" class="text-decoration-none">
-                      {{ hnode.short_name }}
-                    </a>
-                  {% else %}
-                    <span>UNK</span>
-                  {% endif %}
-                  {% if traceroute.snr_towards and loop.index0 < traceroute.snr_towards|length %}
-                    {{ snr_badge(traceroute.snr_towards[loop.index0]) }}
-                  {% endif %}
-                </div>
-                {% if not loop.last %}
-                  <span class="mx-2">⇢</span>
-                {% endif %}
-              </div>
-            {% endfor %}
-          {% endif %}
-
-          {# Destination node for forward path #}
-          <div class="d-inline-flex align-items-center me-2 mb-1">
-            <span class="mx-2">⇢</span>
-            <div class="position-relative">
-              {% if traceroute.to_id_hex in nodes %}
-                <a href="node_{{ traceroute.to_id_hex }}.html" class="text-decoration-none fw-bold">
-                  {{ nodes[traceroute.to_id_hex].short_name }}
+              <span class="mx-1">⇢</span>
+              {% set hnodeid = utils.convert_node_id_from_int_to_hex(hop) %}
+              {% set hnode = nodes[hnodeid] if hnodeid in nodes else None %}
+              {% if hnode %}
+                <a href="/node_{{ hnodeid }}.html" 
+                   class="reception-badge {% if traceroute.snr_towards and loop.index0 < traceroute.snr_towards|length %}{% if traceroute.snr_towards[loop.index0] > 0 %}snr-good{% elif traceroute.snr_towards[loop.index0] > -5 %}snr-adequate{% elif traceroute.snr_towards[loop.index0] > -10 %}snr-poor{% else %}snr-very-poor{% endif %}{% endif %}"
+                   data-toggle="popover"
+                   data-content="<div class='receiver-popover'>
+                       <strong>{{ hnode.long_name }}</strong><br>
+                       {% if traceroute.snr_towards and loop.index0 < traceroute.snr_towards|length %}
+                         SNR: {{ '%.1f'|format(traceroute.snr_towards[loop.index0]) }}dB<br>
+                       {% endif %}
+                       {% if hnode.hw_model %}
+                         HW: {{ hnode.hw_model | safe_hw_model }}<br>
+                       {% endif %}
+                       {% if hnode.firmware_version %}
+                         FW: {{ hnode.firmware_version }}<br>
+                       {% endif %}
+                       {% if hnode.role is not none %}
+                         Role: {{ utils.get_role_name(hnode.role) }}<br>
+                       {% endif %}
+                       {% if hnode.owner_username %}
+                         Owner: {{ hnode.owner_username }}<br>
+                       {% endif %}
+                       Last Seen: {{ time_ago(hnode.ts_seen) }}
+                   </div>">
+                   {% if traceroute.snr_towards and loop.index0 < traceroute.snr_towards|length %}<span class="snr-indicator"></span>{% endif %}
+                   {{ hnode.short_name }}
                 </a>
               {% else %}
-                <span class="fw-bold">UNK</span>
+                <span class="reception-badge">UNK</span>
               {% endif %}
-            </div>
+            {% endfor %}
+
+            {# Destination node for forward path #}
+            <span class="mx-1">⇢</span>
+            {% if traceroute.to_id_hex in nodes %}
+              <a href="/node_{{ traceroute.to_id_hex }}.html" 
+                 class="reception-badge"
+                 data-toggle="popover"
+                 data-content="<div class='receiver-popover'>
+                     <strong>{{ nodes[traceroute.to_id_hex].long_name }}</strong><br>
+                     {% if nodes[traceroute.to_id_hex].hw_model %}
+                       HW: {{ nodes[traceroute.to_id_hex].hw_model | safe_hw_model }}<br>
+                     {% endif %}
+                     {% if nodes[traceroute.to_id_hex].firmware_version %}
+                       FW: {{ nodes[traceroute.to_id_hex].firmware_version }}<br>
+                     {% endif %}
+                     {% if nodes[traceroute.to_id_hex].role is not none %}
+                       Role: {{ utils.get_role_name(nodes[traceroute.to_id_hex].role) }}<br>
+                     {% endif %}
+                     {% if nodes[traceroute.to_id_hex].owner_username %}
+                       Owner: {{ nodes[traceroute.to_id_hex].owner_username }}<br>
+                     {% endif %}
+                     Last Seen: {{ time_ago(nodes[traceroute.to_id_hex].ts_seen) }}
+                 </div>">
+                 {{ nodes[traceroute.to_id_hex].short_name }}
+              </a>
+            {% else %}
+              <span class="reception-badge">UNK</span>
+            {% endif %}
           </div>
         </div>
 
         {% if traceroute.route_back %}
-          <strong>Return Route:</strong>
-          <div class="d-flex align-items-center flex-wrap mt-2">
-            {# Source node for return path #}
-            <div class="d-inline-flex align-items-center me-2 mb-1">
-              <div class="position-relative">
-                {% if traceroute.to_id_hex in nodes %}
-                  <a href="node_{{ traceroute.to_id_hex }}.html" class="text-decoration-none fw-bold">
-                    {{ nodes[traceroute.to_id_hex].short_name }}
-                  </a>
-                  {% if traceroute.route_back|length == 0 and traceroute.snr_back %}
-                    {{ snr_badge(traceroute.snr_back[0]) }}
-                  {% endif %}
-                {% else %}
-                  <span class="fw-bold">UNK</span>
-                {% endif %}
-              </div>
-              {% if traceroute.route_back|length > 0 %}
-                <span class="mx-2">⇢</span>
+          <div class="d-flex align-items-center flex-wrap">
+            <span class="text-muted me-2" style="min-width: 70px;">Return:</span>
+            <div class="d-flex align-items-center flex-wrap">
+              {# Return source (destination node) #}
+              {% if traceroute.to_id_hex in nodes %}
+                <a href="/node_{{ traceroute.to_id_hex }}.html" 
+                   class="reception-badge {% if traceroute.route_back|length == 0 and traceroute.snr_back %}{% if traceroute.snr_back[0] > 0 %}snr-good{% elif traceroute.snr_back[0] > -5 %}snr-adequate{% elif traceroute.snr_back[0] > -10 %}snr-poor{% else %}snr-very-poor{% endif %}{% endif %}"
+                   data-toggle="popover"
+                   data-content="<div class='receiver-popover'>
+                       <strong>{{ nodes[traceroute.to_id_hex].long_name }}</strong><br>
+                       {% if traceroute.route_back|length == 0 and traceroute.snr_back %}
+                         SNR: {{ '%.1f'|format(traceroute.snr_back[0]) }}dB<br>
+                       {% endif %}
+                       {% if nodes[traceroute.to_id_hex].hw_model %}
+                         HW: {{ nodes[traceroute.to_id_hex].hw_model | safe_hw_model }}<br>
+                       {% endif %}
+                       {% if nodes[traceroute.to_id_hex].firmware_version %}
+                         FW: {{ nodes[traceroute.to_id_hex].firmware_version }}<br>
+                       {% endif %}
+                       {% if nodes[traceroute.to_id_hex].role is not none %}
+                         Role: {{ utils.get_role_name(nodes[traceroute.to_id_hex].role) }}<br>
+                       {% endif %}
+                       {% if nodes[traceroute.to_id_hex].owner_username %}
+                         Owner: {{ nodes[traceroute.to_id_hex].owner_username }}<br>
+                       {% endif %}
+                       Last Seen: {{ time_ago(nodes[traceroute.to_id_hex].ts_seen) }}
+                   </div>">
+                   {% if traceroute.route_back|length == 0 and traceroute.snr_back %}<span class="snr-indicator"></span>{% endif %}
+                   {{ nodes[traceroute.to_id_hex].short_name }}
+                </a>
+              {% else %}
+                <span class="reception-badge">UNK</span>
               {% endif %}
-            </div>
 
-            {# Return hop nodes #}
-            {% if traceroute.route_back|length > 0 %}
+              {# Return hops #}
               {% for hop in traceroute.route_back %}
-                <div class="d-inline-flex align-items-center me-2 mb-1">
-                  {% set hnodeid = utils.convert_node_id_from_int_to_hex(hop) %}
-                  {% set hnode = nodes[hnodeid] if hnodeid in nodes else None %}
-                  <div class="position-relative">
-                    {% if hnode %}
-                      <a href="node_{{ hnodeid }}.html" class="text-decoration-none">
-                        {{ hnode.short_name }}
-                      </a>
-                    {% else %}
-                      <span>UNK</span>
-                    {% endif %}
-                    {% if traceroute.snr_back and loop.index0 < traceroute.snr_back|length %}
-                      {{ snr_badge(traceroute.snr_back[loop.index0]) }}
-                    {% endif %}
-                  </div>
-                  {% if not loop.last %}
-                    <span class="mx-2">⇢</span>
-                  {% endif %}
-                </div>
-              {% endfor %}
-            {% endif %}
-
-            {# Final destination (original source) for return path #}
-            <div class="d-inline-flex align-items-center me-2 mb-1">
-              <div class="position-relative">
-                {% if traceroute.from_id_hex in nodes %}
-                  <span class="mx-2">⇢</span>
-                  <a href="node_{{ traceroute.from_id_hex }}.html" class="text-decoration-none fw-bold">
-                    {{ nodes[traceroute.from_id_hex].short_name }}
+                <span class="mx-1">⇢</span>
+                {% set hnodeid = utils.convert_node_id_from_int_to_hex(hop) %}
+                {% set hnode = nodes[hnodeid] if hnodeid in nodes else None %}
+                {% if hnode %}
+                  <a href="/node_{{ hnodeid }}.html" 
+                     class="reception-badge {% if traceroute.snr_back and loop.index0 < traceroute.snr_back|length %}{% if traceroute.snr_back[loop.index0] > 0 %}snr-good{% elif traceroute.snr_back[loop.index0] > -5 %}snr-adequate{% elif traceroute.snr_back[loop.index0] > -10 %}snr-poor{% else %}snr-very-poor{% endif %}{% endif %}"
+                     data-toggle="popover"
+                     data-content="<div class='receiver-popover'>
+                         <strong>{{ hnode.long_name }}</strong><br>
+                         {% if traceroute.snr_back and loop.index0 < traceroute.snr_back|length %}
+                           SNR: {{ '%.1f'|format(traceroute.snr_back[loop.index0]) }}dB<br>
+                         {% endif %}
+                         {% if hnode.hw_model %}
+                           HW: {{ hnode.hw_model | safe_hw_model }}<br>
+                         {% endif %}
+                         {% if hnode.firmware_version %}
+                           FW: {{ hnode.firmware_version }}<br>
+                         {% endif %}
+                         {% if hnode.role is not none %}
+                           Role: {{ utils.get_role_name(hnode.role) }}<br>
+                         {% endif %}
+                         {% if hnode.owner_username %}
+                           Owner: {{ hnode.owner_username }}<br>
+                         {% endif %}
+                         Last Seen: {{ time_ago(hnode.ts_seen) }}
+                     </div>">
+                     {% if traceroute.snr_back and loop.index0 < traceroute.snr_back|length %}<span class="snr-indicator"></span>{% endif %}
+                     {{ hnode.short_name }}
                   </a>
                 {% else %}
-                  <span class="fw-bold">UNK</span>
+                  <span class="reception-badge">UNK</span>
                 {% endif %}
-              </div>
+              {% endfor %}
+
+              {# Return destination (source node) #}
+              <span class="mx-1">⇢</span>
+              {% if traceroute.from_id_hex in nodes %}
+                <a href="/node_{{ traceroute.from_id_hex }}.html" 
+                   class="reception-badge"
+                   data-toggle="popover"
+                   data-content="<div class='receiver-popover'>
+                       <strong>{{ nodes[traceroute.from_id_hex].long_name }}</strong><br>
+                       {% if nodes[traceroute.from_id_hex].hw_model %}
+                         HW: {{ nodes[traceroute.from_id_hex].hw_model | safe_hw_model }}<br>
+                       {% endif %}
+                       {% if nodes[traceroute.from_id_hex].firmware_version %}
+                         FW: {{ nodes[traceroute.from_id_hex].firmware_version }}<br>
+                       {% endif %}
+                       {% if nodes[traceroute.from_id_hex].role is not none %}
+                         Role: {{ utils.get_role_name(nodes[traceroute.from_id_hex].role) }}<br>
+                       {% endif %}
+                       {% if nodes[traceroute.from_id_hex].owner_username %}
+                         Owner: {{ nodes[traceroute.from_id_hex].owner_username }}<br>
+                       {% endif %}
+                       Last Seen: {{ time_ago(nodes[traceroute.from_id_hex].ts_seen) }}
+                   </div>">
+                   {{ nodes[traceroute.from_id_hex].short_name }}
+                </a>
+              {% else %}
+                <span class="reception-badge">UNK</span>
+              {% endif %}
             </div>
           </div>
         {% endif %}
 
-        <strong>Total Hops:</strong> {{ traceroute.route|length }} forward{% if traceroute.route_back %}, {{ traceroute.route_back|length }} return{% endif %}<br>
-      </p>
+        <div class="mt-3">
+          <strong>Time:</strong> {{ format_timestamp(traceroute.ts_created) }}<br>
+          <strong>Total Hops:</strong> {{ traceroute.route|length }} forward{% if traceroute.route_back %}, {{ traceroute.route_back|length }} return{% endif %}
+        </div>
+      </div>
     </div>
   </div>
 
