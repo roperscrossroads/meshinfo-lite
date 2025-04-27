@@ -183,36 +183,39 @@ document.addEventListener('DOMContentLoaded', function() {
     const positionCols = document.querySelectorAll('.position-col');
     const telemetryCols = document.querySelectorAll('.telemetry-col');
 
-    // Clear any existing preferences
-    localStorage.removeItem('showPosition');
-    localStorage.removeItem('showTelemetry');
-
-    // Load saved preferences - default to false (hidden) if not set
-    const showPosition = localStorage.getItem('showPosition') === 'true';
-    const showTelemetry = localStorage.getItem('showTelemetry') === 'true';
-    
-    positionSwitch.checked = showPosition;
-    telemetrySwitch.checked = showTelemetry;
-
     function toggleColumns(columns, show) {
         columns.forEach(col => {
             col.style.display = show ? '' : 'none';
         });
     }
 
-    // Initial state
+    // Load saved preferences from localStorage
+    let showPosition = localStorage.getItem('showPosition');
+    let showTelemetry = localStorage.getItem('showTelemetry');
+
+    // Convert string 'true'/'false' to boolean, default to false if not set
+    showPosition = showPosition === 'true';
+    showTelemetry = showTelemetry === 'true';
+
+    // Set initial checkbox states
+    positionSwitch.checked = showPosition;
+    telemetrySwitch.checked = showTelemetry;
+
+    // Set initial column visibility
     toggleColumns(positionCols, showPosition);
     toggleColumns(telemetryCols, showTelemetry);
 
-    // Event listeners
+    // Event listeners for changes
     positionSwitch.addEventListener('change', function() {
-        toggleColumns(positionCols, this.checked);
-        localStorage.setItem('showPosition', this.checked);
+        const isChecked = this.checked;
+        toggleColumns(positionCols, isChecked);
+        localStorage.setItem('showPosition', isChecked);
     });
 
     telemetrySwitch.addEventListener('change', function() {
-        toggleColumns(telemetryCols, this.checked);
-        localStorage.setItem('showTelemetry', this.checked);
+        const isChecked = this.checked;
+        toggleColumns(telemetryCols, isChecked);
+        localStorage.setItem('showTelemetry', isChecked);
     });
 });
 </script>
