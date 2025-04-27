@@ -31,6 +31,7 @@ debug=true
 timezone=America/Los_Angeles
 zero_hop_timeout=43200
 telemetry_retention_days = 30
+metrics_average_interval=7200
 
 [geocoding]
 enabled=false

@@ -1218,11 +1218,85 @@ def get_metrics():
         
         cursor.close()
         
-        # Fill in missing time slots with zeros
+        # --- Moving Average Helper ---
+        def moving_average_centered(data_list, window_minutes, bucket_size_minutes):
+            # data_list: list of floats (same order as time_slots)
+            # window_minutes: total window size (e.g., 120 for 2 hours)
+            # bucket_size_minutes: size of each bucket (e.g., 30 for 30 min)
+            n = len(data_list)
+            result = []
+            half_window = window_minutes // 2
+            buckets_per_window = max(1, window_minutes // bucket_size_minutes)
+            for i in range(n):
+                # Centered window: find all indices within window centered at i
+                center_time = i
+                window_indices = []
+                for j in range(n):
+                    if abs(j - center_time) * bucket_size_minutes <= half_window:
+                        window_indices.append(j)
+                if window_indices:
+                    avg = sum(data_list[j] for j in window_indices) / len(window_indices)
+                else:
+                    avg = data_list[i]
+                result.append(avg)
+            return result
+
+        # --- Get metrics_average_interval from config ---
+        metrics_avg_interval = int(config.get('server', 'metrics_average_interval', fallback=7200))  # seconds
+        metrics_avg_minutes = metrics_avg_interval // 60
+
+        # --- Calculate moving averages for relevant metrics ---
+        # Determine bucket_size_minutes from bucket_size
+        bucket_size_minutes = bucket_size
+
+        # Prepare raw data lists
+        nodes_online_raw = [nodes_online_data.get(slot, 0) for slot in time_slots]
+        battery_levels_raw = [battery_data.get(slot, 0) for slot in time_slots]
+        temperature_raw = [temperature_data.get(slot, 0) for slot in time_slots]
+        snr_raw = [snr_data.get(slot, 0) for slot in time_slots]
+
+        # --- Get node_activity_prune_threshold from config ---
+        node_activity_prune_threshold = int(config.get('server', 'node_activity_prune_threshold', fallback=7200))  # seconds
+
+        # --- For each time slot, count unique nodes heard in the preceding activity window ---
+        # Fetch all telemetry records in the full time range
+        cursor = md.db.cursor(dictionary=True)
+        cursor.execute(f"""
+            SELECT id, ts_created
+            FROM telemetry
+            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
+            ORDER BY ts_created
+        """, (start_timestamp, end_timestamp))
+        all_telemetry = list(cursor.fetchall())
+        # Convert ts_created to datetime for easier comparison
+        for row in all_telemetry:
+            if isinstance(row['ts_created'], str):
+                row['ts_created'] = datetime.datetime.strptime(row['ts_created'], '%Y-%m-%d %H:%M:%S')
+        # Precompute for each time slot
+        nodes_heard_per_slot = []
+        for slot in time_slots:
+            # slot is a string, convert to datetime
+            if '%H:%M' in time_format or '%H:%i' in time_format:
+                slot_time = datetime.datetime.strptime(slot, '%Y-%m-%d %H:%M')
+            elif '%H:00' in time_format:
+                slot_time = datetime.datetime.strptime(slot, '%Y-%m-%d %H:%M')
+            else:
+                slot_time = datetime.datetime.strptime(slot, '%Y-%m-%d')
+            window_start = slot_time - datetime.timedelta(seconds=node_activity_prune_threshold)
+            # Find all node ids with telemetry in [window_start, slot_time]
+            active_nodes = set()
+            for row in all_telemetry:
+                if window_start < row['ts_created'] <= slot_time:
+                    active_nodes.add(row['id'])
+            nodes_heard_per_slot.append(len(active_nodes))
+        # Now apply moving average and round to nearest integer
+        nodes_online_smoothed = [round(x) for x in moving_average_centered(nodes_heard_per_slot, metrics_avg_minutes, bucket_size_minutes)]
+
+        # Fill in missing time slots with zeros (for non-averaged metrics)
         result = {
             'nodes_online': {
                 'labels': time_slots,
-                'data': [nodes_online_data.get(slot, 0) for slot in time_slots]
+                'data': nodes_online_smoothed
             },
             'message_traffic': {
                 'labels': time_slots,
@@ -1234,15 +1308,15 @@ def get_metrics():
             },
             'battery_levels': {
                 'labels': time_slots,
-                'data': [battery_data.get(slot, 0) for slot in time_slots]
+                'data': moving_average_centered(battery_levels_raw, metrics_avg_minutes, bucket_size_minutes)
             },
             'temperature': {
                 'labels': time_slots,
-                'data': [temperature_data.get(slot, 0) for slot in time_slots]
+                'data': moving_average_centered(temperature_raw, metrics_avg_minutes, bucket_size_minutes)
             },
             'snr': {
                 'labels': time_slots,
-                'data': [snr_data.get(slot, 0) for slot in time_slots]
+                'data': moving_average_centered(snr_raw, metrics_avg_minutes, bucket_size_minutes)
             }
         }
         
