@@ -15,12 +15,18 @@ def metrics():
 
 @app.route('/api/metrics')
 def get_metrics():
+    node_activity_prune_threshold = int(config.get('server', 'node_activity_prune_threshold', fallback=7200))
+    metrics_avg_interval = int(config.get('server', 'metrics_average_interval', fallback=7200))
+    metrics_avg_minutes = metrics_avg_interval // 60
+
     db = MeshData()
-    
-    # Get the last 24 hours of data
+    # Get the last 24 hours of data, but extend for smoothing
     end_time = datetime.now()
     start_time = end_time - timedelta(hours=24)
-    
+    extra_minutes = metrics_avg_minutes // 2
+    extended_start_time = start_time - timedelta(minutes=extra_minutes)
+    extended_end_time = end_time + timedelta(minutes=extra_minutes)
+
     # Nodes Online (per hour)
     nodes_online = db.execute("""
         SELECT 
@@ -30,7 +36,7 @@ def get_metrics():
         WHERE timestamp >= ? AND timestamp <= ?
         GROUP BY hour
         ORDER BY hour
-    """, (int(start_time.timestamp()), int(end_time.timestamp())))
+    """, (int(extended_start_time.timestamp()), int(extended_end_time.timestamp())))
     
     # Message Traffic (per hour)
     message_traffic = db.execute("""
@@ -41,7 +47,7 @@ def get_metrics():
         WHERE timestamp >= ? AND timestamp <= ?
         GROUP BY hour
         ORDER BY hour
-    """, (int(start_time.timestamp()), int(end_time.timestamp())))
+    """, (int(extended_start_time.timestamp()), int(extended_end_time.timestamp())))
     
     # Channel Utilization
     channel_util = db.execute("""
@@ -52,7 +58,7 @@ def get_metrics():
         WHERE timestamp >= ? AND timestamp <= ?
         GROUP BY hour
         ORDER BY hour
-    """, (int(start_time.timestamp()), int(end_time.timestamp())))
+    """, (int(extended_start_time.timestamp()), int(extended_end_time.timestamp())))
     
     # Battery Levels (for each node)
     battery_levels = db.execute("""
@@ -64,7 +70,7 @@ def get_metrics():
         WHERE timestamp >= ? AND timestamp <= ?
         GROUP BY id, hour
         ORDER BY hour
-    """, (int(start_time.timestamp()), int(end_time.timestamp())))
+    """, (int(extended_start_time.timestamp()), int(extended_end_time.timestamp())))
     
     # Temperature Readings
     temperature = db.execute("""
@@ -76,7 +82,7 @@ def get_metrics():
         WHERE timestamp >= ? AND timestamp <= ?
         GROUP BY id, hour
         ORDER BY hour
-    """, (int(start_time.timestamp()), int(end_time.timestamp())))
+    """, (int(extended_start_time.timestamp()), int(extended_end_time.timestamp())))
     
     # Signal Strength (SNR)
     snr = db.execute("""
@@ -87,7 +93,7 @@ def get_metrics():
         WHERE timestamp >= ? AND timestamp <= ?
         GROUP BY hour
         ORDER BY hour
-    """, (int(start_time.timestamp()), int(end_time.timestamp())))
+    """, (int(extended_start_time.timestamp()), int(extended_end_time.timestamp())))
     
     # Process battery levels data
     battery_data = {}
@@ -105,10 +111,39 @@ def get_metrics():
         temp_data[row['id']]['hours'].append(row['hour'])
         temp_data[row['id']]['temps'].append(row['avg_temp'])
     
+    # Build extended labels and data for nodes_online
+    extended_labels = [row['hour'] for row in nodes_online]
+    extended_data = [row['node_count'] for row in nodes_online]
+
+    # Moving average helper (centered)
+    def moving_average_centered(data, window):
+        n = len(data)
+        result = []
+        half = window // 2
+        for i in range(n):
+            left = max(0, i - half)
+            right = min(n, i + half + 1)
+            window_data = data[left:right]
+            result.append(sum(window_data) / len(window_data))
+        return result
+
+    # Apply smoothing to extended data
+    window_buckets = max(1, metrics_avg_minutes // 60)
+    smoothed_data = moving_average_centered(extended_data, window_buckets)
+
+    # Trim to original 24-hour window
+    trimmed_labels = []
+    trimmed_data = []
+    for label, value in zip(extended_labels, smoothed_data):
+        label_dt = datetime.strptime(label, '%Y-%m-%d %H:%M')
+        if start_time <= label_dt <= end_time:
+            trimmed_labels.append(label)
+            trimmed_data.append(value)
+
     return jsonify({
         'nodes_online': {
-            'labels': [row['hour'] for row in nodes_online],
-            'data': [row['node_count'] for row in nodes_online]
+            'labels': trimmed_labels,
+            'data': trimmed_data
         },
         'message_traffic': {
             'labels': [row['hour'] for row in message_traffic],
