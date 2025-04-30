@@ -413,8 +413,24 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             record["role"] = record["role"] or 0
             record["active"] = is_active
             record["last_seen"] = utils.time_since(record["ts_seen"])
-            node_id = utils.convert_node_id_from_int_to_hex(row[0])
-            nodes[node_id] = record
+            # --- Add: Find most recent channel ---
+            node_id = row[0]
+            cur2 = self.db.cursor()
+            cur2.execute("""
+                (SELECT channel, ts_created FROM telemetry WHERE id = %s AND channel IS NOT NULL ORDER BY ts_created DESC LIMIT 1)
+                UNION ALL
+                (SELECT channel, ts_created FROM text WHERE from_id = %s AND channel IS NOT NULL ORDER BY ts_created DESC LIMIT 1)
+                ORDER BY ts_created DESC LIMIT 1
+            """, (node_id, node_id))
+            channel_row = cur2.fetchone()
+            if channel_row and channel_row[0] is not None:
+                record["channel"] = channel_row[0]
+            else:
+                record["channel"] = None
+            cur2.close()
+            # --- End add ---
+            node_id_hex = utils.convert_node_id_from_int_to_hex(row[0])
+            nodes[node_id_hex] = record
         
         cur.close()
         return nodes
