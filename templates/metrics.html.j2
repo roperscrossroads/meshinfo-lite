@@ -653,7 +653,9 @@ Mesh Metrics
                         day: 'numeric'
                     }) + '\n' + timeStr,
                     isDateLabel: true,
-                    isFirstOfDate: true
+                    isFirstOfDate: true,
+                    date: utcDate,
+                    timeStr: timeStr
                 };
             }
             
@@ -661,7 +663,9 @@ Mesh Metrics
             return {
                 display: timeStr,
                 isDateLabel: false,
-                isFirstOfDate: false
+                isFirstOfDate: false,
+                date: utcDate,
+                timeStr: timeStr
             };
         });
         
@@ -669,6 +673,9 @@ Mesh Metrics
         chart.data.labels = localLabels.map(l => l.display);
         chart.data.datasets[0].data = data.data;
         chart.data.datasets[0].label = label;
+        
+        // Get the current time range from the filter
+        const timeRange = document.getElementById('timeRangeFilter') ? document.getElementById('timeRangeFilter').value : 'day';
         
         // Update y-axis label
         chart.options.scales.y.title.text = yAxisLabel;
@@ -679,33 +686,45 @@ Mesh Metrics
             ticks: {
                 ...chart.options.scales.x.ticks,
                 callback: function(val, index) {
-                    // Get the actual label
                     const label = localLabels[index];
                     if (!label) return '';
-                    
-                    // Calculate label density
                     const labelCount = localLabels.length;
-                    const skipFactor = Math.ceil(labelCount / 15); // Target showing ~15 labels
-                    
-                    // Always show date labels
+                    // For 'month' view: only show the date (no time)
+                    if (timeRange === 'month') {
+                        if (label.isFirstOfDate) {
+                            const day = label.date.getDate();
+                            // Show label for the 1st, 4th, 7th, ... day (every 3rd day, including the 1st)
+                            if (day === 1 || day % 3 === 0) {
+                                return label.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                            }
+                        }
+                        return '';
+                    }
+                    // For 'week' view: show date at start of day, and only show '12:00' (noon) for other times
+                    if (timeRange === 'week') {
+                        if (label.isFirstOfDate) {
+                            return label.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        }
+                        // Only show '12:00' (noon)
+                        if (label.timeStr === '12:00') {
+                            return '12:00';
+                        }
+                        return '';
+                    }
+                    // For 'day' view: keep current behavior (show date at start of day, otherwise show time at regular intervals)
                     if (label.isFirstOfDate) {
                         return label.display.split('\n');
                     }
-                    
-                    // For time labels, check if we're too close to a date label
+                    // Show other time labels at regular intervals
+                    const skipFactor = Math.ceil(labelCount / 15); // Target showing ~15 labels
                     const prevLabel = index > 0 ? localLabels[index - 1] : null;
                     const nextLabel = index < localLabels.length - 1 ? localLabels[index + 1] : null;
-                    
-                    // Skip if adjacent to a date label
                     if (prevLabel?.isFirstOfDate || nextLabel?.isFirstOfDate) {
                         return '';
                     }
-                    
-                    // Show other time labels at regular intervals
                     if (index === 0 || index % skipFactor === 0) {
                         return label.display;
                     }
-                    
                     return '';
                 }
             }

@@ -769,7 +769,9 @@ for (var i = 0; i < allpoints.length - 1; i++) {
     
     // Create line feature
     var line = new ol.Feature({
-        geometry: new ol.geom.LineString(points)
+        geometry: new ol.geom.LineString(points),
+        segmentIndex: i,
+        isForwardPath: isForwardPath
     });
     
     // Style the line based on path type
@@ -812,14 +814,32 @@ for (var i = 0; i < allpoints.length - 1; i++) {
     
     lines.push(line);
     
-    // Add label at the middle of the line
-    var midPoint = [
-        (points[0][0] + points[1][0]) / 2,
-        (points[0][1] + points[1][1]) / 2
-    ];
-    
+    // Add label at a fraction along the line with perpendicular offset
+    var fraction = (i + 1) / (allpoints.length); // Spread labels along the line
+    var x = points[0][0] + (points[1][0] - points[0][0]) * fraction;
+    var y = points[0][1] + (points[1][1] - points[0][1]) * fraction;
+
+    // Calculate perpendicular offset
+    var dx = points[1][0] - points[0][0];
+    var dy = points[1][1] - points[0][1];
+    var length = Math.sqrt(dx*dx + dy*dy);
+    var offset = 40; // in map units (adjust as needed)
+    var perpX = -dy / length * offset;
+    var perpY = dx / length * offset;
+
+    // Direction: forward = +offset, return = -offset
+    var isReturn = !isForwardPath;
+    if (isReturn) {
+        perpX = -perpX;
+        perpY = -perpY;
+    }
+
+    var labelPoint = [x + perpX, y + perpY];
+
     var label = new ol.Feature({
-        geometry: new ol.geom.Point(midPoint)
+        geometry: new ol.geom.Point(labelPoint),
+        segmentIndex: i,
+        isForwardPath: isForwardPath
     });
     
     var labelText = '';
@@ -867,31 +887,8 @@ for (var i = 0; i < allpoints.length - 1; i++) {
 
     // Only create label if there's text to show
     if (labelText) {
-        label.setStyle(new ol.style.Style({
-            text: new ol.style.Text({
-                text: labelText,
-                font: '12px Arial',
-                fill: new ol.style.Fill({ color: '#000000' }),
-                stroke: new ol.style.Stroke({
-                    color: '#ffffff',
-                    width: 3
-                }),
-                padding: [3, 5, 3, 5],
-                offsetY: -20,
-                backgroundFill: new ol.style.Fill({
-                    color: 'rgba(255, 255, 255, 0.85)'
-                }),
-                backgroundStroke: new ol.style.Stroke({
-                    color: 'rgba(0, 0, 0, 0.4)',
-                    width: 1,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                }),
-                placement: 'point',
-                overflow: true
-            })
-        }));
-        
+        label.set('labelText', labelText);
+        label.setStyle(getNormalLabelStyle(labelText));
         labels.push(label);
     }
 }
@@ -1035,6 +1032,81 @@ for (var i = 0; i < allpoints.length - 1; i++) {
     var hit = map.hasFeatureAtPixel(pixel);
     
     map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+  });
+
+  // Define glow box styles for labels
+  function getGlowBoxStyle(isForward, labelText) {
+    var color = isForward ? 'rgba(68,170,68,0.35)' : 'rgba(170,68,170,0.35)';
+    return new ol.style.Style({
+        text: new ol.style.Text({
+            text: labelText,
+            font: '12px Arial',
+            fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }), // invisible text
+            backgroundFill: new ol.style.Fill({ color: color }),
+            padding: [4, 6, 4, 6], // tighter padding for glow
+            offsetY: -20,
+            backgroundStroke: new ol.style.Stroke({
+                color: color,
+                width: 5 // tighter stroke
+            }),
+            placement: 'point',
+            overflow: true
+        })
+    });
+  }
+
+  // Save the normal label style for later use
+  function getNormalLabelStyle(labelText) {
+    return new ol.style.Style({
+        text: new ol.style.Text({
+            text: labelText,
+            font: '12px Arial',
+            fill: new ol.style.Fill({ color: '#000000' }),
+            stroke: new ol.style.Stroke({
+                color: '#ffffff',
+                width: 3
+            }),
+            padding: [3, 5, 3, 5],
+            offsetY: -20,
+            backgroundFill: new ol.style.Fill({
+                color: 'rgba(255, 255, 255, 0.85)'
+            }),
+            backgroundStroke: new ol.style.Stroke({
+                color: 'rgba(0, 0, 0, 0.4)',
+                width: 1,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }),
+            placement: 'point',
+            overflow: true
+        })
+    });
+  }
+
+  // Add hover effect for lines to glow the associated label with a box
+  map.on('pointermove', function(e) {
+    var pixel = map.getEventPixel(e.originalEvent);
+    var feature = map.forEachFeatureAtPixel(pixel, function(feature) {
+        return feature;
+    });
+    // Remove glow from all labels first
+    labels.forEach(function(label) {
+        var labelText = label.get('labelText');
+        if (labelText) {
+            label.setStyle(getNormalLabelStyle(labelText));
+        }
+    });
+    if (feature && feature.getGeometry() instanceof ol.geom.LineString) {
+        var segIdx = feature.get('segmentIndex');
+        var isForward = feature.get('isForwardPath');
+        var label = labels.find(l => l.get('segmentIndex') === segIdx);
+        if (label) {
+            var labelText = label.get('labelText');
+            var glowBox = getGlowBoxStyle(isForward, labelText);
+            var normal = getNormalLabelStyle(labelText);
+            label.setStyle([glowBox, normal]);
+        }
+    }
   });
 </script>
 
