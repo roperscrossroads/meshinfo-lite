@@ -375,7 +375,8 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         )
         # Modified to include all nodes but still mark active status
         all_sql = """SELECT n.*, u.username owner_username,
-            CASE WHEN n.ts_seen > FROM_UNIXTIME(%s) THEN 1 ELSE 0 END as is_active
+            CASE WHEN n.ts_seen > FROM_UNIXTIME(%s) THEN 1 ELSE 0 END as is_active,
+            UNIX_TIMESTAMP(n.ts_uplink) as ts_uplink
         FROM nodeinfo n 
         LEFT OUTER JOIN meshuser u ON n.owner = u.email"""
         
@@ -1101,7 +1102,12 @@ SET owner = %s WHERE id = %s"""
             self.store_node(self.unknown(id))
         else:
             if via:
-                sql = """UPDATE nodeinfo SET
+                # Only set ts_uplink if this node is reporting directly via MQTT (via is None or same as id)
+                if via == id:
+                    sql = """UPDATE nodeinfo SET
+ts_seen = NOW(), updated_via = %s, ts_uplink = NOW() WHERE id = %s"""
+                else:
+                    sql = """UPDATE nodeinfo SET
 ts_seen = NOW(), updated_via = %s WHERE id = %s"""
                 param = (via, id)
             else:
@@ -1346,10 +1352,12 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             import migrations.add_traceroute_snr as add_traceroute_snr
             import migrations.add_traceroute_id as add_traceroute_id
             import migrations.add_channel_info as add_channel_info
+            import migrations.add_ts_uplink as add_ts_uplink
             add_message_reception.migrate(self.db)
             add_traceroute_snr.migrate(self.db)
             add_traceroute_id.migrate(self.db)
             add_channel_info.migrate(self.db)
+            add_ts_uplink.migrate(self.db)
         except ImportError as e:
             logging.error(f"Failed to import migration module: {e}")
             # Continue with database setup even if migration fails

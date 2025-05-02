@@ -610,7 +610,8 @@ def map():
         zero_hop_timeout=zero_hop_timeout,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(),
+        Channel=meshtastic_support.Channel  # Add Channel enum to template context
     )
 
 
