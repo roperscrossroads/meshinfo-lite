@@ -7,6 +7,7 @@ import utils
 import logging
 import re
 from timezone_utils import time_ago  # Import time_ago from timezone_utils
+from meshtastic_support import get_hardware_model_name  # Import get_hardware_model_name from meshtastic_support
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -1667,14 +1668,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             
             # Get HW Model Name safely
             hw_model = node_data.get('hw_model')
-            hw_model_name = 'Unknown HW'
-            if hw_model is not None:
-                try:
-                    from meshtastic_support import HardwareModel
-                    hw_model_name = HardwareModel(hw_model).name
-                    hw_model_name = hw_model_name.replace('_', ' ').title()
-                except (ValueError, ImportError) as e:
-                    logging.warning(f"Could not resolve hardware model {hw_model} for node {node_id_hex}: {e}")
+            hw_model_name = get_hardware_model_name(hw_model)
             
             # Get Icon URL
             node_name_for_icon = node_data.get('long_name', node_data.get('short_name', ''))

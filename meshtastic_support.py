@@ -203,3 +203,41 @@ HARDWARE_PHOTOS = {
     HardwareModel.RPI_PICO2: "RPI_PICO.png",
     HardwareModel.NRF52840DK: "NRF52840DK.png"
 }
+
+def validate_hardware_model(hw_model_value):
+    """
+    Strictly validate a hardware model value against the HardwareModel enum.
+    
+    Args:
+        hw_model_value: The numeric hardware model value
+        
+    Returns:
+        The matching HardwareModel enum value
+        
+    Raises:
+        ValueError: If the hardware model value is not in the enum
+    """
+    if hw_model_value is None:
+        raise ValueError("Hardware model value cannot be None")
+    
+    for model in HardwareModel:
+        if model.value == hw_model_value:
+            return model
+    
+    raise ValueError(f"Invalid hardware model value: {hw_model_value}")
+
+def get_hardware_model_name(hw_model_value):
+    """
+    Convert a hardware model value to a human-readable name.
+    
+    Args:
+        hw_model_value: The numeric hardware model value
+        
+    Returns:
+        A human-readable hardware model name or "Unknown (value)" if not recognized
+    """
+    try:
+        model = validate_hardware_model(hw_model_value)
+        return model.name.replace('_', ' ')
+    except ValueError:
+        return f"Unknown ({hw_model_value})"

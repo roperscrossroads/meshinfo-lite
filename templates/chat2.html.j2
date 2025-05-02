@@ -96,7 +96,7 @@ window.addEventListener('load', function() {
 
                                     {# Hardware Info #}
                                     {% if nodes[message.from].hw_model %}
-                                        HW: {{ meshtastic_support.HardwareModel(nodes[message.from].hw_model).name | replace('_', ' ') }}<br>
+                                        HW: {{ meshtastic_support.get_hardware_model_name(nodes[message.from].hw_model) }}<br>
                                     {% endif %}
                                     {% if nodes[message.from].firmware_version %}
                                         FW: {{ nodes[message.from].firmware_version }}<br>
@@ -180,7 +180,7 @@ window.addEventListener('load', function() {
 
                                         {# Hardware Info #}
                                         {% if nodes[message.to].hw_model %}
-                                            HW: {{ meshtastic_support.HardwareModel(nodes[message.to].hw_model).name | replace('_', ' ') }}<br>
+                                            HW: {{ meshtastic_support.get_hardware_model_name(nodes[message.to].hw_model) }}<br>
                                         {% endif %}
                                         {% if nodes[message.to].firmware_version %}
                                             FW: {{ nodes[message.to].firmware_version }}<br>

@@ -74,7 +74,7 @@ app.jinja_env.globals.update(max=max)
 @app.template_filter('safe_hw_model')
 def safe_hw_model(value):
     try:
-        return meshtastic_support.HardwareModel(value).name.replace('_', ' ')
+        return meshtastic_support.get_hardware_model_name(value)
     except (ValueError, AttributeError):
         return f"Unknown ({value})"
 

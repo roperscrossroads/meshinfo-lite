@@ -69,14 +69,21 @@
           {{ node.long_name }}
         </td>
         <td scope="col" class="text-center">
-          {% if node.hw_model and node.hw_model in meshtastic_support.HardwareModel._value2member_map_ %}
-          {% if meshtastic_support.HardwareModel(node.hw_model) and meshtastic_support.HardwareModel(node.hw_model) in
-          meshtastic_support.HARDWARE_PHOTOS %}
-          <img
-            src="images/hardware/{{ meshtastic_support.HARDWARE_PHOTOS[meshtastic_support.HardwareModel(node.hw_model)] }}"
-            alt="{{ meshtastic_support.HardwareModel(node.hw_model).name }}"
-            title="{{ meshtastic_support.HardwareModel(node.hw_model).name }}" style="width: 50px;">
-          {% endif %}
+          {% if node.hw_model is not none %}
+            {% set hw_name = meshtastic_support.get_hardware_model_name(node.hw_model) %}
+            {% if node.hw_model in meshtastic_support.HardwareModel._value2member_map_ %}
+              {% set hw_model_enum = meshtastic_support.HardwareModel(node.hw_model) %}
+              {% if hw_model_enum in meshtastic_support.HARDWARE_PHOTOS %}
+                <img
+                  src="images/hardware/{{ meshtastic_support.HARDWARE_PHOTOS[hw_model_enum] }}"
+                  alt="{{ hw_name }}"
+                  title="{{ hw_name }}" style="width: 50px;">
+              {% else %}
+                <!-- Debug: No photo found for {{ node.hw_model }} ({{ hw_model_enum.name }}) -->
+              {% endif %}
+            {% else %}
+              <!-- Debug: Invalid hardware model: {{ node.hw_model }} -->
+            {% endif %}
           {% endif %}
         </td>
         <td scope="col">
