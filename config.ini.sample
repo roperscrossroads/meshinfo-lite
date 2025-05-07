@@ -1,17 +1,17 @@
 [mesh]
-name=ZA Mesh
-short_name=ZA Mesh
-description=Serving Meshtastic to South Africa.
-contact=dade@dade.co.za
-url=https://mesh.zr1rf.za.net
-latitude=-33.918861
-longitude=18.423300
+name=CSRA MSH
+short_name=CSRA
+description=Serving Meshtastic to the CSRA
+contact=fake@gmail.com
+url=https://www.csramesh.org
+latitude=33.4687
+longitude=-81.9717
 channel_key=1PG7OiApB1nwvP+rz05pAQ==
 
 [mqtt]
-broker=mqtt.zr1rf.za.net
+broker=mqtt.csramsh.net
 port=1883
-topic=msh/ZA/#
+topic=msh/US/GA/csramsh/#
 username=meshdev
 password=large4cats
 
@@ -28,7 +28,7 @@ port=8000
 node_activity_prune_threshold=7200
 render_interval=15
 debug=true
-timezone=America/Los_Angeles
+timezone=America/New_York
 zero_hop_timeout=43200
 telemetry_retention_days = 30
 metrics_average_interval=7200
@@ -39,7 +39,7 @@ apikey=YOUR_KEY_HERE
 
 [registrations]
 enabled=true
-jwt_secret=6219c1c2364499639ce9d16c33863c4f6fedb7a4a1a0f29524c20d95cb00e5f5
+jwt_secret=CHANGE_ME_THIS_IS_A_SECURITY_ISSUE_IF_YOU_DONT_861c02acfc2f475ddfab3d3120b35ce3993663432819523ccd60392b1ae2b93b
 
 [smtp]
 email=YOUR_EMAIL_ADDRESS

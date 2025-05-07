@@ -8,26 +8,45 @@ class MeshtasticMonday:
     def __init__(self, data):
         monday = []
         uniq = ""
+        
+        # Handle empty or invalid data
+        if not data or not isinstance(data, list):
+            self.monday = []
+            return
+            
         for chat in data:
+            # Skip invalid chat entries
+            if not isinstance(chat, dict) or "to" not in chat:
+                continue
+                
             to = chat["to"]
             if (to != "ffffffff"):
                 continue
+                
+            # Skip entries missing required fields
+            if "ts_created" not in chat or "text" not in chat or "from" not in chat:
+                continue
+                
             ts = chat["ts_created"]
             day = strftime('%w', localtime(ts))
             if day != "1":
                 continue
+                
             text = chat["text"]
             if "meshtasticmonday" not in text.lower():
                 continue
+                
             frm = chat["from"]
             current = frm + "." + text
             if current == uniq:
                 continue
+                
             dt = str(datetime.fromtimestamp(ts).date())
             tmp = dict(chat)
             tmp["monday"] = dt
             monday.append(tmp)
             uniq = current
+            
         monday = sorted(monday, key=lambda x: x['ts_created'])
         self.monday = monday
 
@@ -35,6 +54,7 @@ class MeshtasticMonday:
         nodes = {}
         if not self.monday:
             return nodes
+            
         for monday in self.monday:
             frm = monday["from"]
             if frm not in nodes:
@@ -49,7 +69,10 @@ class MeshtasticMonday:
                 nodes[frm]["mondays"].append(dt)
                 nodes[frm]["check_ins"] += 1
 
-        #  Calculate streak
+        # Calculate streak
+        if not self.monday:
+            return nodes
+            
         latest_monday = self.monday[-1]["monday"]
         for node in nodes:
             mondays = list(nodes[node]["mondays"])

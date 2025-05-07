@@ -1,6 +1,8 @@
 # MeshInfo-Lite
 
-Realtime web UI to run against a Meshtastic regional or private mesh network.
+Realtime web UI to run against a Meshtastic regional or private mesh network. 
+
+A work in progress. This is a customized for [CSRA Mesh](https://www.csramesh.org/) but probably still has references to the projects and meshes that it was forked from (originally forked from [agessaman/meshinfo-lite](https://github.com/agessaman/meshinfo-lite)).
 
 ## Overview
 
@@ -57,7 +59,7 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 
 ## Chat
 
-If you're using this and have questions, or perhaps you want to join in on the dev effort and want to interact collaboratively, come chat with us on [#meshinfo on Meshtastic ZA Discord](https://discord.gg/cmFCKBxY).
+If you're using this and have questions, or perhaps you want to join in on the dev effort and want to interact collaboratively, come chat with us on [Discord](https://discord.com/invite/mgzj2PmhKf).
 
 ## Running
 
@@ -68,7 +70,7 @@ If you're using this and have questions, or perhaps you want to join in on the d
 ##### Clone the repo
 
 ```sh
-git clone https://github.com/dadecoza/meshinfo-lite.git
+git clone https://github.com/roperscrossroads/meshinfo-lite.git
 cd meshinfo-lite
 ```
 
@@ -123,7 +125,7 @@ python main.py
 Clone the repository.
 
 ```sh
-git clone https://github.com/dadecoza/meshinfo-lite.git
+git clone https://github.com/roperscrossroads/meshinfo-lite.git
 ```
 
 If already existing, be sure to pull updates.
@@ -149,8 +151,6 @@ the templates.
 
 
 ## Contributing
-
-We happily accept Pull Requests!
 
 TODO: Need to rewrite this section.
 

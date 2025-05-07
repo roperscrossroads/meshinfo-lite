@@ -737,20 +737,34 @@ def logs():
     )
 
 
+# @app.route('/monday.html')
+# def monday():
+#     md = get_meshdata()
+#     if not md: # Check if MeshData failed to initialize
+#         abort(503, description="Database connection unavailable")
+#     nodes = md.get_nodes()
+#     chat = md.get_chat()
+#     monday = MeshtasticMonday(chat).get_data()
+#     return render_template(
+#         "monday.html.j2",
+#         auth=auth(),
+#         config=config,
+#         nodes=nodes,
+#         monday=monday,
+#         utils=utils,
+#         datetime=datetime.datetime,
+#         timestamp=datetime.datetime.now(),
+#     )
+
+# Temporary placeholder route that returns a simple message
 @app.route('/monday.html')
 def monday():
-    md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
-    chat = md.get_chat()
-    monday = MeshtasticMonday(chat).get_data()
     return render_template(
         "monday.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes,
-        monday=monday,
+        nodes={},
+        monday={"messages": [], "nodes": {}},
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),

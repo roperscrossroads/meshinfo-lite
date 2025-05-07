@@ -9,7 +9,7 @@
       <img src="/images/logo.png" alt="logo" style="height: 250px">
       <h2>{{ config["mesh"]["name"] }}</h2>
       <p>
-        This site provides information on <a href="nodes.html"><span class="font-weight-bold">{{ active_nodes|length }}</span> active nodes</a> in the Puget Sound Meshtastic network.
+        This site provides information on <a href="nodes.html"><span class="font-weight-bold">{{ active_nodes|length }}</span> active nodes</a> in the CSRA Meshtastic network.
       </p>
       <p>Last updated: {{ format_timestamp(timestamp.timestamp()) }}</p>
     </div>
@@ -23,7 +23,7 @@
         </div>
         <div class="card-body">
           <p>
-            MeshInfo is a web-based tool which collects and visualizes data from <a href="https://meshtastic.org">Meshtastic</a> nodes across the Puget Sound region. It provides visibility into our <a href="https://pugetmesh.org/">PugetMesh community mesh network</a>, helping both new and experienced members understand network coverage, identify growth opportunities, and troubleshoot connectivity issues.
+            MeshInfo is a web-based tool which collects and visualizes data from <a href="https://meshtastic.org">Meshtastic</a> nodes across the CSRA. It provides visibility into our <a href="https://www.csramesh.org/">CSRA Mesh community mesh network</a>, helping both new and experienced members understand network coverage, identify growth opportunities, and troubleshoot connectivity issues.
           </p>
           <p>
             Through MeshInfo, you can view node locations on maps, check detailed node information including telemetry data, visualize node connections, and search for specific nodes by ID or name.
@@ -61,13 +61,13 @@
           </ul>
           <p><strong>Note:</strong> Your node will still appear in MeshInfo without location data, but distance and direction information to other nodes won't be available.</p>
 
-          <h4>PugetMesh MQTT Connection (recommended):</h4>
-          <p><strong>Important:</strong> Users who don't connect directly to the <a href="https://pugetmesh.org/meshtastic/#mqtt-and-maps">PugetMesh MQTT server</a> won't be sharing information with other users in the region. Connecting your node to our MQTT server allows your data to contribute to the regional mesh network and helps everyone better understand network coverage.</p>
-          </p> To connect your node directly to the PugetMesh MQTT server, configure these settings in <span class="text-danger">Settings > Modules > MQTT</span>:</p>
+          <h4>CSRA Mesh MQTT Connection (recommended):</h4>
+          <p><strong>Important:</strong> Users who don't connect directly to the <a href="https://www.csramesh.org/faqs">CSRA Mesh MQTT server</a> won't be sharing information with other users in the region. Connecting your node to our MQTT server allows your data to contribute to the regional mesh network and helps everyone better understand network coverage.</p>
+          </p> To connect your node directly to the CSRA Mesh MQTT server, configure these settings in <span class="text-danger">Settings > Modules > MQTT</span>:</p>
           
           <ul class="list-group mb-4">
             <li class="list-group-item">
-              <strong>Address:</strong> <code>mqtt.davekeogh.com</code>
+              <strong>Address:</strong> <code>mqtt.csramsh.net</code>
             </li>
             <li class="list-group-item">
               <strong>Username:</strong> <code>meshdev</code>
@@ -85,7 +85,7 @@
               <strong>TLS Enabled:</strong> No
             </li>
             <li class="list-group-item">
-              <strong>Root topic:</strong> <code>msh/US</code>
+              <strong>Root topic:</strong> <code>msh/US/GA/csramsh</code>
             </li>
           </ul>
 
@@ -108,9 +108,9 @@
           </ul>
           
           <p>
-            For complete setup instructions, visit the PugetMesh configuration page:
+            For complete setup instructions, visit the CSRA Mesh configuration page:
           </p>
-          <a href="https://pugetmesh.org/meshtastic/config/#get-on-the-map" class="btn btn-primary">View Full Configuration Guide</a>
+          <a href="https://www.csramesh.org/faqs" class="btn btn-primary">View Full Configuration Guide</a>
         </div>
       </div>
     </div>
@@ -120,15 +120,15 @@
     <div class="col-md-12">
       <div class="card">
         <div class="card-header bg-warning">
-          <h3 class="mb-0">Join the PugetMesh Community</h3>
+          <h3 class="mb-0">Join the CSRA Mesh Community</h3>
         </div>
         <div class="card-body">
           <p>
-            PugetMesh is a volunteer-driven group supporting mesh networks in the Puget Sound region. We focus on building a resilient off-grid communication network using Meshtastic technology.
+            CSRA Mesh is a volunteer-driven group supporting mesh networks in the CSRA. We focus on building a resilient off-grid communication network using Meshtastic technology.
           </p>
           <div class="text-center">
-            <a href="https://discord.gg/ANvUg3AyZt" class="btn btn-secondary mr-2">Join Our Discord</a>
-            <a href="https://pugetmesh.org/" class="btn btn-secondary">Visit PugetMesh.org</a>
+            <a href="https://discord.com/invite/mgzj2PmhKf" class="btn btn-secondary mr-2">Join Our Discord</a>
+            <a href="https://www.csramesh.org/" class="btn btn-secondary">Visit CSRAmesh.org</a>
           </div>
         </div>
       </div>

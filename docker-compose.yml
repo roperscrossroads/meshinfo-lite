@@ -1,6 +1,8 @@
+version: "3.9"
+
 services:
   mariadb:
-    image: mariadb
+    image: mariadb:11.7
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: passw0rd
