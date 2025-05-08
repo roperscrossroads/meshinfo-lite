@@ -1122,14 +1122,14 @@ def get_metrics():
             SELECT 
                 DATE_FORMAT(
                     DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                        telemetry_time,
+                        INTERVAL -MOD(MINUTE(telemetry_time), {bucket_size}) MINUTE
                     ),
                     '{time_format}'
                 ) as time_slot,
                 COUNT(DISTINCT id) as node_count
             FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
+            WHERE telemetry_time >= %s AND telemetry_time <= %s {channel_condition_telemetry}
             GROUP BY time_slot
             ORDER BY time_slot
         """
@@ -1160,14 +1160,14 @@ def get_metrics():
             SELECT 
                 DATE_FORMAT(
                     DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                        telemetry_time,
+                        INTERVAL -MOD(MINUTE(telemetry_time), {bucket_size}) MINUTE
                     ),
                     '{time_format}'
                 ) as time_slot,
                 AVG(channel_utilization) as avg_util
             FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
+            WHERE telemetry_time >= %s AND telemetry_time <= %s {channel_condition_telemetry}
             GROUP BY time_slot
             ORDER BY time_slot
         """
@@ -1179,14 +1179,14 @@ def get_metrics():
             SELECT 
                 DATE_FORMAT(
                     DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                        telemetry_time,
+                        INTERVAL -MOD(MINUTE(telemetry_time), {bucket_size}) MINUTE
                     ),
                     '{time_format}'
                 ) as time_slot,
                 AVG(battery_level) as avg_battery
             FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
+            WHERE telemetry_time >= %s AND telemetry_time <= %s {channel_condition_telemetry}
             GROUP BY time_slot
             ORDER BY time_slot
         """
@@ -1198,14 +1198,14 @@ def get_metrics():
             SELECT 
                 DATE_FORMAT(
                     DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
+                        telemetry_time,
+                        INTERVAL -MOD(MINUTE(telemetry_time), {bucket_size}) MINUTE
                     ),
                     '{time_format}'
                 ) as time_slot,
                 AVG(temperature) as avg_temp
             FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
+            WHERE telemetry_time >= %s AND telemetry_time <= %s {channel_condition_telemetry}
             GROUP BY time_slot
             ORDER BY time_slot
         """
