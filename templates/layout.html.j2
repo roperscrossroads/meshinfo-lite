@@ -48,17 +48,20 @@
         {% endif %}
          <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Tools
+            Links
           </a>
           <div class="dropdown-menu" aria-labelledby="toolsDropdown">
+            <a class="dropdown-item" href="https://csramon.duckdns.org/status/all">Server Monitor</a>
             <a class="dropdown-item" href="https://www.csramesh.org/">CSRA Mesh Website</a>
           </div>
         </li>
       </ul>
-      {% if not auth %}
-      <a href="{{ url_for("login") }}" class="btn btn-info" role="button">Login</a>
-      {% else %}
-      <a href="{{ url_for("logout") }}" class="btn btn-info" role="button">Logout</a>
+      {% if config.getboolean('registrations', 'enabled', fallback=false) %}
+        {% if not auth %}
+        <a href="{{ url_for("login") }}" class="btn btn-info" role="button">Login</a>
+        {% else %}
+        <a href="{{ url_for("logout") }}" class="btn btn-info" role="button">Logout</a>
+        {% endif %}
       {% endif %}
     </div>
   </nav>
