@@ -27,25 +27,38 @@ class MeshtasticMonday:
             if "ts_created" not in chat or "text" not in chat or "from" not in chat:
                 continue
                 
-            ts = chat["ts_created"]
-            day = strftime('%w', localtime(ts))
-            if day != "1":
+            # Handle different timestamp formats
+            try:
+                ts = chat["ts_created"]
+                if isinstance(ts, datetime):
+                    ts = ts.timestamp()
+                elif isinstance(ts, str):
+                    # Try parsing as ISO format
+                    ts = datetime.fromisoformat(ts).timestamp()
+                elif not isinstance(ts, (int, float)):
+                    continue  # Skip if timestamp is not in a known format
+                    
+                day = strftime('%w', localtime(ts))
+                if day != "1":
+                    continue
+                    
+                text = chat["text"]
+                if "meshtasticmonday" not in text.lower():
+                    continue
+                    
+                frm = chat["from"]
+                current = frm + "." + text
+                if current == uniq:
+                    continue
+                    
+                dt = str(datetime.fromtimestamp(ts).date())
+                tmp = dict(chat)
+                tmp["monday"] = dt
+                monday.append(tmp)
+                uniq = current
+            except (ValueError, TypeError, AttributeError):
+                # Skip entries with invalid timestamps
                 continue
-                
-            text = chat["text"]
-            if "meshtasticmonday" not in text.lower():
-                continue
-                
-            frm = chat["from"]
-            current = frm + "." + text
-            if current == uniq:
-                continue
-                
-            dt = str(datetime.fromtimestamp(ts).date())
-            tmp = dict(chat)
-            tmp["monday"] = dt
-            monday.append(tmp)
-            uniq = current
             
         monday = sorted(monday, key=lambda x: x['ts_created'])
         self.monday = monday
