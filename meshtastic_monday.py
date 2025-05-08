@@ -28,8 +28,8 @@ class MeshtasticMonday:
                 continue
                 
             # Handle different timestamp formats
+            ts = chat["ts_created"]
             try:
-                ts = chat["ts_created"]
                 if isinstance(ts, datetime):
                     ts = ts.timestamp()
                 elif isinstance(ts, str):
