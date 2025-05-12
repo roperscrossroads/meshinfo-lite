@@ -243,6 +243,16 @@
             </td>
           </tr>
           <tr>
+            <th scope="row" style="background: #F2F6F9; text-align: left;">Channel</th>
+            <td class="text-left">
+              {% if node.channel %}
+              <span class="badge" style="background-color: {{ utils.get_channel_color(node.channel) }}; color: white; padding: 2px 6px; border-radius: 4px;" title="Channel {{ node.channel }} ({{ utils.get_channel_name(node.channel) }})">{{ utils.get_channel_name(node.channel, use_short_names=False) }}</span>
+              {% else %}
+              Unknown
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
             <th scope="row" style="background: #F2F6F9; text-align: left;">Updated via</th>
             <td class="text-left">
               {% if node.updated_via %}

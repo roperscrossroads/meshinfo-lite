@@ -968,6 +968,19 @@ ts_updated = VALUES(ts_updated)"""
         # Extract channel from the root of the telemetry data
         channel = data.get("channel")
 
+        def validate_telemetry_value(value):
+            """Validate telemetry values, converting invalid values to None."""
+            if value is None:
+                return None
+            try:
+                # Convert to float and check if it's a valid number
+                float_val = float(value)
+                if float_val == float('inf') or float_val == float('-inf') or str(float_val).lower() == 'nan':
+                    return None
+                return float_val
+            except (ValueError, TypeError):
+                return None
+
         data = {
             "air_util_tx": None,
             "battery_level": None,
@@ -991,7 +1004,7 @@ ts_updated = VALUES(ts_updated)"""
                 continue
             for key in data:
                 if key in payload[metric]:
-                    data[key] = payload[metric][key]
+                    data[key] = validate_telemetry_value(payload[metric][key])
 
         sql = """INSERT INTO telemetry
 (id, air_util_tx, battery_level, channel_utilization,
