@@ -92,7 +92,7 @@ window.addEventListener('load', function() {
                                 class="node-link"
                                 data-toggle="popover"
                                 data-content="<div class='receiver-popover'>
-                                    <strong>{{ nodes[message.from].long_name }}</strong><br>
+                                    <strong>{{ nodes[message.from].long_name|replace('"', '&quot;') }}</strong><br>
 
                                     {# Hardware Info #}
                                     {% if nodes[message.from].hw_model %}
@@ -159,7 +159,7 @@ window.addEventListener('load', function() {
                                     {# Last Seen #}
                                     Last Seen: {{ time_ago(nodes[message.from].ts_seen) }}
                                 </div>">
-                                    {{ nodes[message.from].long_name }} ({{ nodes[message.from].short_name }})
+                                    {{ nodes[message.from].long_name|replace('"', '&quot;') }} ({{ nodes[message.from].short_name|replace('"', '&quot;') }})
                                 </a>
                             {% else %}
                                 {{ message.from }}
@@ -176,7 +176,7 @@ window.addEventListener('load', function() {
                                     class="node-link"
                                     data-toggle="popover"
                                     data-content="<div class='receiver-popover'>
-                                        <strong>{{ nodes[message.to].long_name }}</strong><br>
+                                        <strong>{{ nodes[message.to].long_name|replace('"', '&quot;') }}</strong><br>
 
                                         {# Hardware Info #}
                                         {% if nodes[message.to].hw_model %}
@@ -244,7 +244,7 @@ window.addEventListener('load', function() {
                                         {# Last Seen #}
                                         Last Seen: {{ time_ago(nodes[message.to].ts_seen) }}
                                     </div>">
-                                    {{ nodes[message.to].long_name }} ({{ nodes[message.to].short_name }})
+                                    {{ nodes[message.to].long_name|replace('"', '&quot;') }} ({{ nodes[message.to].short_name|replace('"', '&quot;') }})
                                 </a>
                             </span>
                         {% endif %}
@@ -283,7 +283,7 @@ window.addEventListener('load', function() {
                             class="reception-badge {% if reception.rx_snr > 0 %}snr-good{% elif reception.rx_snr > -5 %}snr-adequate{% elif reception.rx_snr > -10 %}snr-poor{% else %}snr-very-poor{% endif %}"
                             data-toggle="popover"
                             data-content="<div class='receiver-popover'>
-                                <strong>{{ node.long_name }}</strong><br>
+                                <strong>{{ node.long_name|replace('"', '&quot;') }}</strong><br>
                                 SNR: {{ '%.1f'|format(reception.rx_snr) }}dB<br>
                                 RSSI: {{ reception.rx_rssi }}dBm
                                 {% if reception.hop_start is not none and reception.hop_limit is not none %}
@@ -291,7 +291,7 @@ window.addEventListener('load', function() {
                                 {% endif %}
                                 </div>">
                                 <span class="snr-indicator"></span>
-                                {{ node.short_name }}
+                                {{ node.short_name|replace('"', '&quot;') }}
                             </a>
                             {% endif %}
                         {% endfor %}
@@ -305,7 +305,7 @@ window.addEventListener('load', function() {
                             {% set node = nodes[node_id] %}
                             <div class="mobile-reception-row">
                                 <div class="mobile-node-name">
-                                    <a href="/node_{{ node_id }}.html">{{ node.long_name }}</a>
+                                    <a href="/node_{{ node_id }}.html">{{ node.long_name|replace('"', '&quot;') }}</a>
                                 </div>
                                 <div class="mobile-metrics">
                                     <div class="metric snr {% if reception.rx_snr > 0 %}snr-good{% elif reception.rx_snr > -5 %}snr-adequate{% elif reception.rx_snr > -10 %}snr-poor{% else %}snr-very-poor{% endif %}">
