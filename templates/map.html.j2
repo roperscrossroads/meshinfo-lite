@@ -289,6 +289,9 @@
     var neighborLayers = [];
     {% for id, node in nodes.items() %}
       {% if node.position is defined and node.position and node.position.longitude_i and node.position.latitude_i %}
+        {% set lat = node.position.latitude_i / 10000000 %}
+        {% set lon = node.position.longitude_i / 10000000 %}
+        {% if -90 <= lat <= 90 and -180 <= lon <= 180 %}
       nodes['{{ id }}'] = {
         id: '{{ id }}',
         short_name: '{{ node.short_name }}',
@@ -296,7 +299,7 @@
         last_seen: '{{ time_ago(node.ts_seen) }}',
         ts_seen: {{ node.ts_seen }},
         ts_uplink: {% if node.ts_uplink is defined and node.ts_uplink is not none %}{{ node.ts_uplink }}{% else %}null{% endif %},
-        position: [{{ node.position.longitude_i / 10000000 }}, {{ node.position.latitude_i / 10000000 }}],
+        position: [{{ lon }}, {{ lat }}],
         online: {% if node.active %}true{% else %}false{% endif %},
         channel: {% if node.channel is not none %}{{ node.channel }}{% else %}null{% endif %},
         zero_hop_data: {{ zero_hop_data.get(id, {'heard': [], 'heard_by': []}) | tojson | safe }}
