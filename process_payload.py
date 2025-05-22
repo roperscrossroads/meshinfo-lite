@@ -186,6 +186,15 @@ def process_payload(payload, topic, md: MeshData):
     # --- Add log at the start ---
     logger = logging.getLogger(__name__) # Get logger instance
     logger.debug(f"process_payload: Entered function for topic: {topic}")
+    
+    # Check if this is an ignored channel
+    if "/2/e/" in topic:
+        channel_name = topic.split("/")[-2]  # Get channel name from topic
+        ignored_channels = config.get("channels", "ignored_channels", fallback="").split(",")
+        if channel_name in ignored_channels:
+            logger.debug(f"Ignoring message from channel: {channel_name}")
+            return
+    
     # --- End log ---
     mp = get_packet(payload)
     if mp:

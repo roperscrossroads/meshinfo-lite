@@ -968,7 +968,7 @@ ts_updated = VALUES(ts_updated)"""
         # Extract channel from the root of the telemetry data
         channel = data.get("channel")
 
-        def validate_telemetry_value(value):
+        def validate_telemetry_value(value, field_name=None):
             """Validate telemetry values, converting invalid values to None."""
             if value is None:
                 return None
@@ -977,6 +977,55 @@ ts_updated = VALUES(ts_updated)"""
                 float_val = float(value)
                 if float_val == float('inf') or float_val == float('-inf') or str(float_val).lower() == 'nan':
                     return None
+                
+                # Apply field-specific validation
+                if field_name:
+                    if field_name == 'battery_level':
+                        # Battery level should be positive and an integer
+                        # Allow values > 100% due to calibration issues
+                        if float_val < 0 or not float_val.is_integer():
+                            return None
+                        return int(float_val)  # Convert to int since DB expects INT
+                    elif field_name == 'air_util_tx' or field_name == 'channel_utilization':
+                        # Utilization values should be positive
+                        # Allow > 100% due to network conditions
+                        if float_val < 0:
+                            return None
+                    elif field_name == 'uptime_seconds':
+                        # Uptime should be positive
+                        if float_val < 0:
+                            return None
+                    elif field_name == 'voltage':
+                        # Voltage should be positive and reasonable
+                        # Allow up to 100V to accommodate various power systems
+                        if float_val < 0 or float_val > 100:
+                            return None
+                    elif field_name == 'temperature':
+                        # Temperature should be within reasonable sensor range
+                        # Allow -100°C to 150°C to accommodate various sensors and conditions
+                        if not -100 <= float_val <= 150:
+                            return None
+                    elif field_name == 'relative_humidity':
+                        # Humidity should be reasonable
+                        # Allow slight overshoot due to calibration
+                        if not -5 <= float_val <= 105:
+                            return None
+                    elif field_name == 'barometric_pressure':
+                        # Pressure should be positive and reasonable
+                        # Allow wider range for different altitudes and conditions
+                        if float_val < 0 or float_val > 2000:
+                            return None
+                    elif field_name == 'gas_resistance':
+                        # Gas resistance should be positive
+                        # Allow up to 1e308 (near DOUBLE_MAX) for various sensors
+                        if float_val <= 0 or float_val > 1e308:
+                            return None
+                    elif field_name == 'current':
+                        # Current should be reasonable
+                        # Allow wider range for various power monitoring setups
+                        if not -50 <= float_val <= 50:
+                            return None
+                
                 return float_val
             except (ValueError, TypeError):
                 return None
@@ -1004,7 +1053,7 @@ ts_updated = VALUES(ts_updated)"""
                 continue
             for key in data:
                 if key in payload[metric]:
-                    data[key] = validate_telemetry_value(payload[metric][key])
+                    data[key] = validate_telemetry_value(payload[metric][key], key)
 
         sql = """INSERT INTO telemetry
 (id, air_util_tx, battery_level, channel_utilization,
