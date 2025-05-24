@@ -86,7 +86,7 @@
                 <div class="mb-3">
                   <h6>Telemetry</h6>
                   <div class="row g-2">
-                    {% if node.telemetry.battery_level %}
+                    {% if node.telemetry.battery_level is not none %}
                       <div class="col-6">
                         <div class="d-flex align-items-center">
                           <img src="images/icons/battery.svg" alt="Battery" style="height: 20px; margin-right: 5px;">
@@ -94,7 +94,7 @@
                         </div>
                       </div>
                     {% endif %}
-                    {% if node.telemetry.voltage %}
+                    {% if node.telemetry.voltage is not none %}
                       <div class="col-6">
                         <div class="d-flex align-items-center">
                           <img src="images/icons/voltage.svg" alt="Voltage" style="height: 14px; margin-right: 5px;">
@@ -102,7 +102,7 @@
                         </div>
                       </div>
                     {% endif %}
-                    {% if node.telemetry.air_util_tx %}
+                    {% if node.telemetry.air_util_tx is not none %}
                       <div class="col-6">
                         <div class="d-flex align-items-center">
                           <img src="images/icons/up.svg" alt="Air Util TX" style="height: 14px; margin-right: 5px;">
@@ -110,7 +110,7 @@
                         </div>
                       </div>
                     {% endif %}
-                    {% if node.telemetry.channel_utilization %}
+                    {% if node.telemetry.channel_utilization is not none %}
                       <div class="col-6">
                         <div class="d-flex align-items-center">
                           <img src="images/icons/down.svg" alt="Channel Util" style="height: 14px; margin-right: 5px;">

@@ -31,25 +31,28 @@ def distance_between_two_points(lat1, lon1, lat2, lon2):
 
 
 def calculate_distance_between_nodes(node1, node2):
-    """Calculate the distance between two nodes, ensuring data integrity."""
-    if not node1 or not node2:
+    """Calculate distance between two nodes in kilometers."""
+    # Handle both dictionary and object access
+    pos1 = node1.get("position") if isinstance(node1, dict) else node1.position
+    pos2 = node2.get("position") if isinstance(node2, dict) else node2.position
+    
+    if not pos1 or not pos2:
         return None
-    if not node1.get("position") or not node2.get("position"):
+        
+    # Handle both dictionary and object access for latitude_i and longitude_i
+    lat1 = pos1.get("latitude_i") if isinstance(pos1, dict) else pos1.latitude_i
+    lon1 = pos1.get("longitude_i") if isinstance(pos1, dict) else pos1.longitude_i
+    lat2 = pos2.get("latitude_i") if isinstance(pos2, dict) else pos2.latitude_i
+    lon2 = pos2.get("longitude_i") if isinstance(pos2, dict) else pos2.longitude_i
+    
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
         return None
-    if any(
-        key not in node1["position"] or key not in node2["position"]
-        or node1["position"][key] is None or node2["position"][key] is None
-        for key in ["latitude_i", "longitude_i"]
-    ):
-        return None
-    return round(
-        distance_between_two_points(
-            node1["position"]["latitude_i"] / 10000000,
-            node1["position"]["longitude_i"] / 10000000,
-            node2["position"]["latitude_i"] / 10000000,
-            node2["position"]["longitude_i"] / 10000000,
-        ),
-        2,
+
+    return distance_between_two_points(
+        lat1 / 1e7,
+        lon1 / 1e7,
+        lat2 / 1e7,
+        lon2 / 1e7
     )
 
 

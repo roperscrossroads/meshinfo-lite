@@ -370,70 +370,206 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 last = num
 
     def get_nodes(self, active=False):
+        """
+        Retrieve all nodes from the database, including their latest telemetry, position, and channel data.
+
+        This method uses a single optimized SQL query with Common Table Expressions (CTEs) to join the latest telemetry,
+        position, and channel information for each node. To avoid column name collisions (especially for the 'id' field),
+        all joined tables alias their 'id' columns (e.g., 'telemetry_id', 'position_id', 'channel_id') and only the
+        primary node ID from 'nodeinfo' is selected as 'id'.
+
+        This explicit column selection and aliasing is critical: if the joined tables' 'id' columns were not aliased or
+        omitted from the SELECT list, they could overwrite the real node ID in the result set with NULL for nodes that
+        lack telemetry or position data. This would cause many nodes to be skipped in the final output, leading to an
+        incorrect and reduced node count. By selecting only 'n.id' as 'id', we ensure all nodes from 'nodeinfo' are
+        included, regardless of whether they have telemetry, position, or channel data.
+
+        Args:
+            active (bool): Unused, present for compatibility.
+        Returns:
+            dict: A dictionary of nodes keyed by their hex ID, with all relevant data included.
+        """
         nodes = {}
         active_threshold = int(
             self.config["server"]["node_activity_prune_threshold"]
         )
-        # Modified to include all nodes but still mark active status
-        all_sql = """SELECT n.*, u.username owner_username,
-            CASE WHEN n.ts_seen > FROM_UNIXTIME(%s) THEN 1 ELSE 0 END as is_active,
-            UNIX_TIMESTAMP(n.ts_uplink) as ts_uplink
-        FROM nodeinfo n 
-        LEFT OUTER JOIN meshuser u ON n.owner = u.email"""
         
-        cur = self.db.cursor()
-        timeout = time.time() - active_threshold
-        params = (timeout, )
-        cur.execute(all_sql, params)
-        rows = cur.fetchall()
-        column_names = [desc[0] for desc in cur.description]
-        
-        for row in rows:
-            record = {}
-            for i in range(len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    record[column_names[i]] = row[i].timestamp()
-                else:
-                    record[column_names[i]] = row[i]
-            
-            # Use the is_active field from the query
-            is_active = bool(record.get("is_active", 0))
-            record["telemetry"] = self.get_telemetry(row[0])
-            record["neighbors"] = self.get_neighbors(row[0])
-            record["position"] = self.get_position(row[0])
-            if record["position"]:
-                if record["position"]["latitude_i"]:
-                    record["position"]["latitude"] = \
-                        record["position"]["latitude_i"] / 10000000
-                else:
-                    record["position"]["latitude"] = None
-                if record["position"]["longitude_i"]:
-                    record["position"]["longitude"] = \
-                        record["position"]["longitude_i"] / 10000000
-                else:
-                    record["position"]["longitude"] = None
-            record["role"] = record["role"] or 0
-            record["active"] = is_active
-            record["last_seen"] = utils.time_since(record["ts_seen"])
-            # --- Add: Find most recent channel ---
-            node_id = row[0]
-            cur2 = self.db.cursor()
-            cur2.execute("""
-                (SELECT channel, ts_created FROM telemetry WHERE id = %s AND channel IS NOT NULL ORDER BY ts_created DESC LIMIT 1)
+        # Combined query to get all node data in one go
+        sql = """
+        WITH latest_telemetry AS (
+            SELECT id as telemetry_id, 
+                   air_util_tx,
+                   battery_level,
+                   channel_utilization,
+                   uptime_seconds,
+                   voltage,
+                   temperature,
+                   relative_humidity,
+                   barometric_pressure,
+                   gas_resistance,
+                   current,
+                   telemetry_time,
+                   channel as telemetry_channel,
+                   ROW_NUMBER() OVER (PARTITION BY id ORDER BY telemetry_time DESC) as rn
+            FROM telemetry
+            WHERE battery_level IS NOT NULL
+        ),
+        latest_position AS (
+            SELECT id as position_id,
+                   altitude,
+                   ground_speed,
+                   ground_track,
+                   latitude_i,
+                   longitude_i,
+                   location_source,
+                   precision_bits,
+                   position_time,
+                   geocoded,
+                   ROW_NUMBER() OVER (PARTITION BY id ORDER BY position_time DESC) as rn
+            FROM position
+        ),
+        latest_channel AS (
+            SELECT id as channel_id, channel, ts_created
+            FROM (
+                SELECT id, channel, ts_created
+                FROM telemetry
+                WHERE channel IS NOT NULL
                 UNION ALL
-                (SELECT channel, ts_created FROM text WHERE from_id = %s AND channel IS NOT NULL ORDER BY ts_created DESC LIMIT 1)
-                ORDER BY ts_created DESC LIMIT 1
-            """, (node_id, node_id))
-            channel_row = cur2.fetchone()
-            if channel_row and channel_row[0] is not None:
-                record["channel"] = channel_row[0]
-            else:
-                record["channel"] = None
-            cur2.close()
-            # --- End add ---
-            node_id_hex = utils.convert_node_id_from_int_to_hex(row[0])
-            nodes[node_id_hex] = record
+                SELECT from_id as id, channel, ts_created
+                FROM text
+                WHERE channel IS NOT NULL
+            ) combined
+            WHERE id IS NOT NULL
+            GROUP BY id
+            ORDER BY ts_created DESC
+        )
+        SELECT 
+            n.id,
+            n.long_name,
+            n.short_name,
+            n.hw_model,
+            n.role,
+            n.firmware_version,
+            n.owner,
+            n.updated_via,
+            n.ts_seen,
+            n.ts_created,
+            n.ts_updated,
+            u.username as owner_username,
+            CASE WHEN n.ts_seen > FROM_UNIXTIME(%s) THEN 1 ELSE 0 END as is_active,
+            UNIX_TIMESTAMP(n.ts_uplink) as ts_uplink,
+            -- Telemetry fields
+            t.air_util_tx,
+            t.battery_level,
+            t.channel_utilization,
+            t.uptime_seconds,
+            t.voltage,
+            t.temperature,
+            t.relative_humidity,
+            t.barometric_pressure,
+            t.gas_resistance,
+            t.current,
+            t.telemetry_time,
+            t.telemetry_channel,
+            -- Position fields
+            p.altitude,
+            p.ground_speed,
+            p.ground_track,
+            p.latitude_i,
+            p.longitude_i,
+            p.location_source,
+            p.precision_bits,
+            p.position_time,
+            p.geocoded,
+            -- Channel
+            c.channel
+        FROM nodeinfo n
+        LEFT OUTER JOIN meshuser u ON n.owner = u.email
+        LEFT OUTER JOIN latest_telemetry t ON n.id = t.telemetry_id AND t.rn = 1
+        LEFT OUTER JOIN latest_position p ON n.id = p.position_id AND p.rn = 1
+        LEFT OUTER JOIN latest_channel c ON n.id = c.channel_id
+        WHERE n.id IS NOT NULL
+        """
         
+        cur = self.db.cursor(dictionary=True)
+        timeout = time.time() - active_threshold
+        cur.execute(sql, (timeout,))
+        rows = cur.fetchall()
+        
+        print("Fetched rows:", len(rows))
+        skipped = 0
+        for row in rows:
+            if not row or row.get('id') is None:
+                skipped += 1
+                continue
+            if not row or row.get('id') is None:
+                continue  # Skip rows with no ID
+                
+            record = {}
+            # Convert datetime fields to timestamps
+            for key, value in row.items():
+                if isinstance(value, datetime.datetime):
+                    record[key] = value.timestamp()
+                else:
+                    record[key] = value
+            
+            # Process telemetry data
+            telemetry = type('Telemetry', (), {})()  # Create an object with attributes
+            telemetry_fields = [
+                'air_util_tx', 'battery_level', 'channel_utilization',
+                'uptime_seconds', 'voltage', 'temperature', 'relative_humidity',
+                'barometric_pressure', 'gas_resistance', 'current',
+                'telemetry_time', 'telemetry_channel'
+            ]
+            # Initialize all telemetry fields to None first
+            for field in telemetry_fields:
+                setattr(telemetry, field, None)
+            # Then set values from row if they exist
+            for field in telemetry_fields:
+                if field in row and row[field] is not None:
+                    setattr(telemetry, field, row[field])
+            record['telemetry'] = telemetry
+            
+            # Process position data
+            position = type('Position', (), {})()  # Create an object with attributes
+            position_fields = [
+                'altitude', 'ground_speed', 'ground_track', 'latitude_i',
+                'longitude_i', 'location_source', 'precision_bits',
+                'position_time', 'geocoded'
+            ]
+            # Initialize all position fields to None first
+            for field in position_fields:
+                setattr(position, field, None)
+            # Then set values from row if they exist
+            for field in position_fields:
+                if field in row and row[field] is not None:
+                    setattr(position, field, row[field])
+            
+            # Always set latitude and longitude attributes
+            position.latitude = position.latitude_i / 10000000 if position.latitude_i else None
+            position.longitude = position.longitude_i / 10000000 if position.longitude_i else None
+            record['position'] = position
+            
+            # Get neighbors data
+            record['neighbors'] = self.get_neighbors(row['id'])
+            
+            # Set other fields
+            record['role'] = record.get('role', 0)
+            record['active'] = bool(record.get('is_active', 0))
+            record['last_seen'] = utils.time_since(record['ts_seen'])
+            record['channel'] = row.get('channel')
+            
+            try:
+                # Convert node ID to hex string and ensure it's properly formatted
+                node_id_hex = utils.convert_node_id_from_int_to_hex(row['id'])
+                if node_id_hex:  # Only add if conversion was successful
+                    nodes[node_id_hex] = record
+            except (TypeError, ValueError) as e:
+                logging.error(f"Error converting node ID {row['id']} to hex: {e}")
+                continue
+        
+        print("Skipped rows due to missing id:", skipped)
+        print("Final nodes count:", len(nodes))
         cur.close()
         return nodes
 

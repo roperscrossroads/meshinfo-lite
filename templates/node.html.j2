@@ -23,7 +23,7 @@
     <tr>
       {% if node.telemetry %}
       <td class="text-center">
-        {% if node.telemetry.air_util_tx %}
+        {% if node.telemetry.air_util_tx is not none %}
         <span class="text-center" title="Air Util TX">
           <img src="images/icons/up.svg" alt="Air Util TX" style="height: 14px">
           {{ node.telemetry.air_util_tx | round(1) }}%
@@ -31,7 +31,7 @@
         {% endif %}
       </td>
       <td class="text-center">
-        {% if node.telemetry.channel_utilization %}
+        {% if node.telemetry.channel_utilization is not none %}
         <span class="text-center" title="Channel Util">
           <img src="images/icons/down.svg" alt="Channel Util" style="height: 14px">
           {{ node.telemetry.channel_utilization | round(1) }}%
@@ -39,7 +39,7 @@
         {% endif %}
       </td>
       <td class="text-center">
-        {% if node.telemetry.battery_level %}
+        {% if node.telemetry.battery_level is not none %}
         <span class="text-center" title="Battery Level">
           <img src="images/icons/battery.svg" alt="Battery" style="height: 20px">
           {{ node.telemetry.battery_level | round(0) }}%
@@ -47,7 +47,7 @@
         {% endif %}
       </td>
       <td class="text-center">
-        {% if node.telemetry.voltage %}
+        {% if node.telemetry.voltage is not none %}
           <span class="text-center" title="Voltage">
             <img src="images/icons/voltage.svg" alt="Voltage" style="height: 14px">
             {% if node.telemetry.voltage is number %}
@@ -305,18 +305,18 @@
                 </td>
                 <td>
                   {% if nid in nodes %}
-                  {% set dist = utils.calculate_distance_between_nodes(nodes[nid], node) %}
-                  {% if dist %}
-                    {% if nodes[nid].position and nodes[nid].position.latitude_i and nodes[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
-                      <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
-                        target="_blank" 
-                        title="View elevation profile">
-                        {{ dist }} km 🏔️
-                      </a>
-                    {% else %}
-                      {{ dist }} km
+                    {% if nodes[nid].position and node.position %}
+                      {% if nodes[nid].position.latitude_i is not none and nodes[nid].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
+                        {% set dist = utils.calculate_distance_between_nodes(nodes[nid], node) %}
+                        {% if dist %}
+                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
+                            target="_blank" 
+                            title="View elevation profile">
+                            {{ dist|round(2) }} km 🏔️
+                          </a>
+                        {% endif %}
+                      {% endif %}
                     {% endif %}
-                  {% endif %}
                   {% endif %}
                 </td>
                 <td><span title="Neighbor data">N</span></td>
@@ -349,10 +349,10 @@
                         <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
                           target="_blank" 
                           title="View elevation profile">
-                          {{ dist }} km 🏔️
+                          {{ dist|round(2) }} km 🏔️
                         </a>
                       {% else %}
-                        {{ dist }} km
+                        {{ dist|round(2) }} km
                       {% endif %}
                     {% endif %}
                     {% endif %}
@@ -398,19 +398,19 @@
                       SNR: {{ neighbor.snr }}
                     </td>
                     <td>
-                      {% if nid in nodes %}
-                      {% set dist = utils.calculate_distance_between_nodes(nodes[nid], node) %}
-                      {% if dist %}
-                        {% if nodes[nid].position and nodes[nid].position.latitude_i and nodes[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
-                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
-                            target="_blank" 
-                            title="View elevation profile">
-                            {{ dist }} km 🏔️
-                          </a>
-                        {% else %}
-                          {{ dist }} km
+                      {% if id in nodes %}
+                        {% if nodes[id].position and node.position %}
+                          {% if nodes[id].position.latitude_i is not none and nodes[id].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
+                            {% set dist = utils.calculate_distance_between_nodes(nodes[id], node) %}
+                            {% if dist %}
+                              <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[id].position.latitude_i / 1e7 }},{{ nodes[id].position.longitude_i / 1e7 }}" 
+                                target="_blank" 
+                                title="View elevation profile">
+                                {{ dist|round(2) }} km 🏔️
+                              </a>
+                            {% endif %}
+                          {% endif %}
                         {% endif %}
-                      {% endif %}
                       {% endif %}
                     </td>
                     <td><span title="Neighbor data">N</span></td>
@@ -445,10 +445,10 @@
                         <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
                           target="_blank" 
                           title="View elevation profile">
-                          {{ dist }} km 🏔️
+                          {{ dist|round(2) }} km 🏔️
                         </a>
                       {% else %}
-                        {{ dist }} km
+                        {{ dist|round(2) }} km
                       {% endif %}
                     {% endif %}
                     {% endif %}

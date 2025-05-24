@@ -133,12 +133,12 @@
         {% endif %}
         {% if node.telemetry %}
           <td scope="col" class="telemetry-col">
-            {% if 'battery_level' in node.telemetry %}
+            {% if node.telemetry and node.telemetry.battery_level is not none %}
               {{ node.telemetry.battery_level }}%
             {% endif %}
           </td>
           <td scope="col" class="telemetry-col">
-            {% if 'voltage' in node.telemetry %}
+            {% if node.telemetry and node.telemetry.voltage is not none %}
               {% if node.telemetry.voltage is number %}
                 {{ node.telemetry.voltage|round(2) }}V
               {% else %}
@@ -147,7 +147,7 @@
             {% endif %}
           </td>
           <td scope="col" class="telemetry-col">
-            {% if 'air_util_tx' in node.telemetry %}
+            {% if node.telemetry and node.telemetry.air_util_tx is not none %}
               {% if node.telemetry.air_util_tx is number %}
                 {{ node.telemetry.air_util_tx|round(1) }}%
               {% else %}
@@ -156,7 +156,7 @@
             {% endif %}
           </td>
           <td scope="col" class="telemetry-col">
-            {% if 'channel_utilization' in node.telemetry %}
+            {% if node.telemetry and node.telemetry.channel_utilization is not none %}
               {% if node.telemetry.channel_utilization is number %}
                 {{ node.telemetry.channel_utilization|round(1) }}%
               {% else %}
