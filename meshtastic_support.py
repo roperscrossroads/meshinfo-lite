@@ -122,6 +122,7 @@ class Channel(Enum):
     LONG_FAST = 8
     MEDIUM_FAST = 31
     SHORT_FAST = 112
+    LONG_MODERATE = 88
     # Additional channels will be added as they are discovered
 
 class ShortChannel(Enum):
@@ -132,6 +133,7 @@ class ShortChannel(Enum):
     LF = 8
     MF = 31
     SF = 112
+    LM = 88
     # Additional channels will be added as they are discovered
 
 def get_channel_name(channel_value, use_short_names=False):

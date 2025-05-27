@@ -370,12 +370,11 @@ def traceroute_map():
         abort(503, description="Database connection unavailable")
     nodes = md.get_nodes()
     
-    # Get traceroute data
+    # Get traceroute attempt by unique id
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
         SELECT * FROM traceroute WHERE traceroute_id = %s
     """, (traceroute_id,))
-    
     traceroute_data = cursor.fetchone()
     if not traceroute_data:
         abort(404)
@@ -383,22 +382,22 @@ def traceroute_map():
     # Format the forward route data
     route = []
     if traceroute_data['route']:
-        route = [int(hop) for hop in traceroute_data['route'].split(';')]
+        route = [int(hop) for hop in traceroute_data['route'].split(';') if hop]
     
     # Format the return route data
     route_back = []
     if traceroute_data['route_back']:
-        route_back = [int(hop) for hop in traceroute_data['route_back'].split(';')]
+        route_back = [int(hop) for hop in traceroute_data['route_back'].split(';') if hop]
     
     # Format the forward SNR values and scale by dividing by 4
     snr_towards = []
     if traceroute_data['snr_towards']:
-        snr_towards = [float(s)/4.0 for s in traceroute_data['snr_towards'].split(';')]
+        snr_towards = [float(s)/4.0 for s in traceroute_data['snr_towards'].split(';') if s]
     
     # Format the return SNR values and scale by dividing by 4
     snr_back = []
     if traceroute_data['snr_back']:
-        snr_back = [float(s)/4.0 for s in traceroute_data['snr_back'].split(';')]
+        snr_back = [float(s)/4.0 for s in traceroute_data['snr_back'].split(';') if s]
     
     # Create a clean traceroute object for the template
     traceroute = {
