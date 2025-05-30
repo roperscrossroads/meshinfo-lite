@@ -312,6 +312,12 @@
       center: ol.proj.fromLonLat([0, 0]),
       zoom: 2,
     }),
+    // Add event handling configuration
+    eventHandling: {
+      touchstart: { passive: true },
+      touchmove: { passive: true },
+      touchend: { passive: true }
+    }
   });
 
   var forwardLineStyle = new ol.style.Style({
@@ -1114,7 +1120,7 @@ for (var i = 0; i < allpoints.length - 1; i++) {
     #map {
     height: 70vh;
     width: 100%;
-    margin-bottom: 60px;  // Add margin to prevent legend overlap
+    margin-bottom: 60px;  /* Add margin to prevent legend overlap */
     }
     #legend {
     background-color: #ffffff;
