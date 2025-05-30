@@ -293,7 +293,9 @@ window.addEventListener('load', function() {
           {% set to_id_hex = utils.convert_node_id_from_int_to_hex(item["to_id"]) %}
           {% if from_id_hex in nodes and to_id_hex in nodes and
                 nodes[from_id_hex].position and nodes[from_id_hex].position.latitude is not none and nodes[from_id_hex].position.longitude is not none and
-                nodes[to_id_hex].position and nodes[to_id_hex].position.latitude is not none and nodes[to_id_hex].position.longitude is not none %}
+                nodes[to_id_hex].position and nodes[to_id_hex].position.latitude is not none and nodes[to_id_hex].position.longitude is not none and
+                meshdata.is_position_fresh(nodes[from_id_hex].position, config.getint('server', 'node_location_prune_threshold')) and
+                meshdata.is_position_fresh(nodes[to_id_hex].position, config.getint('server', 'node_location_prune_threshold')) %}
             <a href="/traceroute_map.html?id={{ best_attempt.id }}" class="btn btn-sm btn-outline-primary" title="View traceroute map">
               <i class="bi bi-map"></i> Map
             </a>

@@ -2152,6 +2152,26 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         
         return active_nodes_data
 
+    def is_position_fresh(self, position, prune_threshold, now=None):
+        """
+        Returns True if the position dict/object has a position_time within prune_threshold seconds of now.
+        """
+        if not position:
+            return False
+        # Accept both dict and object
+        position_time = None
+        if isinstance(position, dict):
+            position_time = position.get('position_time')
+        else:
+            position_time = getattr(position, 'position_time', None)
+        if not position_time:
+            return False
+        if isinstance(position_time, datetime.datetime):
+            position_time = position_time.timestamp()
+        if now is None:
+            now = time.time()
+        return (now - position_time) <= prune_threshold
+
 
 def create_database():
     config = configparser.ConfigParser()

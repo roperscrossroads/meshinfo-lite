@@ -415,6 +415,36 @@ def traceroute_map():
     }
     
     cursor.close()
+
+    # --- Build traceroute_positions dict for historical accuracy ---
+    node_ids = set([traceroute['from_id'], traceroute['to_id']] + traceroute['route'] + traceroute['route_back'])
+    traceroute_positions = {}
+    ts_created = traceroute['ts_created']
+    # If ts_created is a datetime, convert to timestamp
+    if hasattr(ts_created, 'timestamp'):
+        ts_created = ts_created.timestamp()
+    for node_id in node_ids:
+        pos = md.get_position_at_time(node_id, ts_created)
+        if not pos and node_id in nodes and nodes[node_id].position:
+            pos_obj = nodes[node_id].position
+            # Convert to dict if needed
+            if hasattr(pos_obj, '__dict__'):
+                pos = dict(pos_obj.__dict__)
+            else:
+                pos = dict(pos_obj)
+            # Ensure position_time is present and properly formatted
+            if 'position_time' not in pos or not pos['position_time']:
+                if hasattr(pos_obj, 'position_time') and pos_obj.position_time:
+                    pt = pos_obj.position_time
+                    if isinstance(pt, datetime.datetime):
+                        pos['position_time'] = pt.timestamp()
+                    else:
+                        pos['position_time'] = pt
+                else:
+                    pos['position_time'] = None
+        if pos:
+            traceroute_positions[node_id] = pos
+
     
     return render_template(
         "traceroute_map.html.j2",
@@ -422,6 +452,7 @@ def traceroute_map():
         config=config,
         nodes=nodes,
         traceroute=traceroute,
+        traceroute_positions=traceroute_positions,  # <-- pass to template
         utils=utils,
         meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
@@ -715,6 +746,7 @@ def traceroutes():
         meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
+        meshdata=md  # Add meshdata to template context
     )
 
 
