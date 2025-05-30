@@ -311,42 +311,107 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         return neighbors
 
     def get_traceroutes(self, page=1, per_page=25):
-        """Get paginated traceroutes with SNR information."""
-        # Get total count first
+        """Get paginated traceroutes with SNR information, grouping all attempts (request and reply) together."""
         cur = self.db.cursor()
-        cur.execute("SELECT COUNT(*) FROM traceroute")
+        cur.execute("SELECT COUNT(DISTINCT request_id) FROM traceroute")
         total = cur.fetchone()[0]
         
-        # Get paginated results with all fields
-        sql = """SELECT traceroute_id, from_id, to_id, route, route_back,
-            snr_towards, snr_back, success, channel, hop_limit, ts_created
-            FROM traceroute 
-            ORDER BY ts_created DESC
-            LIMIT %s OFFSET %s"""
+        # Get paginated request_ids
+        cur.execute("""
+            SELECT request_id
+            FROM traceroute
+            GROUP BY request_id
+            ORDER BY MAX(ts_created) DESC
+            LIMIT %s OFFSET %s
+        """, (per_page, (page - 1) * per_page))
+        request_ids = [row[0] for row in cur.fetchall()]
         
-        offset = (page - 1) * per_page
-        cur.execute(sql, (per_page, offset))
+        # Fetch all traceroute rows for these request_ids
+        if not request_ids:
+            return {
+                "items": [],
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": (total + per_page - 1) // per_page,
+                "has_prev": page > 1,
+                "has_next": page * per_page < total,
+                "prev_num": page - 1,
+                "next_num": page + 1
+            }
+        format_strings = ','.join(['%s'] * len(request_ids))
+        sql = f"""
+            SELECT 
+                t.request_id,
+                t.from_id,
+                t.to_id,
+                t.route,
+                t.route_back,
+                t.snr_towards,
+                t.snr_back,
+                t.success,
+                t.channel,
+                t.hop_limit,
+                t.ts_created,
+                t.is_reply,
+                t.error_reason,
+                t.attempt_number,
+                t.traceroute_id
+            FROM traceroute t
+            WHERE t.request_id IN ({format_strings})
+            ORDER BY t.request_id DESC, t.ts_created ASC
+        """
+        cur.execute(sql, tuple(request_ids))
         rows = cur.fetchall()
         
-        traceroutes = []
+        # Group by request_id
+        from collections import defaultdict
+        grouped = defaultdict(list)
         for row in rows:
-            traceroutes.append({
-                "id": row[0],
-                "from_id": row[1],
-                "to_id": row[2],
-                "route": [int(a) for a in row[3].split(";")] if row[3] else [],
-                "route_back": [int(a) for a in row[4].split(";")] if row[4] else [],
-                "snr_towards": [float(s)/4.0 for s in row[5].split(";")] if row[5] else [],
-                "snr_back": [float(s)/4.0 for s in row[6].split(";")] if row[6] else [],
+            route = [int(a) for a in row[3].split(";")] if row[3] else []
+            route_back = [int(a) for a in row[4].split(";")] if row[4] else []
+            snr_towards = [float(s)/4.0 for s in row[5].split(";")] if row[5] else []
+            snr_back = [float(s)/4.0 for s in row[6].split(";")] if row[6] else []
+            from_id = row[1]
+            to_id = row[2]
+            # For zero-hop, do NOT set route or route_back to endpoints; leave as empty lists
+            grouped[row[0]].append({
+                "id": row[14],  # Use traceroute_id as the unique id
+                "from_id": from_id,
+                "to_id": to_id,
+                "route": route,
+                "route_back": route_back,
+                "snr_towards": snr_towards,
+                "snr_back": snr_back,
                 "success": row[7],
                 "channel": row[8],
                 "hop_limit": row[9],
-                "ts_created": row[10].timestamp()
+                "ts_created": row[10].timestamp(),
+                "is_reply": row[11],
+                "error_reason": row[12],
+                "attempt_number": row[13],
+                "traceroute_id": row[14]
             })
+        # Prepare items as a list of dicts, each with all attempts for a request_id
+        items = []
+        for req_id in request_ids:
+            attempts = grouped[req_id]
+            # Group status logic: prefer success, then error, then incomplete
+            summary = dict(attempts[0])
+            summary['attempts'] = attempts
+            summary['success'] = any(a['success'] for a in attempts)
+            summary['error_reason'] = next((a['error_reason'] for a in attempts if a['error_reason']), None)
+            # If any attempt is successful, set status to success
+            if summary['success']:
+                summary['status'] = 'success'
+            elif summary['error_reason']:
+                summary['status'] = 'error'
+            else:
+                summary['status'] = 'incomplete'
+            items.append(summary)
         cur.close()
-        
         return {
-            "items": traceroutes,
+            "items": items,
             "page": page,
             "per_page": per_page,
             "total": total,
@@ -969,52 +1034,91 @@ ts_updated = VALUES(ts_updated)"""
         self.db.commit()
 
     def store_traceroute(self, data):
+        import logging
         from_id = self.verify_node(data["from"])
         to_id = self.verify_node(data["to"])
         payload = dict(data["decoded"]["json_payload"])
-        
-        # Process forward route and SNR
+
+        # Always use the payload's request_id if present, else fallback to message id
+        payload_request_id = data["decoded"].get("request_id")
+        message_id = data.get("id")
+        request_id = payload_request_id or message_id
+
+        # Determine if this is a reply and get error reason
+        is_reply = False
+        error_reason = None
+
+        # Check if this is a routing message with error
+        if "error_reason" in payload:
+            error_reason = payload["error_reason"]
+
+        # Check if this is a route reply (legacy Meshtastic format)
+        if "route_reply" in payload:
+            is_reply = True
+            payload = payload["route_reply"]
+        elif "route_request" in payload:
+            payload = payload["route_request"]
+
+        # Robust reply detection: if payload_request_id is present and does not match message_id, treat as reply
+        if payload_request_id and message_id and str(payload_request_id) != str(message_id):
+            is_reply = True
+
+        # Insert the traceroute row
         route = None
         snr_towards = None
         if "route" in payload:
             route = ";".join(str(r) for r in payload["route"])
         if "snr_towards" in payload:
-            # Store raw SNR values directly
             snr_towards = ";".join(str(float(s)) for s in payload["snr_towards"])
-        
-        # Process return route and SNR
         route_back = None
         snr_back = None
         if "route_back" in payload:
             route_back = ";".join(str(r) for r in payload["route_back"])
         if "snr_back" in payload:
-            # Store raw SNR values directly
             snr_back = ";".join(str(float(s)) for s in payload["snr_back"])
 
-        # A traceroute is successful if we have either:
-        # 1. A direct connection with SNR data in both directions
-        # 2. A multi-hop route with SNR data in both directions
-        is_direct = not bool(route and route_back)  # True if no hops in either direction
-        
-        success = False
-        if is_direct:
-            # For direct connections, we just need SNR data in both directions
-            success = bool(snr_towards and snr_back)
-        else:
-            # For multi-hop routes, we need both routes and their SNR data
-            success = bool(route and route_back and snr_towards and snr_back)
+        # Parse as lists for logic
+        route_list = payload.get("route", [])
+        route_back_list = payload.get("route_back", [])
+        snr_towards_list = payload.get("snr_towards", [])
+        snr_back_list = payload.get("snr_back", [])
 
-        # Extract additional metadata
+        # Only mark as success if:
+        # For zero-hop direct connection:
+        if not route_list and not route_back_list:
+            # Must have SNR values in either direction
+            success = bool(snr_towards_list or snr_back_list)
+        # For multi-hop:
+        elif route_list and route_back_list:
+            # Must have SNR values in both directions
+            success = bool(snr_towards_list and snr_back_list)
+        else:
+            success = False
+
+        # Now join for DB storage
+        route = None
+        snr_towards = None
+        if "route" in payload:
+            route = ";".join(str(r) for r in payload["route"])
+        if "snr_towards" in payload:
+            snr_towards = ";".join(str(float(s)) for s in payload["snr_towards"])
+        route_back = None
+        snr_back = None
+        if "route_back" in payload:
+            route_back = ";".join(str(r) for r in payload["route_back"])
+        if "snr_back" in payload:
+            snr_back = ";".join(str(float(s)) for s in payload["snr_back"])
+
+        # --- FIX: Define attempt_number before use ---
+        attempt_number = data.get("attempt_number") or payload.get("attempt_number")
+
         channel = data.get("channel", None)
         hop_limit = data.get("hop_limit", None)
-        request_id = data.get("id", None)
         traceroute_time = payload.get("time", None)
-
         sql = """INSERT INTO traceroute
         (from_id, to_id, channel, hop_limit, success, request_id, route, route_back, 
-        snr_towards, snr_back, time, ts_created)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s), NOW())"""
-        
+        snr_towards, snr_back, time, ts_created, is_reply, error_reason, attempt_number)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s), NOW(), %s, %s, %s)"""
         params = (
             from_id,
             to_id,
@@ -1026,10 +1130,37 @@ ts_updated = VALUES(ts_updated)"""
             route_back,
             snr_towards,
             snr_back,
-            traceroute_time
+            traceroute_time,
+            is_reply,
+            error_reason,
+            attempt_number
         )
         self.db.cursor().execute(sql, params)
         self.db.commit()
+
+        # --- Robust consolidation logic: ensure all related rows use the same request_id ---
+        cur = self.db.cursor()
+        ids_to_check = set()
+        if message_id:
+            ids_to_check.add(message_id)
+        if payload_request_id:
+            ids_to_check.add(payload_request_id)
+        if request_id:
+            ids_to_check.add(request_id)
+        # Find all request_ids for these ids (as traceroute_id or request_id)
+        all_request_ids = set()
+        for idval in ids_to_check:
+            if idval:
+                cur.execute("SELECT request_id FROM traceroute WHERE traceroute_id = %s OR request_id = %s", (idval, idval))
+                all_request_ids.update([row[0] for row in cur.fetchall() if row[0]])
+        if all_request_ids:
+            canonical_request_id = min(all_request_ids)
+            cur.execute(f"UPDATE traceroute SET request_id = %s WHERE request_id IN ({','.join(['%s']*len(all_request_ids))})", (canonical_request_id, *all_request_ids))
+            self.db.commit()
+            logging.info(f"Consolidated traceroute rows: set request_id={canonical_request_id} for ids {all_request_ids}")
+        else:
+            logging.warning(f"No related traceroute rows found for ids: {ids_to_check}")
+        cur.close()
 
     def get_successful_traceroutes(self):
         sql = """
@@ -1547,22 +1678,23 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             import sys
             migrations_path = os.path.join(os.path.dirname(__file__), 'migrations')
             sys.path.insert(0, os.path.dirname(__file__))
-            import migrations.add_message_reception as add_message_reception
-            import migrations.add_traceroute_snr as add_traceroute_snr
-            import migrations.add_traceroute_id as add_traceroute_id
-            import migrations.add_channel_info as add_channel_info
-            import migrations.add_ts_uplink as add_ts_uplink
-            add_message_reception.migrate(self.db)
-            add_traceroute_snr.migrate(self.db)
-            add_traceroute_id.migrate(self.db)
-            add_channel_info.migrate(self.db)
-            add_ts_uplink.migrate(self.db)
+            from migrations import MIGRATIONS
+            
+            # Run all migrations in order
+            for migration in MIGRATIONS:
+                try:
+                    migration(self.db)
+                    logging.info(f"Successfully ran migration: {migration.__name__}")
+                except Exception as e:
+                    logging.error(f"Failed to run migration {migration.__name__}: {e}")
+                    raise
+                    
         except ImportError as e:
             logging.error(f"Failed to import migration module: {e}")
             # Continue with database setup even if migration fails
             pass
         except Exception as e:
-            logging.error(f"Failed to run migration: {e}")
+            logging.error(f"Failed to run migrations: {e}")
             raise
 
         self.db.commit()
@@ -2019,6 +2151,26 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         ))
         
         return active_nodes_data
+
+    def is_position_fresh(self, position, prune_threshold, now=None):
+        """
+        Returns True if the position dict/object has a position_time within prune_threshold seconds of now.
+        """
+        if not position:
+            return False
+        # Accept both dict and object
+        position_time = None
+        if isinstance(position, dict):
+            position_time = position.get('position_time')
+        else:
+            position_time = getattr(position, 'position_time', None)
+        if not position_time:
+            return False
+        if isinstance(position_time, datetime.datetime):
+            position_time = position_time.timestamp()
+        if now is None:
+            now = time.time()
+        return (now - position_time) <= prune_threshold
 
 
 def create_database():

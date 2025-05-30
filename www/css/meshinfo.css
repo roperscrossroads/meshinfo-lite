@@ -60,6 +60,17 @@ nav {
     color: white;
 }
 
+/* Additional badge styles */
+.badge.bg-purple {
+    background-color: #6f42c1;
+    color: white;
+}
+
+.badge.bg-success {
+    background-color: #28a745;
+    color: white;
+}
+
 /* Layout classes */
 .neighbor-table td.node-id {
     min-width: 85px;

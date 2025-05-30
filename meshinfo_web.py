@@ -370,12 +370,11 @@ def traceroute_map():
         abort(503, description="Database connection unavailable")
     nodes = md.get_nodes()
     
-    # Get traceroute data
+    # Get traceroute attempt by unique id
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
         SELECT * FROM traceroute WHERE traceroute_id = %s
     """, (traceroute_id,))
-    
     traceroute_data = cursor.fetchone()
     if not traceroute_data:
         abort(404)
@@ -383,22 +382,22 @@ def traceroute_map():
     # Format the forward route data
     route = []
     if traceroute_data['route']:
-        route = [int(hop) for hop in traceroute_data['route'].split(';')]
+        route = [int(hop) for hop in traceroute_data['route'].split(';') if hop]
     
     # Format the return route data
     route_back = []
     if traceroute_data['route_back']:
-        route_back = [int(hop) for hop in traceroute_data['route_back'].split(';')]
+        route_back = [int(hop) for hop in traceroute_data['route_back'].split(';') if hop]
     
     # Format the forward SNR values and scale by dividing by 4
     snr_towards = []
     if traceroute_data['snr_towards']:
-        snr_towards = [float(s)/4.0 for s in traceroute_data['snr_towards'].split(';')]
+        snr_towards = [float(s)/4.0 for s in traceroute_data['snr_towards'].split(';') if s]
     
     # Format the return SNR values and scale by dividing by 4
     snr_back = []
     if traceroute_data['snr_back']:
-        snr_back = [float(s)/4.0 for s in traceroute_data['snr_back'].split(';')]
+        snr_back = [float(s)/4.0 for s in traceroute_data['snr_back'].split(';') if s]
     
     # Create a clean traceroute object for the template
     traceroute = {
@@ -416,6 +415,36 @@ def traceroute_map():
     }
     
     cursor.close()
+
+    # --- Build traceroute_positions dict for historical accuracy ---
+    node_ids = set([traceroute['from_id'], traceroute['to_id']] + traceroute['route'] + traceroute['route_back'])
+    traceroute_positions = {}
+    ts_created = traceroute['ts_created']
+    # If ts_created is a datetime, convert to timestamp
+    if hasattr(ts_created, 'timestamp'):
+        ts_created = ts_created.timestamp()
+    for node_id in node_ids:
+        pos = md.get_position_at_time(node_id, ts_created)
+        if not pos and node_id in nodes and nodes[node_id].position:
+            pos_obj = nodes[node_id].position
+            # Convert to dict if needed
+            if hasattr(pos_obj, '__dict__'):
+                pos = dict(pos_obj.__dict__)
+            else:
+                pos = dict(pos_obj)
+            # Ensure position_time is present and properly formatted
+            if 'position_time' not in pos or not pos['position_time']:
+                if hasattr(pos_obj, 'position_time') and pos_obj.position_time:
+                    pt = pos_obj.position_time
+                    if isinstance(pt, datetime.datetime):
+                        pos['position_time'] = pt.timestamp()
+                    else:
+                        pos['position_time'] = pt
+                else:
+                    pos['position_time'] = None
+        if pos:
+            traceroute_positions[node_id] = pos
+
     
     return render_template(
         "traceroute_map.html.j2",
@@ -423,6 +452,7 @@ def traceroute_map():
         config=config,
         nodes=nodes,
         traceroute=traceroute,
+        traceroute_positions=traceroute_positions,  # <-- pass to template
         utils=utils,
         meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
@@ -716,6 +746,7 @@ def traceroutes():
         meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
+        meshdata=md  # Add meshdata to template context
     )
 
 
