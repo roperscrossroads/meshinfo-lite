@@ -561,7 +561,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         cur.execute(sql, (timeout,))
         rows = cur.fetchall()
         
-        print("Fetched rows:", len(rows))
+        # print("Fetched rows:", len(rows))
         skipped = 0
         for row in rows:
             if not row or row.get('id') is None:
@@ -633,8 +633,8 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 logging.error(f"Error converting node ID {row['id']} to hex: {e}")
                 continue
         
-        print("Skipped rows due to missing id:", skipped)
-        print("Final nodes count:", len(nodes))
+        # print("Skipped rows due to missing id:", skipped)
+        # print("Final nodes count:", len(nodes))
         cur.close()
         return nodes
 
