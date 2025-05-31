@@ -456,10 +456,10 @@ const labels = [];
 // Add source node (from_id)
 {% set from_id = traceroute.from_id_hex %}
 {% set pos = traceroute_positions.get(from_id_int) %}
+{% if pos and pos.longitude_i is not none and pos.latitude_i is not none %}
 console.log('Source node ID (hex):', '{{ from_id }}');
 console.log('Source node ID (int):', {{ from_id_int }});
 console.log('Traceroute positions keys:', {{ traceroute_positions.keys()|list|tojson }});
-{% if pos and pos.longitude_i is not none and pos.latitude_i is not none %}
 console.log('Source node coordinates:', {{ pos.longitude_i / 10000000 }}, {{ pos.latitude_i / 10000000 }});
 var source = new ol.Feature({
     geometry: new ol.geom.Point(ol.proj.fromLonLat([
@@ -480,7 +480,6 @@ features.push(source);
 // Initialize points tracking
 var lastKnownPoint = null;
 var unknownSequence = [];
-
 // Start with source node
 allpoints.push([
     {{ pos.longitude_i / 10000000 }},
@@ -490,6 +489,11 @@ lastKnownPoint = [
     {{ pos.longitude_i / 10000000 }},
     {{ pos.latitude_i / 10000000 }}
 ];
+{% else %}
+console.log('Source node missing or has no position:', '{{ from_id }}');
+var lastKnownPoint = null;
+var unknownSequence = [];
+{% endif %}
 
 // Add all forward hops in the route
 {% for hop in traceroute.route %}
@@ -714,6 +718,8 @@ unknownSequence.push({
     {% endfor %}
 
     // Handle any remaining unknown nodes before final return to source
+    {% set pos = traceroute_positions.get(from_id_int) %}
+    {% if pos and pos.longitude_i is not none and pos.latitude_i is not none %}
     if (unknownSequence.length > 0) {
         var sourcePoint = [
             {{ pos.longitude_i / 10000000 }},
@@ -744,7 +750,7 @@ unknownSequence.push({
         {{ pos.longitude_i / 10000000 }},
         {{ pos.latitude_i / 10000000 }}
     ]);
-{% endif %}
+    {% endif %}
 {% endif %}
 
 console.log('allpoints array before line/label creation:', JSON.stringify(allpoints));
