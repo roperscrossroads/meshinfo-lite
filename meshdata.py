@@ -312,6 +312,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
 
     def get_traceroutes(self, page=1, per_page=25):
         """Get paginated traceroutes with SNR information, grouping all attempts (request and reply) together."""
+        page = max(1, page)  # Ensure page is at least 1
         cur = self.db.cursor()
         cur.execute("SELECT COUNT(DISTINCT request_id) FROM traceroute")
         total = cur.fetchone()[0]
