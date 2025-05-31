@@ -718,7 +718,7 @@
           var panel = '<div style="position: relative; margin-bottom: 12px">'
             + '<span title="' + (node.online ? 'Online' : 'Offline') + '" style="position: absolute; top: 0; right: 0; font-size: 1.5em">' 
             + (node.online ? '🟢' : '⚫') + '</span>'
-            + '<div class="fw-bold">' + node.long_name + '</div>'
+            + '<div class="fw-bold"><a href="node_' + node.id + '.html" target="_blank">' + node.long_name + '</a></div>'
             + '<div class="text-muted small">' + node.id + ' <span style="font-weight: bold; color: #333;">(' + node.short_name + ')</span></div>'
             + '</div>'
             + '<div class="small">'
