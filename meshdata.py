@@ -312,6 +312,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
 
     def get_traceroutes(self, page=1, per_page=25):
         """Get paginated traceroutes with SNR information, grouping all attempts (request and reply) together."""
+        page = max(1, page)  # Ensure page is at least 1
         cur = self.db.cursor()
         cur.execute("SELECT COUNT(DISTINCT request_id) FROM traceroute")
         total = cur.fetchone()[0]
@@ -561,7 +562,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         cur.execute(sql, (timeout,))
         rows = cur.fetchall()
         
-        print("Fetched rows:", len(rows))
+        # print("Fetched rows:", len(rows))
         skipped = 0
         for row in rows:
             if not row or row.get('id') is None:
@@ -633,8 +634,8 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 logging.error(f"Error converting node ID {row['id']} to hex: {e}")
                 continue
         
-        print("Skipped rows due to missing id:", skipped)
-        print("Final nodes count:", len(nodes))
+        # print("Skipped rows due to missing id:", skipped)
+        # print("Final nodes count:", len(nodes))
         cur.close()
         return nodes
 
@@ -2171,6 +2172,42 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         if now is None:
             now = time.time()
         return (now - position_time) <= prune_threshold
+
+    def get_telemetry_for_node(self, node_id):
+        """
+        Return the last 24 hours of telemetry for the given node, ordered by timestamp ascending.
+        Each record is a dict with keys: air_util_tx, battery_level, channel_utilization, ts_created, etc.
+        """
+        telemetry = []
+        sql = """
+            SELECT
+                DATE_FORMAT(ts_created, '%Y-%m-%d %H:%i:00') as interval_start,
+                FLOOR(MINUTE(ts_created) / 10) as ten_minute_block,
+                AVG(air_util_tx) as air_util_tx,
+                AVG(battery_level) as battery_level,
+                AVG(channel_utilization) as channel_utilization,
+                UNIX_TIMESTAMP(MIN(ts_created)) as ts_created
+            FROM telemetry
+            WHERE id = %s AND ts_created >= NOW() - INTERVAL 1 DAY
+            GROUP BY interval_start
+            ORDER BY interval_start ASC
+        """
+        params = (node_id,)
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description]
+        for row in rows:
+            record = {}
+            for i in range(len(row)):
+                value = row[i]
+                if isinstance(value, datetime.datetime):
+                    record[column_names[i]] = int(value.timestamp())
+                else:
+                    record[column_names[i]] = value
+            telemetry.append(record)
+        cur.close()
+        return telemetry
 
 
 def create_database():

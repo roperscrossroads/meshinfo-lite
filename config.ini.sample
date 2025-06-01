@@ -26,12 +26,17 @@ port=8000
 
 [server]
 node_activity_prune_threshold=7200
+node_location_prune_threshold=86400
 render_interval=15
 debug=true
 timezone=America/Los_Angeles
 zero_hop_timeout=43200
 telemetry_retention_days = 30
 metrics_average_interval=7200
+
+[channels]
+# Comma-separated list of channel names to ignore
+#ignored_channels=MVR_Commo
 
 [geocoding]
 enabled=false

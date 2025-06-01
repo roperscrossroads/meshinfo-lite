@@ -2,8 +2,7 @@
 
 {% block title %}Traceroute Map | MeshInfo{% endblock %}
 {% block head %}
-  <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.css" rel="stylesheet">
+  {% include "map_dependencies.html.j2" %}
   
   <script>
   // Function to initialize popovers
@@ -322,17 +321,35 @@
 </div>
 
 <script type="module">
+import Map from 'ol/Map.js';
+import View from 'ol/View.js';
+import TileLayer from 'ol/layer/Tile.js';
+import OSM from 'ol/source/OSM.js';
+import VectorLayer from 'ol/layer/Vector.js';
+import VectorSource from 'ol/source/Vector.js';
+import Feature from 'ol/Feature.js';
+import Point from 'ol/geom/Point.js';
+import LineString from 'ol/geom/LineString.js';
+import {fromLonLat, toLonLat} from 'ol/proj.js';
+import Style from 'ol/style/Style.js';
+import Circle from 'ol/style/Circle.js';
+import Fill from 'ol/style/Fill.js';
+import Stroke from 'ol/style/Stroke.js';
+import Text from 'ol/style/Text.js';
+import Overlay from 'ol/Overlay.js';
+import { isEmpty } from 'ol/extent.js';
+
 var allpoints = [];
 
-const map = new ol.Map({
+const map = new Map({
   layers: [
-    new ol.layer.Tile({
-      source: new ol.source.OSM(),
+    new TileLayer({
+      source: new OSM(),
     }),
   ],
   target: 'map',
-  view: new ol.View({
-    center: ol.proj.fromLonLat([0, 0]),
+  view: new View({
+    center: fromLonLat([0, 0]),
     zoom: 2,
   }),
   // Add event handling configuration
@@ -343,56 +360,56 @@ const map = new ol.Map({
   }
 });
 
-var forwardLineStyle = new ol.style.Style({
-  stroke: new ol.style.Stroke({
+var forwardLineStyle = new Style({
+  stroke: new Stroke({
     color: '#44AA44',
     width: 3
   })
 });
 
-var forwardDashedLineStyle = new ol.style.Style({
-  stroke: new ol.style.Stroke({
+var forwardDashedLineStyle = new Style({
+  stroke: new Stroke({
     color: '#44AA44',
     width: 3,
     lineDash: [5, 5]
   })
 });
 
-var returnLineStyle = new ol.style.Style({
-  stroke: new ol.style.Stroke({
+var returnLineStyle = new Style({
+  stroke: new Stroke({
     color: '#AA44AA',  // Purple for return path
     width: 3
   })
 });
 
-var returnDashedLineStyle = new ol.style.Style({
-  stroke: new ol.style.Stroke({
+var returnDashedLineStyle = new Style({
+  stroke: new Stroke({
     color: '#AA44AA',  // Purple for return path
     width: 3,
     lineDash: [5, 5]
   })
 });
 
-var sourceStyle = new ol.style.Style({
-  image: new ol.style.Circle({
+var sourceStyle = new Style({
+  image: new Circle({
     radius: 8,
-    fill: new ol.style.Fill({
+    fill: new Fill({
       color: '#FF4444'
     }),
-    stroke: new ol.style.Stroke({
+    stroke: new Stroke({
       color: 'white',
       width: 2
     })
   })
 });
 
-var destStyle = new ol.style.Style({
-  image: new ol.style.Circle({
+var destStyle = new Style({
+  image: new Circle({
     radius: 8,
-    fill: new ol.style.Fill({
+    fill: new Fill({
       color: '#4444FF'
     }),
-    stroke: new ol.style.Stroke({
+    stroke: new Stroke({
       color: 'white',
       width: 2
     })
@@ -400,20 +417,20 @@ var destStyle = new ol.style.Style({
 });
 
 function createHopStyle(hopNumber, isReturn) {
-  return new ol.style.Style({
-    image: new ol.style.Circle({
+  return new Style({
+    image: new Circle({
       radius: 8,
-      fill: new ol.style.Fill({
+      fill: new Fill({
         color: isReturn ? '#AA44AA' : '#44AA44'  // Purple for return, green for forward
       }),
-      stroke: new ol.style.Stroke({
+      stroke: new Stroke({
         color: 'white',
         width: 2
       })
     }),
-    text: new ol.style.Text({
+    text: new Text({
       text: hopNumber.toString(),
-      fill: new ol.style.Fill({
+      fill: new Fill({
         color: '#FFFFFF'
       }),
       font: 'bold 12px Arial'
@@ -421,20 +438,20 @@ function createHopStyle(hopNumber, isReturn) {
   });
 }
 
-var unknownStyle = new ol.style.Style({
-  image: new ol.style.Circle({
+var unknownStyle = new Style({
+  image: new Circle({
     radius: 8,
-    fill: new ol.style.Fill({
+    fill: new Fill({
       color: '#FFA500' // Orange color
     }),
-    stroke: new ol.style.Stroke({
+    stroke: new Stroke({
       color: 'white',
       width: 2
     })
   }),
-  text: new ol.style.Text({
+  text: new Text({
     text: '?',
-    fill: new ol.style.Fill({
+    fill: new Fill({
       color: '#FFFFFF'
     }),
     font: 'bold 12px Arial'
@@ -456,13 +473,13 @@ const labels = [];
 // Add source node (from_id)
 {% set from_id = traceroute.from_id_hex %}
 {% set pos = traceroute_positions.get(from_id_int) %}
+{% if pos and pos.longitude_i is not none and pos.latitude_i is not none %}
 console.log('Source node ID (hex):', '{{ from_id }}');
 console.log('Source node ID (int):', {{ from_id_int }});
 console.log('Traceroute positions keys:', {{ traceroute_positions.keys()|list|tojson }});
-{% if pos and pos.longitude_i is not none and pos.latitude_i is not none %}
 console.log('Source node coordinates:', {{ pos.longitude_i / 10000000 }}, {{ pos.latitude_i / 10000000 }});
-var source = new ol.Feature({
-    geometry: new ol.geom.Point(ol.proj.fromLonLat([
+var source = new Feature({
+    geometry: new Point(fromLonLat([
         {{ pos.longitude_i / 10000000 }},
         {{ pos.latitude_i / 10000000 }}
     ])),
@@ -480,7 +497,6 @@ features.push(source);
 // Initialize points tracking
 var lastKnownPoint = null;
 var unknownSequence = [];
-
 // Start with source node
 allpoints.push([
     {{ pos.longitude_i / 10000000 }},
@@ -490,6 +506,11 @@ lastKnownPoint = [
     {{ pos.longitude_i / 10000000 }},
     {{ pos.latitude_i / 10000000 }}
 ];
+{% else %}
+console.log('Source node missing or has no position:', '{{ from_id }}');
+var lastKnownPoint = null;
+var unknownSequence = [];
+{% endif %}
 
 // Add all forward hops in the route
 {% for hop in traceroute.route %}
@@ -513,8 +534,8 @@ if (unknownSequence.length > 0) {
         ];
         console.log('Placing unknown node at interpolated coordinates:', midPoint, 'between', lastKnownPoint, 'and', nextKnownPoint);
         // Create unknown node feature
-        var unknownNode = new ol.Feature({
-            geometry: new ol.geom.Point(ol.proj.fromLonLat(midPoint)),
+        var unknownNode = new Feature({
+            geometry: new Point(fromLonLat(midPoint)),
             node: {
                 ...unknownSequence[i],
                 direction: 'forward'
@@ -530,8 +551,8 @@ if (unknownSequence.length > 0) {
 }
 
 // Add the known forward hop node
-var hopNode = new ol.Feature({
-    geometry: new ol.geom.Point(ol.proj.fromLonLat([
+var hopNode = new Feature({
+    geometry: new Point(fromLonLat([
         {{ pos.longitude_i / 10000000 }},
         {{ pos.latitude_i / 10000000 }}
     ])),
@@ -593,8 +614,8 @@ if (unknownSequence.length > 0) {
         ];
         console.log('Placing unknown node at interpolated coordinates:', midPoint, 'between', lastKnownPoint, 'and', nextKnownPoint);
         // Create unknown node feature
-        var unknownNode = new ol.Feature({
-            geometry: new ol.geom.Point(ol.proj.fromLonLat(midPoint)),
+        var unknownNode = new Feature({
+            geometry: new Point(fromLonLat(midPoint)),
             node: unknownSequence[i]
         });
         unknownNode.setStyle(unknownStyle);
@@ -604,8 +625,8 @@ if (unknownSequence.length > 0) {
 }
 
 // Add destination node
-var dest = new ol.Feature({
-    geometry: new ol.geom.Point(ol.proj.fromLonLat([
+var dest = new Feature({
+    geometry: new Point(fromLonLat([
         {{ pos.longitude_i / 10000000 }},
         {{ pos.latitude_i / 10000000 }}
     ])),
@@ -657,8 +678,8 @@ if (unknownSequence.length > 0) {
             lastKnownPoint[1] + (nextKnownPoint[1] - lastKnownPoint[1]) * fraction
         ];
         console.log('Placing unknown node at interpolated coordinates:', midPoint, 'between', lastKnownPoint, 'and', nextKnownPoint);
-        var unknownNode = new ol.Feature({
-            geometry: new ol.geom.Point(ol.proj.fromLonLat(midPoint)),
+        var unknownNode = new Feature({
+            geometry: new Point(fromLonLat(midPoint)),
             node: {
                 ...unknownSequence[i],
                 direction: 'return'
@@ -672,8 +693,8 @@ if (unknownSequence.length > 0) {
 }
 
 // Add return hop node
-var returnHopNode = new ol.Feature({
-    geometry: new ol.geom.Point(ol.proj.fromLonLat([
+var returnHopNode = new Feature({
+    geometry: new Point(fromLonLat([
         {{ pos.longitude_i / 10000000 }},
         {{ pos.latitude_i / 10000000 }}
     ])),
@@ -714,6 +735,8 @@ unknownSequence.push({
     {% endfor %}
 
     // Handle any remaining unknown nodes before final return to source
+    {% set pos = traceroute_positions.get(from_id_int) %}
+    {% if pos and pos.longitude_i is not none and pos.latitude_i is not none %}
     if (unknownSequence.length > 0) {
         var sourcePoint = [
             {{ pos.longitude_i / 10000000 }},
@@ -728,8 +751,8 @@ unknownSequence.push({
                 lastKnownPoint[1] + (sourcePoint[1] - lastKnownPoint[1]) * fraction
             ];
             console.log('Placing unknown return node at interpolated coordinates:', midPoint, 'between', lastKnownPoint, 'and', sourcePoint);
-            var unknownNode = new ol.Feature({
-                geometry: new ol.geom.Point(ol.proj.fromLonLat(midPoint)),
+            var unknownNode = new Feature({
+                geometry: new Point(fromLonLat(midPoint)),
                 node: unknownSequence[i]  // Include all node properties directly
             });
             unknownNode.setStyle(unknownStyle);
@@ -744,20 +767,21 @@ unknownSequence.push({
         {{ pos.longitude_i / 10000000 }},
         {{ pos.latitude_i / 10000000 }}
     ]);
-{% endif %}
+    {% endif %}
 {% endif %}
 
 console.log('allpoints array before line/label creation:', JSON.stringify(allpoints));
 // Create lines between nodes
 for (var i = 0; i < allpoints.length - 1; i++) {
-    var fromPoint = allpoints[i];
-    var toPoint = allpoints[i+1];
-    var points = [fromPoint, toPoint];
+    // Project endpoints to EPSG:3857
+    var fromPoint3857 = fromLonLat(allpoints[i]);
+    var toPoint3857 = fromLonLat(allpoints[i+1]);
+    var points = [fromPoint3857, toPoint3857];
     
-    // Calculate distance for this segment
+    // Calculate distance for this segment (use original lon/lat for distance)
     var distance = calculateDistance(
-        fromPoint[1], fromPoint[0], 
-        toPoint[1], toPoint[0]
+        allpoints[i][1], allpoints[i][0], 
+        allpoints[i+1][1], allpoints[i+1][0]
     );
     
     // Get SNR for this hop
@@ -793,16 +817,11 @@ for (var i = 0; i < allpoints.length - 1; i++) {
         {% endif %}
     {% endif %}
     
-    // Transform coordinates from EPSG:4326 to EPSG:3857
-    for (var j = 0; j < points.length; j++) {
-        points[j] = ol.proj.transform(points[j], 'EPSG:4326', 'EPSG:3857');
-    }
-    
     // Only create line and label features if all coordinates are valid
-    if (!isNaN(fromPoint[0]) && !isNaN(fromPoint[1]) && !isNaN(toPoint[0]) && !isNaN(toPoint[1])) {
+    if (!isEmpty(fromPoint3857) && !isEmpty(toPoint3857)) {
         // Create line feature
-        var line = new ol.Feature({
-            geometry: new ol.geom.LineString(points),
+        var line = new Feature({
+            geometry: new LineString(points),
             segmentIndex: i,
             isForwardPath: isForwardPath
         });
@@ -837,7 +856,7 @@ for (var i = 0; i < allpoints.length - 1; i++) {
         }
         lines.push(line);
 
-        // Add label at a fraction along the line with perpendicular offset
+        // Add label at a fraction along the line with perpendicular offset (all in EPSG:3857)
         var fraction = (i + 1) / (allpoints.length);
         var x = points[0][0] + (points[1][0] - points[0][0]) * fraction;
         var y = points[0][1] + (points[1][1] - points[0][1]) * fraction;
@@ -852,9 +871,9 @@ for (var i = 0; i < allpoints.length - 1; i++) {
             perpX = -perpX;
             perpY = -perpY;
         }
-        var labelPoint = [x + perpX, y + perpY];
-        var label = new ol.Feature({
-            geometry: new ol.geom.Point(labelPoint),
+        var labelPoint = [x + perpX, y + perpY]; // EPSG:3857
+        var label = new Feature({
+            geometry: new Point(labelPoint),
             segmentIndex: i,
             isForwardPath: isForwardPath
         });
@@ -876,7 +895,7 @@ for (var i = 0; i < allpoints.length - 1; i++) {
         });
         hasUnknownEndpoint = (fromFeature && fromFeature.get('node').type === 'unknown') || 
                             (toFeature && toFeature.get('node').type === 'unknown');
-        if (!isNaN(fromLat) && !isNaN(fromLon) && !isNaN(toLat) && !isNaN(toLon) && !hasUnknownEndpoint) {
+        if (!isEmpty(fromLat) && !isEmpty(fromLon) && !isEmpty(toLat) && !isEmpty(toLon) && !hasUnknownEndpoint) {
             var distance = calculateDistance(
                 fromLat, fromLon, 
                 toLat, toLon
@@ -893,7 +912,7 @@ for (var i = 0; i < allpoints.length - 1; i++) {
             labelText += (labelText ? '\n' : '') + 'Hop #' + i;
         }
         // Only create label if segment is not zero-length, labelText is present, and neither endpoint is unknown
-        if ((fromPoint[0] !== toPoint[0] || fromPoint[1] !== toPoint[1]) && labelText && !hasUnknownEndpoint) {
+        if ((allpoints[i][0] !== allpoints[i+1][0] || allpoints[i][1] !== allpoints[i+1][1]) && labelText && !hasUnknownEndpoint) {
             label.set('labelText', labelText);
             label.setStyle(getNormalLabelStyle(labelText));
             labels.push(label);
@@ -909,7 +928,7 @@ features.concat(lines).concat(labels).forEach((f, idx) => {
     const node = f.get('node');
     type = 'node';
     info = `id: ${node.id}, nodeType: ${node.type}`;
-  } else if (f.get('segmentIndex') !== undefined && f.getGeometry() instanceof ol.geom.LineString) {
+  } else if (f.get('segmentIndex') !== undefined && f.getGeometry() instanceof LineString) {
     type = 'line';
     info = `segmentIndex: ${f.get('segmentIndex')}, isForwardPath: ${f.get('isForwardPath')}`;
   } else if (f.get('segmentIndex') !== undefined) {
@@ -918,8 +937,8 @@ features.concat(lines).concat(labels).forEach((f, idx) => {
   }
 });
 
-const vectorLayer = new ol.layer.Vector({
-  source: new ol.source.Vector({
+const vectorLayer = new VectorLayer({
+  source: new VectorSource({
     features: features.concat(lines).concat(labels)
   })
 });
@@ -941,7 +960,7 @@ if (features.length > 0) {
   var resolution = view.getResolution();
   if (resolution < 0.1) {  // If zoomed in too far
       view.setResolution(0.1);  // Set minimum resolution
-      view.setCenter(ol.extent.getCenter(extent));  // Center on the features
+      view.setCenter(toLonLat(extent.getArray(), 'EPSG:3857', 'EPSG:4326'));  // Center on the features
   }
   console.log("Map view center after fit:", view.getCenter());
   console.log("Map view zoom after fit:", view.getZoom());
@@ -953,7 +972,7 @@ if (features.length > 0) {
   var content = document.createElement('div');
   container.appendChild(content);
   
-  var overlay = new ol.Overlay({
+  var overlay = new Overlay({
     element: container,
     autoPan: true,
     autoPanAnimation: {
@@ -1068,15 +1087,15 @@ if (features.length > 0) {
   // Define glow box styles for labels
   function getGlowBoxStyle(isForward, labelText) {
     var color = isForward ? 'rgba(68,170,68,0.35)' : 'rgba(170,68,170,0.35)';
-    return new ol.style.Style({
-        text: new ol.style.Text({
+    return new Style({
+        text: new Text({
             text: labelText,
             font: '12px Arial',
-            fill: new ol.style.Fill({ color: 'rgba(0,0,0,0)' }), // invisible text
-            backgroundFill: new ol.style.Fill({ color: color }),
+            fill: new Fill({ color: 'rgba(0,0,0,0)' }), // invisible text
+            backgroundFill: new Fill({ color: color }),
             padding: [4, 6, 4, 6], // tighter padding for glow
             offsetY: -20,
-            backgroundStroke: new ol.style.Stroke({
+            backgroundStroke: new Stroke({
                 color: color,
                 width: 5 // tighter stroke
             }),
@@ -1088,21 +1107,21 @@ if (features.length > 0) {
 
   // Save the normal label style for later use
   function getNormalLabelStyle(labelText) {
-    return new ol.style.Style({
-        text: new ol.style.Text({
+    return new Style({
+        text: new Text({
             text: labelText,
             font: '12px Arial',
-            fill: new ol.style.Fill({ color: '#000000' }),
-            stroke: new ol.style.Stroke({
+            fill: new Fill({ color: '#000000' }),
+            stroke: new Stroke({
                 color: '#ffffff',
                 width: 3
             }),
             padding: [3, 5, 3, 5],
             offsetY: -20,
-            backgroundFill: new ol.style.Fill({
+            backgroundFill: new Fill({
                 color: 'rgba(255, 255, 255, 0.85)'
             }),
-            backgroundStroke: new ol.style.Stroke({
+            backgroundStroke: new Stroke({
                 color: 'rgba(0, 0, 0, 0.4)',
                 width: 1,
                 lineCap: 'round',
@@ -1127,7 +1146,7 @@ if (features.length > 0) {
             label.setStyle(getNormalLabelStyle(labelText));
         }
     });
-    if (feature && feature.getGeometry() instanceof ol.geom.LineString) {
+    if (feature && feature.getGeometry() instanceof LineString) {
         var segIdx = feature.get('segmentIndex');
         var isForward = feature.get('isForwardPath');
         var label = labels.find(l => l.get('segmentIndex') === segIdx);

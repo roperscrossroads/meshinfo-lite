@@ -81,7 +81,6 @@ def safe_hw_model(value):
 config = configparser.ConfigParser()
 config.read("config.ini")
 
-
 # --- Add these MeshData Management functions ---
 def get_meshdata():
     """Opens a new MeshData connection if there is none yet for the
@@ -643,7 +642,6 @@ def map():
         timestamp=datetime.datetime.now(),
         Channel=meshtastic_support.Channel  # Add Channel enum to template context
     )
-
 
 @app.route('/neighbors.html')
 def neighbors():
@@ -1532,6 +1530,12 @@ def get_chattiest_nodes():
     finally:
         if cursor:
             cursor.close()
+
+@app.route('/api/telemetry/<int:node_id>')
+def api_telemetry(node_id):
+    md = get_meshdata()
+    telemetry = md.get_telemetry_for_node(node_id)
+    return jsonify(telemetry)
 
 def run():
     # Enable Waitress logging
