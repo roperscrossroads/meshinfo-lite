@@ -3,6 +3,8 @@
 {% block title %}{{ node.short_name }} | Node | MeshInfo{% endblock %}
 {% block head %}
   {% include "map_dependencies.html.j2" %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 {% endblock %}
 
 {% block content %}
@@ -70,7 +72,131 @@
       <div id="map" class="map"></div>
       {% endif %}
       {% if node.telemetry %}
-      <img class="w-100" src="data:image/jpeg;base64,{{ telemetry_graph }}">
+      <div class="w-100" id="telemetryChartContainer">
+        <canvas id="telemetryChart" height="250"></canvas>
+      </div>
+      <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const container = document.getElementById('telemetryChartContainer');
+        const canvas = document.getElementById('telemetryChart');
+        fetch('/api/telemetry/{{ node.id }}')
+          .then(response => response.json())
+          .then(data => {
+            if (!data || data.length === 0 || data.every(d => !d.air_util_tx && !d.channel_utilization && !d.battery_level)) {
+              canvas.style.display = 'none';
+              if (!document.getElementById('noTelemetryMsg')) {
+                const msg = document.createElement('div');
+                msg.id = 'noTelemetryMsg';
+                msg.className = 'text-center text-muted';
+                msg.innerText = 'No Telemetry';
+                container.appendChild(msg);
+              }
+              return;
+            }
+            canvas.style.display = '';
+            const ctx = document.getElementById('telemetryChart').getContext('2d');
+            const airUtilTx = data.map(d => d.air_util_tx);
+            const channelUtil = data.map(d => d.channel_utilization);
+            const batteryLevel = data.map(d => d.battery_level);
+
+            // Find the highest value across all datasets
+            const allValues = airUtilTx.concat(channelUtil, batteryLevel).filter(v => v !== null && v !== undefined);
+            let maxValue = Math.max(...allValues, 100);
+            // Only add headroom if maxValue exceeds 100
+            let yMax = maxValue > 100 ? maxValue * 1.05 : 100;
+            // Round up to next multiple of 20 so 100 is always a tick
+            let yMaxRounded = Math.ceil(yMax / 20) * 20;
+
+            // Use ISO strings for Chart.js time scale
+            const labels = data.map(d => new Date(d.ts_created * 1000).toISOString());
+
+            new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels: labels,
+                datasets: [
+                  {
+                    label: 'Air Util TX',
+                    data: airUtilTx,
+                    borderColor: 'blue',
+                    backgroundColor: 'rgba(0,0,255,0.1)',
+                    fill: false,
+                    tension: 0.2,
+                    pointRadius: 2,
+                    spanGaps: true,
+                    borderWidth: 1,
+                  },
+                  {
+                    label: 'Channel Utilization',
+                    data: channelUtil,
+                    borderColor: 'purple',
+                    backgroundColor: 'rgba(128,0,128,0.1)',
+                    fill: false,
+                    tension: 0.2,
+                    pointRadius: 2,
+                    spanGaps: true,
+                    borderWidth: 1,
+                  },
+                  {
+                    label: 'Battery Level',
+                    data: batteryLevel,
+                    borderColor: 'red',
+                    backgroundColor: 'rgba(255,0,0,0.1)',
+                    fill: false,
+                    tension: 0.2,
+                    pointRadius: 2,
+                    spanGaps: true,
+                    borderWidth: 1,
+                  }
+                ]
+              },
+              options: {
+                responsive: true,
+                plugins: {
+                  legend: { position: 'top' },
+                  title: { display: true, text: '24hr Telemetry Data' }
+                },
+                scales: {
+                  x: {
+                    type: 'time',
+                    time: {
+                      unit: 'hour',
+                      stepSize: 3,
+                      displayFormats: {
+                        hour: 'MM/dd HH:mm'
+                      }
+                    },
+                    ticks: {
+                      autoSkip: true,
+                      maxRotation: 45,
+                      minRotation: 45,
+                      callback: function(value, index, ticks) {
+                        // value is the timestamp or ISO string
+                        const date = new Date(value);
+                        if (date.getHours() === 0) {
+                          // Midnight: show date
+                          return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' });
+                        } else {
+                          // Other times: show time only
+                          return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+                        }
+                      }
+                    }
+                  },
+                  y: {
+                    beginAtZero: true,
+                    max: yMaxRounded,
+                    ticks: {
+                      stepSize: 20,
+                      callback: function(value) { return value; }
+                    }
+                  }
+                }
+              }
+            });
+          });
+      });
+      </script>
       {% endif %}
       <div class="w-100 mt-2 text-center fw-bold p-2" style="background: #D7F9FF;">Elsewhere</div>
       <div>

@@ -1531,6 +1531,12 @@ def get_chattiest_nodes():
         if cursor:
             cursor.close()
 
+@app.route('/api/telemetry/<int:node_id>')
+def api_telemetry(node_id):
+    md = get_meshdata()
+    telemetry = md.get_telemetry_for_node(node_id)
+    return jsonify(telemetry)
+
 def run():
     # Enable Waitress logging
     config = configparser.ConfigParser()
