@@ -573,3 +573,9 @@ nav {
     background-color: #f8f9fa !important;
     color: #000 !important;
 }
+
+/* Make OpenStreetMap attribution less prominent on all OpenLayers maps */
+.ol-attribution, .ol-attribution ul {
+    font-size: 0.75em !important;
+    opacity: 0.7;
+}

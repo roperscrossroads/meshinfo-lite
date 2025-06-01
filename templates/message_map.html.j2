@@ -2,8 +2,19 @@
 
 {% block title %}Message Map | MeshInfo{% endblock %}
 {% block head %}
-  <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.css" rel="stylesheet">
+  <script type="importmap">
+    {
+      "imports": {
+        "ol/": "https://cdn.jsdelivr.net/npm/ol@10.5.0/",
+        "rbush": "https://cdn.jsdelivr.net/npm/rbush@3.0.1/index.js",
+        "quickselect": "https://cdn.jsdelivr.net/npm/quickselect@3.0.0/index.min.js",
+        "color-space/": "https://cdn.jsdelivr.net/npm/color-space@2.3.2/",
+        "color-rgba": "https://cdn.jsdelivr.net/npm/color-rgba@3.0.0/index.min.js",
+        "color-parse": "https://cdn.jsdelivr.net/npm/color-parse@2.0.2/index.min.js"
+      }
+    }
+  </script>
+  <link href="https://cdn.jsdelivr.net/npm/ol@10.5.0/ol.css" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -48,39 +59,57 @@
 </div>
 
 <script type="module">
-  const map = new ol.Map({
+  import Map from 'ol/Map.js';
+  import View from 'ol/View.js';
+  import TileLayer from 'ol/layer/Tile.js';
+  import OSM from 'ol/source/OSM.js';
+  import VectorLayer from 'ol/layer/Vector.js';
+  import VectorSource from 'ol/source/Vector.js';
+  import Feature from 'ol/Feature.js';
+  import Point from 'ol/geom/Point.js';
+  import LineString from 'ol/geom/LineString.js';
+  import {fromLonLat, toLonLat} from 'ol/proj.js';
+  import Style from 'ol/style/Style.js';
+  import Circle from 'ol/style/Circle.js';
+  import Fill from 'ol/style/Fill.js';
+  import Stroke from 'ol/style/Stroke.js';
+  import Text from 'ol/style/Text.js';
+  import Overlay from 'ol/Overlay.js';
+  import { isEmpty } from 'ol/extent.js';
+
+  const map = new Map({
     layers: [
-      new ol.layer.Tile({
-        source: new ol.source.OSM(),
+      new TileLayer({
+        source: new OSM(),
       }),
     ],
     target: 'map',
-    view: new ol.View({
-      center: ol.proj.fromLonLat([0, 0]),
+    view: new View({
+      center: fromLonLat([0, 0]),
       zoom: 2,
     }),
   });
 
-  var senderStyle = new ol.style.Style({
-    image: new ol.style.Circle({
+  var senderStyle = new Style({
+    image: new Circle({
       radius: 8,
-      fill: new ol.style.Fill({
+      fill: new Fill({
         color: '#FF4444'
       }),
-      stroke: new ol.style.Stroke({
+      stroke: new Stroke({
         color: 'white',
         width: 2
       })
     })
   });
 
-  var receiverStyle = new ol.style.Style({
-    image: new ol.style.Circle({
+  var receiverStyle = new Style({
+    image: new Circle({
       radius: 6,
-      fill: new ol.style.Fill({
+      fill: new Fill({
         color: '#4444FF'
       }),
-      stroke: new ol.style.Stroke({
+      stroke: new Stroke({
         color: 'white',
         width: 2
       })
@@ -110,8 +139,8 @@
   // Add sender using sender_position
   {% set from_id_hex = utils.convert_node_id_from_int_to_hex(message.from_id) %}
   {% if sender_position and sender_position.longitude_i is not none and sender_position.latitude_i is not none %}
-    senderFeature = new ol.Feature({
-        geometry: new ol.geom.Point(ol.proj.fromLonLat([
+    senderFeature = new Feature({
+        geometry: new Point(fromLonLat([
             {{ sender_position.longitude_i / 10000000 }},
             {{ sender_position.latitude_i / 10000000 }}
         ])),
@@ -145,7 +174,7 @@
         var lat = {{ receiver_pos.latitude_i / 10000000 }};
         console.log(`   Coords: lon=${lon}, lat=${lat}`);
 
-        var pointGeom = new ol.geom.Point(ol.proj.fromLonLat([lon, lat]));
+        var pointGeom = new Point(fromLonLat([lon, lat]));
         console.log("   Created ol.geom.Point");
 
         {% set rid_hex = utils.convert_node_id_from_int_to_hex(receiver_id) %}
@@ -163,7 +192,7 @@
         };
         console.log("   Created nodeData object:", nodeData);
 
-        var receiver = new ol.Feature({
+        var receiver = new Feature({
             geometry: pointGeom,
             node: nodeData
         });
@@ -178,7 +207,7 @@
         // Line and Label creation (can add logs here too if needed)
         var senderCoords = senderFeature.getGeometry().getCoordinates(); // Get projected coords
         // Transform sender's projected coords back to LonLat for fromCoord
-        var fromCoordLonLat = ol.proj.transform(senderCoords, 'EPSG:3857', 'EPSG:4326');
+        var fromCoordLonLat = toLonLat(senderCoords);
         var fromCoord = fromCoordLonLat; // Use LonLat for distance calculation
 
         var toCoord = [lon, lat];
@@ -186,11 +215,11 @@
         var hops = nodeData.hops; // Use hops from nodeData
 
         var points = [fromCoord, toCoord];
-        for (var i = 0; i < points.length; i++) { points[i] = ol.proj.transform(points[i], 'EPSG:4326', 'EPSG:3857'); }
-        var line = new ol.Feature({ geometry: new ol.geom.LineString(points) });
+        for (var i = 0; i < points.length; i++) { points[i] = fromLonLat(points[i]); }
+        var line = new Feature({ geometry: new LineString(points) });
 
-        var lineStyle = new ol.style.Style({
-          stroke: new ol.style.Stroke({
+        var lineStyle = new Style({
+          stroke: new Stroke({
             color: {% if details and details.hop_start is not none and details.hop_limit is not none and (details.hop_start - details.hop_limit) > 0 %}'#6666FF'{% else %}'#FF6666'{% endif %}, // <-- Added comma here
             width: 2
           })
@@ -207,8 +236,8 @@
           (points[0][1] + points[1][1]) / 2
         ];
         
-        var label = new ol.Feature({
-          geometry: new ol.geom.Point(midPoint)
+        var label = new Feature({
+          geometry: new Point(midPoint)
         });
         
         var labelText = distance + ' km';
@@ -216,20 +245,20 @@
           labelText += '\n' + hops + ' hop' + (hops > 1 ? 's' : '');
         }
         
-        label.setStyle(new ol.style.Style({
-            text: new ol.style.Text({
+        label.setStyle(new Style({
+            text: new Text({
                 text: labelText,
                 font: '12px Arial',
-                fill: new ol.style.Fill({ color: '#000000' }),
-                stroke: new ol.style.Stroke({
+                fill: new Fill({ color: '#000000' }),
+                stroke: new Stroke({
                 color: '#ffffff',
                 width: 3
                 }),
                 padding: [3, 5, 3, 5],  // More balanced padding
-                backgroundFill: new ol.style.Fill({
+                backgroundFill: new Fill({
                 color: 'rgba(255, 255, 255, 0.85)'
                 }),
-                backgroundStroke: new ol.style.Stroke({
+                backgroundStroke: new Stroke({
                 color: 'rgba(0, 0, 0, 0.4)',
                 width: 1,
                 lineCap: 'round',
@@ -262,32 +291,25 @@
 
   console.log("Finished processing features. Total points:", features.length, "Total lines:", lines.length, "Total labels:", labels.length);
 
-  // Combine features
-  const allFeatures = features.concat(lines).concat(labels);
-  console.log("Combined all features. Total count:", allFeatures.length);
+  // --- Refactored: Separate features by type ---
+  const lineFeatures = lines;
+  const nodeFeatures = features;
+  const labelFeatures = labels;
 
-  // Create empty source first
-  const vectorSource = new ol.source.Vector();
-  console.log("Created empty vector source.");
+  // Create sources
+  const lineSource = new VectorSource({ features: lineFeatures });
+  const nodeSource = new VectorSource({ features: nodeFeatures });
+  const labelSource = new VectorSource({ features: labelFeatures });
 
-  // Add features explicitly AFTER loops finish
-  if (allFeatures.length > 0) {
-    vectorSource.addFeatures(allFeatures);
-    console.log(`Added ${allFeatures.length} features to vector source. Source now has ${vectorSource.getFeatures().length} features.`);
-  } else {
-    console.warn("No features were created to add to the source.");
-  }
+  // Create layers
+  const lineLayer = new VectorLayer({ source: lineSource });
+  const nodeLayer = new VectorLayer({ source: nodeSource });
+  const labelLayer = new VectorLayer({ source: labelSource });
 
-  // Create layer with the source
-  const vectorLayer = new ol.layer.Vector({
-    source: vectorSource,
-    // Declutter labels slightly
-    declutter: true
-  });
-  console.log("Created vector layer.");
-
-  map.addLayer(vectorLayer);
-  console.log("Added vector layer to map.");
+  // Add to map in order: lines, nodes, labels
+  map.addLayer(lineLayer);
+  map.addLayer(nodeLayer);
+  map.addLayer(labelLayer);
 
   // --- Debugging Map View ---
   var view = map.getView();
@@ -295,11 +317,11 @@
 
   if (features.length > 0) {
     console.log("Attempting to fit map view based on point features...");
-    const pointSourceForExtent = new ol.source.Vector({ features: features });
+    const pointSourceForExtent = new VectorSource({ features: features });
     var extent = pointSourceForExtent.getExtent();
     console.log("Calculated extent from points:", extent);
 
-    if (!ol.extent.isEmpty(extent) && isFinite(extent[0]) && isFinite(extent[1]) && isFinite(extent[2]) && isFinite(extent[3]) && extent[0] <= extent[2] && extent[1] <= extent[3])
+    if (!isEmpty(extent) && isFinite(extent[0]) && isFinite(extent[1]) && isFinite(extent[2]) && isFinite(extent[3]) && extent[0] <= extent[2] && extent[1] <= extent[3])
     {
         console.log("Extent is valid. Fitting view...");
         console.log("View state BEFORE fit:", JSON.stringify(view.getProperties()));
@@ -307,7 +329,7 @@
             padding: [100, 100, 100, 100],
             minResolution: view.getResolutionForZoom(19), // Use maxZoom resolution
             maxZoom: 19,
-            duration: 500
+            duration: 0
         });
         console.log("Fit view called.");
         // Log state immediately after fit call (may not reflect final state yet)
@@ -332,7 +354,7 @@
       console.log(`Map has ${mapLayers.length} layers.`);
       if (mapLayers.length > 1) {
         const potentialVectorLayer = mapLayers[1];
-        if (potentialVectorLayer instanceof ol.layer.Vector) {
+        if (potentialVectorLayer instanceof VectorLayer) {
           const source = potentialVectorLayer.getSource();
           const layerFeatures = source.getFeatures();
           console.log(`Vector layer found. Contains ${layerFeatures.length} features.`);
@@ -358,7 +380,7 @@
   var content = document.createElement('div');
   container.appendChild(content);
   
-  var overlay = new ol.Overlay({
+  var overlay = new Overlay({
     element: container,
     autoPan: true,
     autoPanAnimation: {

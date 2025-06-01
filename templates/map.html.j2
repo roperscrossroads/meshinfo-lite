@@ -3,8 +3,19 @@
 
 {% block title %}Map | MeshInfo{% endblock %}
 {% block head %}
-  <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.css" rel="stylesheet">
+  <script type="importmap">
+    {
+      "imports": {
+        "ol/": "https://cdn.jsdelivr.net/npm/ol@10.5.0/",
+        "rbush": "https://cdn.jsdelivr.net/npm/rbush@3.0.1/index.js",
+        "quickselect": "https://cdn.jsdelivr.net/npm/quickselect@3.0.0/index.min.js",
+        "color-space/": "https://cdn.jsdelivr.net/npm/color-space@2.3.2/",
+        "color-rgba": "https://cdn.jsdelivr.net/npm/color-rgba@3.0.0/index.min.js",
+        "color-parse": "https://cdn.jsdelivr.net/npm/color-parse@2.0.2/index.min.js"
+      }
+    }
+  </script>
+  <link href="https://cdn.jsdelivr.net/npm/ol@10.5.0/ol.css" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -132,6 +143,24 @@
   </div>
 
   <script type="module">
+    import Map from 'ol/Map.js';
+    import View from 'ol/View.js';
+    import TileLayer from 'ol/layer/Tile.js';
+    import OSM from 'ol/source/OSM.js';
+    import VectorLayer from 'ol/layer/Vector.js';
+    import VectorSource from 'ol/source/Vector.js';
+    import Feature from 'ol/Feature.js';
+    import Point from 'ol/geom/Point.js';
+    import LineString from 'ol/geom/LineString.js';
+    import {fromLonLat} from 'ol/proj.js';
+    import Style from 'ol/style/Style.js';
+    import Circle from 'ol/style/Circle.js';
+    import Fill from 'ol/style/Fill.js';
+    import Stroke from 'ol/style/Stroke.js';
+    import Overlay from 'ol/Overlay.js';
+    import Select from 'ol/interaction/Select.js';
+    import {click} from 'ol/events/condition.js';
+
     // Add settings toggle functionality
     const settingsToggle = document.getElementById('settingsToggle');
     const settingsPanel = document.getElementById('settings');
@@ -230,26 +259,26 @@
       server_zoom = 9.5;
     {% endif %}
 
-    const map = new ol.Map({
-      layers: [
-        new ol.layer.Tile({
-          source: new ol.source.OSM(),
-        }),
-      ],
+    const map = new Map({
       target: 'map',
-      view: new ol.View({
-        center: ol.proj.fromLonLat([server_position.longitude, server_position.latitude]),
-        zoom: server_zoom,
-      }),
+      layers: [
+        new TileLayer({
+          source: new OSM()
+        })
+      ],
+      view: new View({
+        center: fromLonLat([server_position.longitude, server_position.latitude]),
+        zoom: server_zoom
+      })
     });
 
-    var defaultStyle = new ol.style.Style({
-      image: new ol.style.Circle({
+    const defaultStyle = new Style({
+      image: new Circle({
         radius: 6,
-        fill: new ol.style.Fill({
+        fill: new Fill({
           color: 'rgba(0, 0, 240, 1)'
         }),
-        stroke: new ol.style.Stroke({
+        stroke: new Stroke({
           color: 'white',
           width: 2
         })
@@ -257,13 +286,13 @@
       zIndex: 0
     });
 
-    var offlineStyle = new ol.style.Style({
-      image: new ol.style.Circle({
+    const offlineStyle = new Style({
+      image: new Circle({
         radius: 6,
-        fill: new ol.style.Fill({
+        fill: new Fill({
           color: 'rgba(0, 0, 0, 0.50)'
         }),
-        stroke: new ol.style.Stroke({
+        stroke: new Stroke({
           color: 'white',
           width: 2
         })
@@ -271,13 +300,13 @@
       zIndex: 1
     });
 
-    var onlineStyle = new ol.style.Style({
-      image: new ol.style.Circle({
+    const onlineStyle = new Style({
+      image: new Circle({
         radius: 6,
-        fill: new ol.style.Fill({
+        fill: new Fill({
           color: 'rgba(50, 240, 50, 1)'
         }),
-        stroke: new ol.style.Stroke({
+        stroke: new Stroke({
           color: 'white',
           width: 2
         })
@@ -338,8 +367,8 @@
           offsetCoords[1] += 0.0001;
         }
         
-        var feature = new ol.Feature({
-          geometry: new ol.geom.Point(ol.proj.fromLonLat(offsetCoords)),
+        const feature = new Feature({
+          geometry: new Point(fromLonLat(offsetCoords)),
           node: node,
         });
 
@@ -372,13 +401,13 @@
             const lastUplink = node.ts_uplink;
             if (now - lastUplink <= disconnectedAge) {
               // Node has active MQTT uplink - show as blue
-              style = new ol.style.Style({
-                image: new ol.style.Circle({
+              style = new Style({
+                image: new Circle({
                   radius: 6,
-                  fill: new ol.style.Fill({
+                  fill: new Fill({
                     color: 'rgba(33, 150, 243, 1)' // Bright blue for active MQTT
                   }),
-                  stroke: new ol.style.Stroke({
+                  stroke: new Stroke({
                     color: 'white',
                     width: 2
                   })
@@ -413,13 +442,13 @@
             // Only apply channel-specific styling if node matches the selected channel
             if (node.channel === channelId) {
               const hasActiveUplink = node.ts_uplink !== null && (now - node.ts_uplink) <= parseInt(settings.nodesDisconnectedAge);
-              style = new ol.style.Style({
-                image: new ol.style.Circle({
+              style = new Style({
+                image: new Circle({
                   radius: 6,
-                  fill: new ol.style.Fill({
+                  fill: new Fill({
                     color: getChannelColor(channelId)
                   }),
-                  stroke: new ol.style.Stroke({
+                  stroke: new Stroke({
                     color: hasActiveUplink ? 'rgba(33, 150, 243, 1)' : 'white',
                     width: hasActiveUplink ? 3 : 2
                   })
@@ -439,15 +468,14 @@
       }
     });
 
-    const layer = new ol.layer.Vector({
+    const layer = new VectorLayer({
+      source: new VectorSource({
+        features: features
+      }),
       style: function(feature) {
-        // If the feature's style is null, return null (truly hide it)
-        // Otherwise return the feature's style
         return feature.getStyle() || null;
       },
-      source: new ol.source.Vector({
-        features: features
-      })
+      zIndex: 2
     });
     map.addLayer(layer);
 
@@ -492,17 +520,6 @@
         let visible = true;
         let style = null;  // Start with no style
 
-        // Debug logging
-        console.log('Filtering node:', {
-          id: node.id,
-          channel: node.channel,
-          selectedChannel: settings.channelFilter,
-          ts_seen: node.ts_seen,
-          age: now - node.ts_seen,
-          maxAge: settings.nodesMaxAge,
-          initialVisible: visible
-        });
-
         // Apply channel filter FIRST
         if (settings.channelFilter !== 'all') {
           const channelId = parseInt(settings.channelFilter);
@@ -510,11 +527,6 @@
           
           if (nodeChannel !== channelId) {
             visible = false;
-            console.log('Node filtered out by channel:', {
-              id: node.id,
-              nodeChannel: nodeChannel,
-              selectedChannel: channelId
-            });
           }
         }
 
@@ -523,11 +535,6 @@
           const maxAge = parseInt(settings.nodesMaxAge);
           if (now - node.ts_seen > maxAge) {
             visible = false;
-            console.log('Node filtered out by max age:', {
-              id: node.id,
-              age: now - node.ts_seen,
-              maxAge: maxAge
-            });
           }
         }
 
@@ -539,13 +546,13 @@
             const lastUplink = node.ts_uplink;
             if (now - lastUplink <= disconnectedAge) {
               // Node has active MQTT uplink - show as blue
-              style = new ol.style.Style({
-                image: new ol.style.Circle({
+              style = new Style({
+                image: new Circle({
                   radius: 6,
-                  fill: new ol.style.Fill({
+                  fill: new Fill({
                     color: 'rgba(33, 150, 243, 1)' // Bright blue for active MQTT
                   }),
-                  stroke: new ol.style.Stroke({
+                  stroke: new Stroke({
                     color: 'white',
                     width: 2
                   })
@@ -580,13 +587,13 @@
             // Only apply channel-specific styling if node matches the selected channel
             if (node.channel === channelId) {
               const hasActiveUplink = node.ts_uplink !== null && (now - node.ts_uplink) <= parseInt(settings.nodesDisconnectedAge);
-              style = new ol.style.Style({
-                image: new ol.style.Circle({
+              style = new Style({
+                image: new Circle({
                   radius: 6,
-                  fill: new ol.style.Fill({
+                  fill: new Fill({
                     color: getChannelColor(channelId)
                   }),
-                  stroke: new ol.style.Stroke({
+                  stroke: new Stroke({
                     color: hasActiveUplink ? 'rgba(33, 150, 243, 1)' : 'white',
                     width: hasActiveUplink ? 3 : 2
                   })
@@ -611,8 +618,8 @@
           const geometry = feature.getGeometry();
           const coordinates = geometry.getCoordinates();
           const distance = calculateDistance(
-            ol.proj.transform(coordinates[0], 'EPSG:3857', 'EPSG:4326'),
-            ol.proj.transform(coordinates[1], 'EPSG:3857', 'EPSG:4326')
+            coordinates[0],
+            coordinates[1]
           ) * 1000; // Convert km to meters
           
           feature.setStyle(distance <= maxDistance ? feature.get('originalStyle') : null);
@@ -642,7 +649,7 @@
     var nodeSubtitle = document.getElementById('details-subtitle');
     var nodeContent = document.getElementById('details-content');
 
-    var overlay = new ol.Overlay({
+    const overlay = new Overlay({
       element: container,
       autoPan: true,
       autoPanAnimation: {
@@ -651,20 +658,21 @@
     });
     map.addOverlay(overlay);
 
-    var selectedStyle = new ol.style.Style({
-      image: new ol.style.Circle({
+    const selectedStyle = new Style({
+      image: new Circle({
         radius: 6,
-        fill: new ol.style.Fill({
+        fill: new Fill({
           color: 'rgba(0, 0, 240, 1)'
         }),
-        stroke: new ol.style.Stroke({
+        stroke: new Stroke({
           color: 'orange',
           width: 2
         })
       })
     });
-    var select = new ol.interaction.Select({
-      condition: ol.events.condition.click,
+
+    const select = new Select({
+      condition: click,
       style: selectedStyle
     });
     map.addInteraction(select);
@@ -700,6 +708,11 @@
       nodeSubtitle.innerHTML = '';
       nodeContent.innerHTML = '';
 
+      // Hide settings panel when clicking on the map
+      settingsPanelVisible = false;
+      settingsPanel.style.display = 'none';
+      localStorage.setItem('settingsPanelVisible', settingsPanelVisible);
+
       if (map.hasFeatureAtPixel(event.pixel)) {
         var feature = map.forEachFeatureAtPixel(event.pixel, function(feature) {
           return feature;
@@ -710,6 +723,62 @@
           var node = properties.node;
           var address = await reverseGeocode(node.position[0], node.position[1]);
           var display_name = [address.address.town, address.address.city, address.address.county, address.address.state, address.address.country].filter(Boolean).join(', ');
+
+          // Get all connected node IDs
+          const connectedNodeIds = new Set();
+          if (node.neighbors) {
+            node.neighbors.forEach(neighbor => connectedNodeIds.add(neighbor.id));
+          }
+          if (node.zero_hop_data) {
+            node.zero_hop_data.heard.forEach(heard => connectedNodeIds.add(heard.node_id));
+            node.zero_hop_data.heard_by.forEach(heard => connectedNodeIds.add(heard.node_id));
+          }
+
+          // Update z-index of all nodes
+          const features = layer.getSource().getFeatures();
+          features.forEach(function(f) {
+            const n = f.getProperties().node;
+            const currentStyle = f.getStyle();
+            if (!currentStyle) return; // Skip if no style
+
+            const currentImage = currentStyle.getImage();
+            if (!currentImage) return; // Skip if no image
+
+            const currentFill = currentImage.getFill();
+            const currentStroke = currentImage.getStroke();
+            
+            if (n.id === node.id || connectedNodeIds.has(n.id)) {
+              // Clicked node and connected nodes get highest z-index
+              f.setStyle(new Style({
+                image: new Circle({
+                  radius: 6,
+                  fill: new Fill({
+                    color: currentFill ? currentFill.getColor() : 'rgba(0, 0, 240, 1)'
+                  }),
+                  stroke: new Stroke({
+                    color: currentStroke ? currentStroke.getColor() : 'white',
+                    width: currentStroke ? currentStroke.getWidth() : 2
+                  })
+                }),
+                zIndex: 10  // Higher z-index for connected nodes
+              }));
+            } else {
+              // Other nodes get lower z-index
+              f.setStyle(new Style({
+                image: new Circle({
+                  radius: 6,
+                  fill: new Fill({
+                    color: currentFill ? currentFill.getColor() : 'rgba(0, 0, 240, 1)'
+                  }),
+                  stroke: new Stroke({
+                    color: currentStroke ? currentStroke.getColor() : 'white',
+                    width: currentStroke ? currentStroke.getWidth() : 2
+                  })
+                }),
+                zIndex: 1  // Lower z-index for unconnected nodes
+              }));
+            }
+          });
 
           // Show and populate the node info panel
           $('#details').show();
@@ -820,24 +889,23 @@
               var nnode = nodes[neighbor.id];
               if (!nnode || !nnode.position) return;
               
-              var points = [node.position, nnode.position];
-              for (var i = 0; i < points.length; i++) {
-                points[i] = ol.proj.transform(points[i], 'EPSG:4326', 'EPSG:3857');
-              }
-
-              var featureLine = new ol.Feature({
-                geometry: new ol.geom.LineString(points)
+              const featureLine = new Feature({
+                geometry: new LineString([
+                  fromLonLat(node.position),
+                  fromLonLat(nnode.position)
+                ])
               });
 
-              var vectorLine = new ol.source.Vector({});
+              const vectorLine = new VectorSource({});
               vectorLine.addFeature(featureLine);
 
-              var lineStyle = new ol.style.Style({
-                fill: new ol.style.Fill({ color: '#66FF66', weight: 8 }),
-                stroke: new ol.style.Stroke({ color: '#66FF66', width: 4 })
+              const lineStyle = new Style({
+                fill: new Fill({ color: '#66FF66', weight: 8 }),
+                stroke: new Stroke({ color: '#66FF66', width: 4 }),
+                zIndex: 5  // Middle z-index for lines
               });
 
-              var vectorLineLayer = new ol.layer.Vector({
+              const vectorLineLayer = new VectorLayer({
                 source: vectorLine,
                 style: lineStyle
               });
@@ -853,26 +921,25 @@
               var nnode = nodes[heard.node_id];
               if (!nnode || !nnode.position) return;
               
-              var points = [node.position, nnode.position];
-              for (var i = 0; i < points.length; i++) {
-                points[i] = ol.proj.transform(points[i], 'EPSG:4326', 'EPSG:3857');
-              }
-
-              var featureLine = new ol.Feature({
-                geometry: new ol.geom.LineString(points)
+              const featureLine = new Feature({
+                geometry: new LineString([
+                  fromLonLat(node.position),
+                  fromLonLat(nnode.position)
+                ])
               });
 
-              var vectorLine = new ol.source.Vector({});
+              const vectorLine = new VectorSource({});
               vectorLine.addFeature(featureLine);
 
               // Use purple if there's a bi-directional connection
               var isBidirectional = node.zero_hop_data.heard_by.some(h => h.node_id === heard.node_id);
-              var lineStyle = new ol.style.Style({
-                fill: new ol.style.Fill({ color: isBidirectional ? '#FF66FF' : '#66FF66', weight: 8 }),
-                stroke: new ol.style.Stroke({ color: isBidirectional ? '#FF66FF' : '#66FF66', width: 4 })
+              const lineStyle = new Style({
+                fill: new Fill({ color: isBidirectional ? '#FF66FF' : '#66FF66', weight: 8 }),
+                stroke: new Stroke({ color: isBidirectional ? '#FF66FF' : '#66FF66', width: 4 }),
+                zIndex: 5  // Middle z-index for lines
               });
 
-              var vectorLineLayer = new ol.layer.Vector({
+              const vectorLineLayer = new VectorLayer({
                 source: vectorLine,
                 style: lineStyle
               });
@@ -888,24 +955,23 @@
               // Skip if we already drew a line for this connection
               if (node.zero_hop_data.heard.some(h => h.node_id === heard.node_id)) return;
               
-              var points = [node.position, nnode.position];
-              for (var i = 0; i < points.length; i++) {
-                points[i] = ol.proj.transform(points[i], 'EPSG:4326', 'EPSG:3857');
-              }
-
-              var featureLine = new ol.Feature({
-                geometry: new ol.geom.LineString(points)
+              const featureLine = new Feature({
+                geometry: new LineString([
+                  fromLonLat(node.position),
+                  fromLonLat(nnode.position)
+                ])
               });
 
-              var vectorLine = new ol.source.Vector({});
+              const vectorLine = new VectorSource({});
               vectorLine.addFeature(featureLine);
 
-              var lineStyle = new ol.style.Style({
-                fill: new ol.style.Fill({ color: '#6666FF', weight: 8 }),
-                stroke: new ol.style.Stroke({ color: '#6666FF', width: 4 })
+              const lineStyle = new Style({
+                fill: new Fill({ color: '#6666FF', weight: 8 }),
+                stroke: new Stroke({ color: '#6666FF', width: 4 }),
+                zIndex: 5  // Middle z-index for lines
               });
 
-              var vectorLineLayer = new ol.layer.Vector({
+              const vectorLineLayer = new VectorLayer({
                 source: vectorLine,
                 style: lineStyle
               });
@@ -979,4 +1045,4 @@
       content: "x";
     }
   </style>
-{% endblock %}
+{% endblock %} 

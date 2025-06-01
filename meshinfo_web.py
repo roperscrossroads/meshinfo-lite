@@ -644,7 +644,6 @@ def map():
         Channel=meshtastic_support.Channel  # Add Channel enum to template context
     )
 
-
 @app.route('/neighbors.html')
 def neighbors():
     view_type = request.args.get('view', 'neighbor_info') # Default to neighbor_info

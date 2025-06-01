@@ -2,8 +2,19 @@
 
 {% block title %}{{ node.short_name }} | Node | MeshInfo{% endblock %}
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.js"></script>
-<link href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.min.css" rel="stylesheet">
+<script type="importmap">
+  {
+    "imports": {
+      "ol/": "https://cdn.jsdelivr.net/npm/ol@10.5.0/",
+      "rbush": "https://cdn.jsdelivr.net/npm/rbush@3.0.1/index.js",
+      "quickselect": "https://cdn.jsdelivr.net/npm/quickselect@3.0.0/index.min.js",
+      "color-space/": "https://cdn.jsdelivr.net/npm/color-space@2.3.2/",
+      "color-rgba": "https://cdn.jsdelivr.net/npm/color-rgba@3.0.0/index.min.js",
+      "color-parse": "https://cdn.jsdelivr.net/npm/color-parse@2.0.2/index.min.js"
+    }
+  }
+</script>
+<link href="https://cdn.jsdelivr.net/npm/ol@10.5.0/ol.css" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -474,131 +485,136 @@
   {% endif %}
 </div>
 <script type="module">
-  var defaultStyle = new ol.style.Style({
-    image: new ol.style.Circle({
-      radius: 6,
-      fill: new ol.style.Fill({
-        color: 'rgba(0, 0, 240, 1)'
-      }),
-      stroke: new ol.style.Stroke({
-        color: 'white',
-        width: 2
-      })
-    })
-  });
+import Map from 'ol/Map.js';
+import View from 'ol/View.js';
+import TileLayer from 'ol/layer/Tile.js';
+import OSM from 'ol/source/OSM.js';
+import VectorLayer from 'ol/layer/Vector.js';
+import VectorSource from 'ol/source/Vector.js';
+import Feature from 'ol/Feature.js';
+import Point from 'ol/geom/Point.js';
+import LineString from 'ol/geom/LineString.js';
+import {fromLonLat} from 'ol/proj.js';
+import Style from 'ol/style/Style.js';
+import Circle from 'ol/style/Circle.js';
+import Fill from 'ol/style/Fill.js';
+import Stroke from 'ol/style/Stroke.js';
 
-  var offlineStyle = new ol.style.Style({
-    image: new ol.style.Circle({
-      radius: 6,
-      fill: new ol.style.Fill({
-        color: 'rgba(0, 0, 0, 0.50)'
-      }),
-      stroke: new ol.style.Stroke({
-        color: 'white',
-        width: 2
-      })
-    })
-  });
-
-  var onlineStyle = new ol.style.Style({
-    image: new ol.style.Circle({
-      radius: 6,
-      fill: new ol.style.Fill({
-        color: 'rgba(50, 240, 50, 1)'
-      }),
-      stroke: new ol.style.Stroke({
-        color: 'white',
-        width: 2
-      })
-    })
-  });
-
-  var node = {
-    id: '{{ node.id }}',
-    short_name: '{{ node.short_name }}',
-    long_name: '{{ node.long_name | e }}',
-    last_seen: '{{ node.last_seen }}',
-    position: {
-      latitude: 38.575764,
-      longitude: -121.478851
-    },
-    active: {{ node.active | tojson }},
-    };
-  
-  const coordinates = {{ node_route|tojson|safe }};
-
-
-  // Convert coordinates to OpenLayers format
-  const route = new ol.geom.LineString(coordinates.map(coord => ol.proj.fromLonLat(coord)));
-
-  // Create a feature for the route
-  const routeFeature = new ol.Feature({
-      geometry: route
-  });
-
-  // Style the route line
-  routeFeature.setStyle(new ol.style.Style({
-      stroke: new ol.style.Stroke({
-          color: 'cyan',
-          width: 2
-      })
-  }));
-
-  // Create a vector source and layer
-  const vectorSource = new ol.source.Vector({
-      features: [routeFeature]
-  });
-
-  const vectorLayer = new ol.layer.Vector({
-      source: vectorSource
-  });
-
-
-  {% if node.position and node.position.longitude_i and node.position.latitude_i %}
-  node.position.latitude = {{ node.position.latitude_i / 1e7 }};
-  node.position.longitude = {{ node.position.longitude_i / 1e7 }};
-  {% endif %}
-
-  {% if node.position and node.position.altitude %}
-  node.position.altitude = {{ node.position.altitude }};
-  {% endif %}
-
-  {% if node.position and node.position.latitude_i and node.position.longitude_i %}
-  const map = new ol.Map({
-    layers: [
-      new ol.layer.Tile({
-        source: new ol.source.OSM(),
-      }),
-    ],
-    target: 'map',
-    view: new ol.View({
-      center: ol.proj.fromLonLat([node.position.longitude, node.position.latitude]),
-      zoom: 12,
+var defaultStyle = new Style({
+  image: new Circle({
+    radius: 6,
+    fill: new Fill({
+      color: 'rgba(0, 0, 240, 1)'
     }),
-  });
-
-  var features = [];
-  var feature = new ol.Feature({
-    geometry: new ol.geom.Point(ol.proj.fromLonLat([node.position.longitude, node.position.latitude])),
-    node: node,
-  });
-  if (node.active) {
-    feature.setStyle(onlineStyle);
-  } else {
-    feature.setStyle(offlineStyle);
-  }
-  features.push(feature);
-
-  const layer = new ol.layer.Vector({
-    style: defaultStyle,
-    source: new ol.source.Vector({
-      features: features
+    stroke: new Stroke({
+      color: 'white',
+      width: 2
     })
-  });
-  map.addLayer(layer);
-  map.addLayer(vectorLayer);
-  {% endif %}
+  })
+});
 
+var offlineStyle = new Style({
+  image: new Circle({
+    radius: 6,
+    fill: new Fill({
+      color: 'rgba(0, 0, 0, 0.50)'
+    }),
+    stroke: new Stroke({
+      color: 'white',
+      width: 2
+    })
+  })
+});
+
+var onlineStyle = new Style({
+  image: new Circle({
+    radius: 6,
+    fill: new Fill({
+      color: 'rgba(50, 240, 50, 1)'
+    }),
+    stroke: new Stroke({
+      color: 'white',
+      width: 2
+    })
+  })
+});
+
+var node = {
+  id: '{{ node.id }}',
+  short_name: '{{ node.short_name }}',
+  long_name: '{{ node.long_name | e }}',
+  last_seen: '{{ node.last_seen }}',
+  position: {
+    latitude: 38.575764,
+    longitude: -121.478851
+  },
+  active: {{ node.active | tojson }},
+};
+
+const coordinates = {{ node_route|tojson|safe }};
+
+// Convert coordinates to OpenLayers format
+const route = new LineString(coordinates.map(coord => fromLonLat(coord)));
+
+// Create a feature for the route
+const routeFeature = new Feature({
+    geometry: route
+});
+
+// Style the route line
+routeFeature.setStyle(new Style({
+    stroke: new Stroke({
+        color: 'cyan',
+        width: 2
+    })
+}));
+
+// Create a feature for the node
+{% if node.position and node.position.longitude_i and node.position.latitude_i %}
+node.position.latitude = {{ node.position.latitude_i / 1e7 }};
+node.position.longitude = {{ node.position.longitude_i / 1e7 }};
+{% endif %}
+
+{% if node.position and node.position.altitude %}
+node.position.altitude = {{ node.position.altitude }};
+{% endif %}
+
+var features = [];
+{% if node.position and node.position.longitude_i and node.position.latitude_i %}
+var feature = new Feature({
+  geometry: new Point(fromLonLat([node.position.longitude, node.position.latitude])),
+  node: node,
+});
+if (node.active) {
+  feature.setStyle(onlineStyle);
+} else {
+  feature.setStyle(offlineStyle);
+}
+features.push(feature);
+features.push(routeFeature);
+
+const vectorSource = new VectorSource({
+  features: features
+});
+
+const vectorLayer = new VectorLayer({
+  source: vectorSource
+});
+
+const map = new Map({
+  layers: [
+    new TileLayer({
+      source: new OSM(),
+    }),
+    vectorLayer
+  ],
+  target: 'map',
+  view: new View({
+    center: fromLonLat([node.position.longitude, node.position.latitude]),
+    zoom: 12,
+  }),
+});
+{% endif %}
 </script>
 <style>
   #map {
