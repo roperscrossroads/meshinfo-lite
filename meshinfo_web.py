@@ -81,7 +81,6 @@ def safe_hw_model(value):
 config = configparser.ConfigParser()
 config.read("config.ini")
 
-
 # --- Add these MeshData Management functions ---
 def get_meshdata():
     """Opens a new MeshData connection if there is none yet for the
