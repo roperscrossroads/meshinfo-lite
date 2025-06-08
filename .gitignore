@@ -19,6 +19,7 @@ postgres/data/*
 config.json
 docker-compose.yml
 spa
+venv/
 
 .pnp.*
 .yarn/*
