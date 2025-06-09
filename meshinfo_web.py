@@ -16,6 +16,8 @@ from paste.translogger import TransLogger
 import configparser
 import logging
 import os
+import psutil
+import gc
 
 import utils
 import meshtastic_support
@@ -46,22 +48,35 @@ if not os.path.exists(cache_dir):
 # Configure Flask-Caching
 cache_config = {
     'CACHE_TYPE': 'SimpleCache', # Default fallback
-    'CACHE_DEFAULT_TIMEOUT': 300 # Default timeout 5 minutes
+    'CACHE_DEFAULT_TIMEOUT': 300, # Default timeout 5 minutes
+    'CACHE_THRESHOLD': 500  # Limit cache size
 }
 if cache_dir:
     cache_config = {
         'CACHE_TYPE': 'FileSystemCache',
         'CACHE_DIR': cache_dir,
-        'CACHE_THRESHOLD': 1000,  # Max number of items (optional, adjust as needed)
-        'CACHE_DEFAULT_TIMEOUT': 60 # Keep your 60 second default timeout
+        'CACHE_THRESHOLD': 500,  # Reduced from 1000 to 500
+        'CACHE_DEFAULT_TIMEOUT': 60, # Keep your 60 second default timeout
+        'CACHE_OPTIONS': {
+            'mode': 0o600  # Secure file permissions
+        }
     }
     logging.info(f"Using FileSystemCache with directory: {cache_dir}")
 else:
     logging.warning("Falling back to SimpleCache due to directory creation issues.")
 
-
 # Initialize Cache with the chosen config
-cache = Cache(app, config=cache_config)
+try:
+    cache = Cache(app, config=cache_config)
+except Exception as e:
+    logging.error(f"Failed to initialize cache: {e}")
+    # Fallback to SimpleCache if FileSystemCache fails
+    cache_config = {
+        'CACHE_TYPE': 'SimpleCache',
+        'CACHE_DEFAULT_TIMEOUT': 300,
+        'CACHE_THRESHOLD': 500
+    }
+    cache = Cache(app, config=cache_config)
 
 # Make globals available to templates
 app.jinja_env.globals.update(convert_to_local=convert_to_local)
@@ -101,9 +116,54 @@ def teardown_meshdata(exception):
     """Closes the MeshData connection at the end of the request."""
     md = g.pop('meshdata', None)
     if md is not None:
-        # MeshData.__del__ should handle closing connection if implemented
-        # Add explicit md.db.close() if __del__ doesn't or isn't reliable
+        try:
+            if md.db and md.db.is_connected():
+                md.db.close()
+                logging.debug("Database connection closed in teardown.")
+        except Exception as e:
+            logging.error(f"Error closing database connection in teardown: {e}")
         logging.debug("MeshData instance removed from request context.")
+
+# Add request lifecycle hooks for better memory management
+@app.before_request
+def before_request():
+    """Log memory usage before each request."""
+    log_memory_usage()
+
+@app.after_request
+def after_request(response):
+    """Log memory usage after each request and force garbage collection."""
+    log_memory_usage()
+    gc.collect()  # Force garbage collection
+    return response
+
+def log_memory_usage():
+    """Log current memory usage of the process."""
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    logging.info(f"Memory usage: {memory_info.rss / 1024 / 1024:.2f} MB (RSS)")
+
+# Add periodic cache cleanup
+def cleanup_cache():
+    try:
+        cache.clear()
+        gc.collect()  # Force garbage collection after cache clear
+        logging.info("Cache cleared and garbage collection performed")
+        log_memory_usage()
+    except Exception as e:
+        logging.error(f"Error during cache cleanup: {e}")
+
+# Schedule cache cleanup every hour
+import threading
+import time
+
+def schedule_cache_cleanup():
+    while True:
+        time.sleep(3600)  # Sleep for 1 hour
+        cleanup_cache()
+
+cleanup_thread = threading.Thread(target=schedule_cache_cleanup, daemon=True)
+cleanup_thread.start()
 # --- End MeshData Management functions ---
 
 
