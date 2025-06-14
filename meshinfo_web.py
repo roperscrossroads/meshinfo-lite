@@ -8,7 +8,8 @@ from flask import (
     url_for,
     abort,
     g,
-    jsonify
+    jsonify,
+    current_app
 )
 from flask_caching import Cache
 from waitress import serve
@@ -18,6 +19,11 @@ import logging
 import os
 import psutil
 import gc
+import weakref
+import threading
+import time
+import re
+import sys
 
 import utils
 import meshtastic_support
@@ -29,8 +35,6 @@ from meshinfo_los_profile import LOSProfile
 from timezone_utils import convert_to_local, format_timestamp, time_ago
 import json
 import datetime
-import time
-import re
 
 app = Flask(__name__)
 
@@ -58,7 +62,9 @@ if cache_dir:
         'CACHE_THRESHOLD': 500,  # Reduced from 1000 to 500
         'CACHE_DEFAULT_TIMEOUT': 60, # Keep your 60 second default timeout
         'CACHE_OPTIONS': {
-            'mode': 0o600  # Secure file permissions
+            'mode': 0o600,  # Secure file permissions
+            'lock_timeout': 10,  # Add timeout for cache locks
+            'lock_suffix': '.lock'  # Add lock file suffix
         }
     }
     logging.info(f"Using FileSystemCache with directory: {cache_dir}")
@@ -96,18 +102,49 @@ def safe_hw_model(value):
 config = configparser.ConfigParser()
 config.read("config.ini")
 
-# --- Add these MeshData Management functions ---
+# Add request context tracking
+active_requests = set()
+request_lock = threading.Lock()
+
+# Add memory usage tracking
+last_memory_log = 0
+last_memory_usage = 0
+MEMORY_LOG_INTERVAL = 300  # Log every 5 minutes
+MEMORY_CHANGE_THRESHOLD = 50 * 1024 * 1024  # 50MB change threshold
+
+@app.before_request
+def before_request():
+    """Track request start and log memory usage."""
+    with request_lock:
+        active_requests.add(id(request))
+    log_memory_usage()  # This will now only log if conditions are met
+
+@app.after_request
+def after_request(response):
+    """Clean up request context and force garbage collection."""
+    with request_lock:
+        active_requests.discard(id(request))
+    
+    # Only force memory logging on error responses or if conditions are met
+    if response.status_code >= 400:
+        log_memory_usage(force=True)
+    else:
+        log_memory_usage()
+    
+    return response
+
+# Modify get_meshdata to use connection pooling
 def get_meshdata():
     """Opens a new MeshData connection if there is none yet for the
     current application context.
     """
     if 'meshdata' not in g:
         try:
+            # Create new MeshData instance without connection pooling
             g.meshdata = MeshData()
             logging.debug("MeshData instance created for request context.")
         except Exception as e:
             logging.error(f"Failed to create MeshData for request context: {e}")
-            # Indicate failure
             g.meshdata = None
     return g.meshdata
 
@@ -117,55 +154,156 @@ def teardown_meshdata(exception):
     md = g.pop('meshdata', None)
     if md is not None:
         try:
-            if md.db and md.db.is_connected():
+            if hasattr(md, 'db') and md.db and md.db.is_connected():
                 md.db.close()
                 logging.debug("Database connection closed in teardown.")
         except Exception as e:
-            logging.error(f"Error closing database connection in teardown: {e}")
+            logging.error(f"Error handling database connection in teardown: {e}")
         logging.debug("MeshData instance removed from request context.")
 
-# Add request lifecycle hooks for better memory management
-@app.before_request
-def before_request():
-    """Log memory usage before each request."""
-    log_memory_usage()
+def log_memory_usage(force=False):
+    """Log current memory usage with detailed information."""
+    global last_memory_log, last_memory_usage
+    current_time = time.time()
+    current_usage = psutil.Process().memory_info().rss
+    
+    # Only log if:
+    # 1. It's been more than MEMORY_LOG_INTERVAL seconds since last log
+    # 2. Memory usage has changed by more than threshold
+    # 3. Force flag is set
+    if not force and (current_time - last_memory_log < MEMORY_LOG_INTERVAL and 
+                     abs(current_usage - last_memory_usage) < MEMORY_CHANGE_THRESHOLD):
+        return
+        
+    try:
+        import gc
+        gc.collect()  # Force garbage collection before measuring
+        
+        process = psutil.Process()
+        mem_info = process.memory_info()
+        
+        # Get memory usage by object type
+        objects_by_type = {}
+        for obj in gc.get_objects():
+            obj_type = type(obj).__name__
+            if obj_type not in objects_by_type:
+                objects_by_type[obj_type] = 0
+            try:
+                objects_by_type[obj_type] += sys.getsizeof(obj)
+            except:
+                pass
+        
+        # Sort object types by memory usage
+        sorted_objects = sorted(objects_by_type.items(), key=lambda x: x[1], reverse=True)
+        
+        logging.info(f"Memory Usage: {mem_info.rss / 1024 / 1024:.1f} MB")
+        logging.info(f"Active Requests: {len(active_requests)}")
+        logging.info("Top 5 memory-consuming object types:")
+        for obj_type, size in sorted_objects[:5]:
+            logging.info(f"  {obj_type}: {size / 1024 / 1024:.1f} MB")
+            
+        last_memory_log = current_time
+        last_memory_usage = current_usage
+        
+    except Exception as e:
+        logging.error(f"Error in detailed memory logging: {e}")
 
-@app.after_request
-def after_request(response):
-    """Log memory usage after each request and force garbage collection."""
-    log_memory_usage()
-    gc.collect()  # Force garbage collection
-    return response
+# Add connection monitoring
+def monitor_connections():
+    """Monitor database connections."""
+    while True:
+        try:
+            with app.app_context():
+                if hasattr(g, 'meshdata') and g.meshdata and hasattr(g.meshdata, 'db'):
+                    if g.meshdata.db.is_connected():
+                        logging.info("Database connection is active")
+                    else:
+                        logging.warning("Database connection is not active")
+        except Exception as e:
+            logging.error(f"Error monitoring database connection: {e}")
+        time.sleep(60)  # Check every minute
 
-def log_memory_usage():
-    """Log current memory usage of the process."""
-    process = psutil.Process(os.getpid())
-    memory_info = process.memory_info()
-    logging.info(f"Memory usage: {memory_info.rss / 1024 / 1024:.2f} MB (RSS)")
+# Add cache lock monitoring
+def monitor_cache_locks():
+    """Monitor cache lock files."""
+    while True:
+        try:
+            if cache_dir:
+                lock_files = [f for f in os.listdir(cache_dir) if f.endswith('.lock')]
+                if lock_files:
+                    logging.warning(f"Found {len(lock_files)} stale cache locks")
+                    # Clean up stale locks
+                    for lock_file in lock_files:
+                        try:
+                            os.remove(os.path.join(cache_dir, lock_file))
+                        except Exception as e:
+                            logging.error(f"Error removing stale lock {lock_file}: {e}")
+        except Exception as e:
+            logging.error(f"Error monitoring cache locks: {e}")
+        time.sleep(300)  # Check every 5 minutes
 
-# Add periodic cache cleanup
+# Add memory watchdog
+def memory_watchdog():
+    """Monitor memory usage and take action if it gets too high."""
+    while True:
+        try:
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+            memory_mb = memory_info.rss / 1024 / 1024
+            
+            if memory_mb > 2000:  # If over 2GB
+                logging.warning(f"Memory usage high ({memory_mb:.2f} MB), clearing cache and forcing GC")
+                with app.app_context():
+                    cache.clear()
+                gc.collect()
+                
+            if memory_mb > 4000:  # If over 4GB
+                logging.error(f"Memory usage critical ({memory_mb:.2f} MB), logging detailed memory info")
+                log_memory_usage()
+                
+        except Exception as e:
+            logging.error(f"Error in memory watchdog: {e}")
+            
+        time.sleep(60)  # Check every minute
+
+# Start monitoring threads
+connection_monitor_thread = threading.Thread(target=monitor_connections, daemon=True)
+connection_monitor_thread.start()
+
+lock_monitor_thread = threading.Thread(target=monitor_cache_locks, daemon=True)
+lock_monitor_thread.start()
+
+watchdog_thread = threading.Thread(target=memory_watchdog, daemon=True)
+watchdog_thread.start()
+
+# Schedule cache cleanup
 def cleanup_cache():
     try:
-        cache.clear()
-        gc.collect()  # Force garbage collection after cache clear
-        logging.info("Cache cleared and garbage collection performed")
+        logging.info("Starting cache cleanup")
+        logging.info("Memory usage before cache cleanup:")
         log_memory_usage()
+        
+        # Clear the cache
+        with app.app_context():
+            cache.clear()
+        
+        # Force garbage collection
+        gc.collect()
+        
+        logging.info("Memory usage after cache cleanup:")
+        log_memory_usage()
+        
     except Exception as e:
         logging.error(f"Error during cache cleanup: {e}")
 
-# Schedule cache cleanup every hour
-import threading
-import time
-
+# Schedule more frequent cache cleanup
 def schedule_cache_cleanup():
     while True:
-        time.sleep(3600)  # Sleep for 1 hour
+        time.sleep(900)  # Run every 15 minutes instead of hourly
         cleanup_cache()
 
 cleanup_thread = threading.Thread(target=schedule_cache_cleanup, daemon=True)
 cleanup_thread.start()
-# --- End MeshData Management functions ---
-
 
 def auth():
     jwt = request.cookies.get('jwt')
