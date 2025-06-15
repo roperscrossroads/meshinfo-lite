@@ -8,6 +8,7 @@ import logging
 import re
 from timezone_utils import time_ago  # Import time_ago from timezone_utils
 from meshtastic_support import get_hardware_model_name  # Import get_hardware_model_name from meshtastic_support
+import types
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -580,7 +581,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                     record[key] = value
             
             # Process telemetry data
-            telemetry = type('Telemetry', (), {})()  # Create an object with attributes
+            telemetry = types.SimpleNamespace()  # Use SimpleNamespace for attribute access
             telemetry_fields = [
                 'air_util_tx', 'battery_level', 'channel_utilization',
                 'uptime_seconds', 'voltage', 'temperature', 'relative_humidity',
@@ -597,7 +598,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             record['telemetry'] = telemetry
             
             # Process position data
-            position = type('Position', (), {})()  # Create an object with attributes
+            position = types.SimpleNamespace()  # Use SimpleNamespace for attribute access
             position_fields = [
                 'altitude', 'ground_speed', 'ground_track', 'latitude_i',
                 'longitude_i', 'location_source', 'precision_bits',

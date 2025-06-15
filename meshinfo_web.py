@@ -51,22 +51,15 @@ if not os.path.exists(cache_dir):
 
 # Configure Flask-Caching
 cache_config = {
-    'CACHE_TYPE': 'SimpleCache', # Default fallback
-    'CACHE_DEFAULT_TIMEOUT': 300, # Default timeout 5 minutes
-    'CACHE_THRESHOLD': 500  # Limit cache size
+    'CACHE_TYPE': 'FileSystemCache',
+    'CACHE_DIR': cache_dir,
+    'CACHE_THRESHOLD': 500,
+    'CACHE_DEFAULT_TIMEOUT': 60,
+    'CACHE_OPTIONS': {
+        'mode': 0o600
+    }
 }
 if cache_dir:
-    cache_config = {
-        'CACHE_TYPE': 'FileSystemCache',
-        'CACHE_DIR': cache_dir,
-        'CACHE_THRESHOLD': 500,  # Reduced from 1000 to 500
-        'CACHE_DEFAULT_TIMEOUT': 60, # Keep your 60 second default timeout
-        'CACHE_OPTIONS': {
-            'mode': 0o600,  # Secure file permissions
-            'lock_timeout': 10,  # Add timeout for cache locks
-            'lock_suffix': '.lock'  # Add lock file suffix
-        }
-    }
     logging.info(f"Using FileSystemCache with directory: {cache_dir}")
 else:
     logging.warning("Falling back to SimpleCache due to directory creation issues.")
