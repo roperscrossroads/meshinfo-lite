@@ -6,6 +6,7 @@ from .add_channel_info import migrate as add_channel_info
 from .add_message_reception import migrate as add_message_reception
 from .add_traceroute_id import migrate as add_traceroute_id
 from .add_positionlog_log_id import migrate as add_positionlog_log_id
+from .add_message_map_indexes import migrate as add_message_map_indexes
 
 # List of migrations to run in order
 MIGRATIONS = [
@@ -16,4 +17,5 @@ MIGRATIONS = [
     add_message_reception,
     add_traceroute_id,
     add_positionlog_log_id,
+    add_message_map_indexes,
 ]

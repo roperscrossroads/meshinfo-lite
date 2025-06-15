@@ -217,49 +217,37 @@ ORDER BY ts_created"""
         cur.close()
         return position
 
-    def get_position_at_time(self, node_id, target_timestamp):
-        """
-        Retrieves the position record from positionlog for a node
-        that is closest to, but not after, the target timestamp.
-        """
+    def get_position_at_time(self, node_id, target_timestamp, cur=None):
+        """Retrieves the position record from positionlog for a node that is closest to, but not after, the target timestamp."""
         position = {}
-        # Convert Unix timestamp to datetime object for SQL comparison
-        target_dt = datetime.datetime.fromtimestamp(target_timestamp)
-
-        # Query positionlog for the latest entry at or before the target time
-        sql = """SELECT latitude_i, longitude_i, ts_created
-                 FROM positionlog
-                 WHERE id = %s
-                 ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
-                 LIMIT 1"""
-        params = (node_id, target_dt)
-        cur = None
-        try:
+        close_cur = False
+        if cur is None:
             cur = self.db.cursor(dictionary=True)
+            close_cur = True
+        try:
+            target_dt = datetime.datetime.fromtimestamp(target_timestamp)
+            sql = """SELECT latitude_i, longitude_i, ts_created
+                     FROM positionlog
+                     WHERE id = %s
+                     ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
+                     LIMIT 1"""
+            params = (node_id, target_dt)
             cur.execute(sql, params)
             row = cur.fetchone()
             if row:
                 position = {
                     "latitude_i": row["latitude_i"],
                     "longitude_i": row["longitude_i"],
-                    "position_time": row["ts_created"].timestamp() # Still store the actual timestamp of the position found
+                    "position_time": row["ts_created"].timestamp() if isinstance(row["ts_created"], datetime.datetime) else row["ts_created"],
+                    "latitude": row["latitude_i"] / 10000000 if row["latitude_i"] else None,
+                    "longitude": row["longitude_i"] / 10000000 if row["longitude_i"] else None
                 }
-                # Add derived lat/lon
-                if position["latitude_i"]:
-                    position["latitude"] = position["latitude_i"] / 10000000
-                else:
-                    position["latitude"] = None
-                if position["longitude_i"]:
-                    position["longitude"] = position["longitude_i"] / 10000000
-                else:
-                    position["longitude"] = None
-
         except mysql.connector.Error as err:
             logging.error(f"Database error fetching nearest position for {node_id}: {err}")
         except Exception as e:
             logging.error(f"Error fetching nearest position for {node_id}: {e}")
         finally:
-            if cur:
+            if close_cur:
                 cur.close()
         return position
 
@@ -2209,6 +2197,87 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             telemetry.append(record)
         cur.close()
         return telemetry
+
+    def get_positions_at_time(self, node_ids, timestamp):
+        """Get the closest position for each node using a single reused cursor."""
+        if not node_ids:
+            return {}
+        results = {}
+        cur = self.db.cursor(dictionary=True)
+        for node_id in node_ids:
+            pos = self.get_position_at_time(node_id, timestamp, cur)
+            if pos:
+                results[node_id] = pos
+        cur.close()
+        return results
+
+    def get_position_at_time(self, node_id, target_timestamp, cur=None):
+        """Retrieves the position record from positionlog for a node that is closest to, but not after, the target timestamp."""
+        position = {}
+        close_cur = False
+        if cur is None:
+            cur = self.db.cursor(dictionary=True)
+            close_cur = True
+        try:
+            target_dt = datetime.datetime.fromtimestamp(target_timestamp)
+            sql = """SELECT latitude_i, longitude_i, ts_created
+                     FROM positionlog
+                     WHERE id = %s
+                     ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
+                     LIMIT 1"""
+            params = (node_id, target_dt)
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            if row:
+                position = {
+                    "latitude_i": row["latitude_i"],
+                    "longitude_i": row["longitude_i"],
+                    "position_time": row["ts_created"].timestamp() if isinstance(row["ts_created"], datetime.datetime) else row["ts_created"],
+                    "latitude": row["latitude_i"] / 10000000 if row["latitude_i"] else None,
+                    "longitude": row["longitude_i"] / 10000000 if row["longitude_i"] else None
+                }
+        except mysql.connector.Error as err:
+            logging.error(f"Database error fetching nearest position for {node_id}: {err}")
+        except Exception as e:
+            logging.error(f"Error fetching nearest position for {node_id}: {e}")
+        finally:
+            if close_cur:
+                cur.close()
+        return position
+
+    def get_reception_details_batch(self, message_id, receiver_ids):
+        """Get reception details for multiple receivers in one query"""
+        if not receiver_ids:
+            return {}
+        
+        # Handle single receiver case
+        if len(receiver_ids) == 1:
+            query = """
+                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start
+                FROM message_reception
+                WHERE message_id = %s AND received_by_id = %s
+            """
+            params = (message_id, receiver_ids[0])
+        else:
+            placeholders = ','.join(['%s'] * len(receiver_ids))
+            query = f"""
+                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start
+                FROM message_reception
+                WHERE message_id = %s AND received_by_id IN ({placeholders})
+            """
+            params = (message_id, *receiver_ids)
+
+        cur = None
+        try:
+            cur = self.db.cursor(dictionary=True)
+            cur.execute(query, params)
+            return {row['received_by_id']: row for row in cur.fetchall()}
+        except Exception as e:
+            logging.error(f"Error fetching reception details: {e}")
+            return {}
+        finally:
+            if cur:
+                cur.close()
 
 
 def create_database():

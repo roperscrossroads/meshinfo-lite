@@ -107,23 +107,17 @@ MEMORY_CHANGE_THRESHOLD = 50 * 1024 * 1024  # 50MB change threshold
 
 @app.before_request
 def before_request():
-    """Track request start and log memory usage."""
+    """Track request start."""
     with request_lock:
         active_requests.add(id(request))
-    log_memory_usage()  # This will now only log if conditions are met
+    # log_memory_usage()  # Removed per-request memory logging
 
 @app.after_request
 def after_request(response):
-    """Clean up request context and force garbage collection."""
+    """Clean up request context."""
     with request_lock:
         active_requests.discard(id(request))
-    
-    # Only force memory logging on error responses or if conditions are met
-    if response.status_code >= 400:
-        log_memory_usage(force=True)
-    else:
-        log_memory_usage()
-    
+    # log_memory_usage()  # Removed per-request memory logging
     return response
 
 # Modify get_meshdata to use connection pooling
@@ -439,18 +433,21 @@ def chat2():
     )
 
 @app.route('/message_map.html')
+@cache.cached(timeout=60, query_string=True)  # Cache for 60 seconds, vary by query string
 def message_map():
     message_id = request.args.get('id')
     if not message_id:
-        abort(404)
+        return redirect(url_for('chat'))
+        
+    meshdata = get_meshdata()
+    if not meshdata:
+        abort(503, description="Database connection unavailable")
 
-    md = get_meshdata() # Use application context
-    if not md: abort(503, description="Database connection unavailable")
-
-    nodes = md.get_nodes() # Still get latest node info for names etc.
-
+    # Get current node info for names
+    nodes = meshdata.get_nodes()
+    
     # Get message and basic reception data
-    cursor = md.db.cursor(dictionary=True)
+    cursor = meshdata.db.cursor(dictionary=True)
     cursor.execute("""
         SELECT t.*, GROUP_CONCAT(r.received_by_id) as receiver_ids
         FROM text t
@@ -463,90 +460,63 @@ def message_map():
     cursor.close()
 
     if not message_base:
-        abort(404)
+        return redirect(url_for('chat'))
 
-    # Get the precise message time (assuming ts_created is Unix timestamp)
-    message_time = message_base['ts_created'].timestamp() # Convert from DB datetime to Unix timestamp
+    # Get the precise message time
+    message_time = message_base['ts_created'].timestamp()
 
-    # Fetch historical position for the sender
-    sender_position = md.get_position_at_time(message_base['from_id'], message_time)
+    # Batch load all positions at once
+    receiver_ids_list = [int(r_id) for r_id in message_base['receiver_ids'].split(',')] if message_base['receiver_ids'] else []
+    node_ids = [message_base['from_id']] + receiver_ids_list
+    positions = meshdata.get_positions_at_time(node_ids, message_time)
 
-    # Fetch historical positions for receivers
-    receiver_positions = {}
-    receiver_details = {} # Store SNR etc. associated with the position
-    if message_base['receiver_ids']:
-        receiver_ids_list = [int(r_id) for r_id in message_base['receiver_ids'].split(',')]
+    # Fallback: If sender position is missing, fetch it directly
+    if message_base['from_id'] not in positions:
+        sender_fallback = meshdata.get_position_at_time(message_base['from_id'], message_time)
+        if sender_fallback:
+            positions[message_base['from_id']] = sender_fallback
 
-        # Fetch full reception details for these receivers for THIS message
-        # Need a separate query as GROUP_CONCAT loses details
-        query_placeholders = ', '.join(['%s'] * len(receiver_ids_list))
-        sql_reception = f"""
-            SELECT * FROM message_reception
-            WHERE message_id = %s AND received_by_id IN ({query_placeholders})
-        """
-        params_reception = [message_id] + receiver_ids_list
-        cursor = md.db.cursor(dictionary=True)
-        cursor.execute(sql_reception, params_reception)
-        receptions = cursor.fetchall()
-        cursor.close()
-
-        for reception in receptions: # Iterate through detailed reception info
-            receiver_id = reception['received_by_id']
-            logging.info(f"Attempting to find position for receiver: {receiver_id} at time {message_time}") # Log attempt
-            pos = md.get_position_at_time(receiver_id, message_time)
-            logging.info(f"Position found for receiver {receiver_id}: {pos}") # Log result
-            if pos: # Only store if position was actually found
-                receiver_positions[receiver_id] = pos
-                # Store details associated with this reception
-                receiver_details[receiver_id] = {
-                    'rx_snr': reception['rx_snr'],
-                    'rx_rssi': reception['rx_rssi'],
-                    'hop_start': reception['hop_start'],
-                    'hop_limit': reception['hop_limit'],
-                    'rx_time': reception['rx_time']
-                }
-            else:
-                logging.warning(f"No position found for receiver {receiver_id} near time {message_time}")
-
+    # Batch load all reception details
+    reception_details = meshdata.get_reception_details_batch(message_id, receiver_ids_list)
+    
+    # Ensure keys are int for lookups
+    receiver_positions = {int(k): v for k, v in positions.items() if k in receiver_ids_list}
+    receiver_details = {int(k): v for k, v in reception_details.items() if k in receiver_ids_list}
+    sender_position = positions.get(message_base['from_id'])
 
     # Prepare message object for template
     message = {
         'id': message_id,
         'from_id': message_base['from_id'],
         'text': message_base['text'],
-        'ts_created': message_time, # Pass Unix timestamp
-        # Pass receiver IDs and their corresponding details
-        'receiver_ids': receiver_ids_list if message_base['receiver_ids'] else []
+        'ts_created': message_time,
+        'receiver_ids': receiver_ids_list
     }
 
-
-    # Check if sender has position data before rendering map
-    if not sender_position:
-         # Decide how to handle - show map without sender? Show error?
-         # For now, let's allow rendering but template must handle missing sender pos
-         logging.warning(f"Sender position at time {message_time} not found for node {message['from_id']}")
-         # abort(404, description="Sender position data not available for message time")
-
-    # --- Add this logging ---
-    logging.debug(f"Data for message {message_id} map:")
-    logging.debug(f"  Sender Position: {sender_position}")
-    logging.debug(f"  Receiver Positions Dict: {receiver_positions}")
-    logging.debug(f"  Receiver Details Dict: {receiver_details}")
-    logging.debug(f"  Receiver IDs List: {message.get('receiver_ids', [])}")
-    # --- End logging ---
+    # Info-level logging for debugging
+    logging.info(f"[message_map] Receiver IDs: {receiver_ids_list}")
+    logging.info(f"[message_map] Receiver Positions Keys: {list(receiver_positions.keys())}")
+    logging.info(f"[message_map] Receiver Details Keys: {list(receiver_details.keys())}")
+    logging.info(f"[message_map] Sender Position: {sender_position}")
+    logging.info(f"[message_map] All Positions: {positions}")
+    logging.info(f"[message_map] All Reception Details: {reception_details}")
+    if receiver_ids_list:
+        rid = receiver_ids_list[0]
+        logging.info(f"[message_map] Sample Position for {rid}: {receiver_positions.get(rid)}")
+        logging.info(f"[message_map] Sample Details for {rid}: {receiver_details.get(rid)}")
 
     return render_template(
         "message_map.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes, # Pass current node info for names
+        nodes=nodes,  # Pass current node info for names
         message=message,
-        sender_position=sender_position, # Pass historical sender position
-        receiver_positions=receiver_positions, # Pass dict of historical receiver positions
-        receiver_details=receiver_details, # Pass dict of receiver SNR/hop details
+        sender_position=sender_position,
+        receiver_positions=receiver_positions,
+        receiver_details=receiver_details,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now() # Page generation time
+        timestamp=datetime.datetime.now()  # Page generation time
     )
 
 @app.route('/traceroute_map.html')
@@ -964,7 +934,7 @@ def monday():
         abort(503, description="Database connection unavailable")
     nodes = md.get_nodes()
     chat = md.get_chat()
-    monday = MeshtasticMonday(chat).get_data()
+    monday = MeshtasticMonday(chat["items"]).get_data()
     return render_template(
         "monday.html.j2",
         auth=auth(),
