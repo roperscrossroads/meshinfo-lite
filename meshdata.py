@@ -486,17 +486,20 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         latest_channel AS (
             SELECT id as channel_id, channel, ts_created
             FROM (
-                SELECT id, channel, ts_created
-                FROM telemetry
-                WHERE channel IS NOT NULL
-                UNION ALL
-                SELECT from_id as id, channel, ts_created
-                FROM text
-                WHERE channel IS NOT NULL
-            ) combined
-            WHERE id IS NOT NULL
-            GROUP BY id
-            ORDER BY ts_created DESC
+                SELECT id, channel, ts_created,
+                       ROW_NUMBER() OVER (PARTITION BY id ORDER BY ts_created DESC) as rn
+                FROM (
+                    SELECT id, channel, ts_created
+                    FROM telemetry
+                    WHERE channel IS NOT NULL
+                    UNION ALL
+                    SELECT from_id as id, channel, ts_created
+                    FROM text
+                    WHERE channel IS NOT NULL
+                ) combined
+                WHERE id IS NOT NULL
+            ) ranked
+            WHERE rn = 1
         )
         SELECT 
             n.id,
