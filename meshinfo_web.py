@@ -24,6 +24,8 @@ import threading
 import time
 import re
 import sys
+import math
+from shapely.geometry import MultiPoint
 
 import utils
 import meshtastic_support
@@ -484,6 +486,30 @@ def message_map():
     receiver_details = {int(k): v for k, v in reception_details.items() if k in receiver_ids_list}
     sender_position = positions.get(message_base['from_id'])
 
+    # Calculate convex hull area in square km
+    points = []
+    if sender_position and sender_position['latitude'] is not None and sender_position['longitude'] is not None:
+        points.append((sender_position['longitude'], sender_position['latitude']))
+    for pos in receiver_positions.values():
+        if pos and pos['latitude'] is not None and pos['longitude'] is not None:
+            points.append((pos['longitude'], pos['latitude']))
+    convex_hull_area_km2 = None
+    if len(points) >= 3:
+        # Use shapely to calculate convex hull area
+        hull = MultiPoint(points).convex_hull
+        # Approximate area on Earth's surface (convert degrees to meters using haversine formula)
+        # We'll use a simple equirectangular projection for small areas
+        # Reference point for projection
+        avg_lat = sum(lat for lon, lat in points) / len(points)
+        earth_radius = 6371.0088  # km
+        def latlon_to_xy(lon, lat):
+            x = math.radians(lon) * earth_radius * math.cos(math.radians(avg_lat))
+            y = math.radians(lat) * earth_radius
+            return (x, y)
+        xy_points = [latlon_to_xy(lon, lat) for lon, lat in hull.exterior.coords]
+        hull_xy = MultiPoint(xy_points).convex_hull
+        convex_hull_area_km2 = hull_xy.area
+    
     # Prepare message object for template
     message = {
         'id': message_id,
@@ -514,6 +540,7 @@ def message_map():
         sender_position=sender_position,
         receiver_positions=receiver_positions,
         receiver_details=receiver_details,
+        convex_hull_area_km2=convex_hull_area_km2,
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now()  # Page generation time

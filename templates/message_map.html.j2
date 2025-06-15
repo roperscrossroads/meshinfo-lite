@@ -29,12 +29,20 @@
         <br>
         <strong>Sender Position Updated:</strong> {{ format_timestamp(sender_position.position_time) }}
         {% endif %}
+        {% if convex_hull_area_km2 is not none %}
+        <br>
+        <strong>Convex Hull Area:</strong> {{ '%.2f' % convex_hull_area_km2 }} km²
+        {% endif %}
       </p>
     </div>
   </div>
 
-  <div id="map" style="height: 70vh; width: 100%;"></div>
-  
+  <div id="map" style="height: 70vh; width: 100%; position: relative;"></div>
+  <!-- Convex Hull Toggle -->
+  <div style="margin: 12px 0 0 0; padding: 8px 12px; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); width: fit-content;">
+    <input type="checkbox" id="showConvexHull" />
+    <label for="showConvexHull">Show Convex Hull</label>
+  </div>
   <div id="legend" class="p-2 mt-3" style="background-color: #ffffff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.2);">
     <div>LEGEND</div>
     <div>
@@ -64,6 +72,7 @@
   import Text from 'ol/style/Text.js';
   import Overlay from 'ol/Overlay.js';
   import { isEmpty } from 'ol/extent.js';
+  import Polygon from 'ol/geom/Polygon.js';
 
   const map = new Map({
     layers: [
@@ -289,12 +298,14 @@
   const nodeSource = new VectorSource({ features: nodeFeatures });
   const labelSource = new VectorSource({ features: labelFeatures });
 
-  // Create layers
-  const lineLayer = new VectorLayer({ source: lineSource });
-  const nodeLayer = new VectorLayer({ source: nodeSource });
-  const labelLayer = new VectorLayer({ source: labelSource });
+  // Create layers with explicit zIndex (define first, before any function uses them)
+  let hullLayer = new VectorLayer({ source: new VectorSource(), zIndex: 1 });
+  const lineLayer = new VectorLayer({ source: lineSource, zIndex: 2 });
+  const nodeLayer = new VectorLayer({ source: nodeSource, zIndex: 3 });
+  const labelLayer = new VectorLayer({ source: labelSource, zIndex: 4 });
 
-  // Add to map in order: lines, nodes, labels
+  // Add to map in order: hull, lines, nodes, labels
+  map.addLayer(hullLayer);
   map.addLayer(lineLayer);
   map.addLayer(nodeLayer);
   map.addLayer(labelLayer);
@@ -432,6 +443,73 @@
         overlay.setPosition(undefined);
     }
     });
+
+  // --- Convex Hull Data from Backend ---
+  const convexHullArea = {{ convex_hull_area_km2 if convex_hull_area_km2 is not none else 'null' }};
+  const hullPoints = [];
+  {% if sender_position and sender_position.latitude is not none and sender_position.longitude is not none %}
+    hullPoints.push([{{ sender_position.longitude }}, {{ sender_position.latitude }}]);
+  {% endif %}
+  {% for pos in receiver_positions.values() %}
+    {% if pos and pos.latitude is not none and pos.longitude is not none %}
+      hullPoints.push([{{ pos.longitude }}, {{ pos.latitude }}]);
+    {% endif %}
+  {% endfor %}
+
+  let hullFeature = null;
+
+  function computeConvexHull(points) {
+    if (points.length < 3) return null;
+    // Andrew's monotone chain algorithm (2D convex hull)
+    points = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const lower = [];
+    for (let p of points) {
+      while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
+      lower.push(p);
+    }
+    const upper = [];
+    for (let i = points.length - 1; i >= 0; i--) {
+      let p = points[i];
+      while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
+      upper.push(p);
+    }
+    upper.pop(); lower.pop();
+    return lower.concat(upper);
+    function cross(o, a, b) {
+      return (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]);
+    }
+  }
+
+  function drawConvexHull() {
+    if (hullFeature) {
+      hullLayer.getSource().removeFeature(hullFeature);
+      hullFeature = null;
+    }
+    if (hullPoints.length < 3) return;
+    const hull = computeConvexHull(hullPoints);
+    if (!hull) return;
+    // Convert to map projection
+    const coords = hull.map(([lon, lat]) => fromLonLat([lon, lat]));
+    coords.push(coords[0]); // close the polygon
+    hullFeature = new Feature({ geometry: new Polygon([coords]) });
+    hullFeature.setStyle(new Style({
+      stroke: new Stroke({ color: '#00AA88', width: 3 }),
+      fill: new Fill({ color: 'rgba(0,170,136,0.1)' })
+    }));
+    hullLayer.getSource().addFeature(hullFeature);
+  }
+
+  document.getElementById('showConvexHull').addEventListener('change', function(e) {
+    if (e.target.checked) {
+      drawConvexHull();
+    } else if (hullFeature) {
+      hullLayer.getSource().removeFeature(hullFeature);
+      hullFeature = null;
+    }
+  });
+  // Optionally, you can auto-check if you want to show by default
+  // document.getElementById('showConvexHull').checked = true;
+  // drawConvexHull();
 </script>
 
 <style>
