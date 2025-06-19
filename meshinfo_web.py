@@ -55,10 +55,11 @@ if not os.path.exists(cache_dir):
 cache_config = {
     'CACHE_TYPE': 'FileSystemCache',
     'CACHE_DIR': cache_dir,
-    'CACHE_THRESHOLD': 500,
+    'CACHE_THRESHOLD': 100,  # Reduced from 500 to 100
     'CACHE_DEFAULT_TIMEOUT': 60,
     'CACHE_OPTIONS': {
-        'mode': 0o600
+        'mode': 0o600,
+        'max_size': 50 * 1024 * 1024  # 50MB max size per item
     }
 }
 if cache_dir:
@@ -75,9 +76,88 @@ except Exception as e:
     cache_config = {
         'CACHE_TYPE': 'SimpleCache',
         'CACHE_DEFAULT_TIMEOUT': 300,
-        'CACHE_THRESHOLD': 500
+        'CACHE_THRESHOLD': 100  # Reduced here too
     }
     cache = Cache(app, config=cache_config)
+
+# Cache monitoring functions
+def get_cache_size():
+    """Get total size of cache directory in bytes."""
+    if cache_dir:
+        try:
+            total_size = 0
+            for dirpath, dirnames, filenames in os.walk(cache_dir):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    total_size += os.path.getsize(fp)
+            return total_size
+        except Exception as e:
+            logging.error(f"Error getting cache size: {e}")
+    return 0
+
+def get_cache_entry_count():
+    """Get number of entries in cache directory."""
+    if cache_dir:
+        try:
+            return len([f for f in os.listdir(cache_dir) if not f.endswith('.lock')])
+        except Exception as e:
+            logging.error(f"Error getting cache entry count: {e}")
+    return 0
+
+def get_largest_cache_entries(limit=5):
+    """Get the largest cache entries with their sizes."""
+    if cache_dir:
+        try:
+            entries = []
+            for f in os.listdir(cache_dir):
+                if not f.endswith('.lock'):
+                    path = os.path.join(cache_dir, f)
+                    size = os.path.getsize(path)
+                    entries.append((f, size))
+            return sorted(entries, key=lambda x: x[1], reverse=True)[:limit]
+        except Exception as e:
+            logging.error(f"Error getting largest cache entries: {e}")
+    return []
+
+def log_cache_stats():
+    """Log detailed cache statistics."""
+    try:
+        total_size = get_cache_size()
+        entry_count = get_cache_entry_count()
+        largest_entries = get_largest_cache_entries()
+        
+        logging.info(f"Cache Statistics:")
+        logging.info(f"  Total Size: {total_size / 1024 / 1024:.2f} MB")
+        logging.info(f"  Entry Count: {entry_count}")
+        logging.info("  Largest Entries:")
+        for entry, size in largest_entries:
+            logging.info(f"    {entry}: {size / 1024 / 1024:.2f} MB")
+    except Exception as e:
+        logging.error(f"Error logging cache stats: {e}")
+
+# Modify cleanup_cache to include cache stats
+def cleanup_cache():
+    try:
+        logging.info("Starting cache cleanup")
+        logging.info("Memory usage before cache cleanup:")
+        log_memory_usage()
+        logging.info("Cache stats before cleanup:")
+        log_cache_stats()
+        
+        # Clear the cache
+        with app.app_context():
+            cache.clear()
+        
+        # Force garbage collection
+        gc.collect()
+        
+        logging.info("Memory usage after cache cleanup:")
+        log_memory_usage()
+        logging.info("Cache stats after cleanup:")
+        log_cache_stats()
+        
+    except Exception as e:
+        logging.error(f"Error during cache cleanup: {e}")
 
 # Make globals available to templates
 app.jinja_env.globals.update(convert_to_local=convert_to_local)
@@ -242,13 +322,19 @@ def memory_watchdog():
             
             if memory_mb > 2000:  # If over 2GB
                 logging.warning(f"Memory usage high ({memory_mb:.2f} MB), clearing cache and forcing GC")
+                logging.info("Cache stats before high memory cleanup:")
+                log_cache_stats()
                 with app.app_context():
                     cache.clear()
                 gc.collect()
+                logging.info("Cache stats after high memory cleanup:")
+                log_cache_stats()
                 
             if memory_mb > 4000:  # If over 4GB
                 logging.error(f"Memory usage critical ({memory_mb:.2f} MB), logging detailed memory info")
                 log_memory_usage()
+                logging.info("Cache stats at critical memory level:")
+                log_cache_stats()
                 
         except Exception as e:
             logging.error(f"Error in memory watchdog: {e}")
@@ -266,26 +352,6 @@ watchdog_thread = threading.Thread(target=memory_watchdog, daemon=True)
 watchdog_thread.start()
 
 # Schedule cache cleanup
-def cleanup_cache():
-    try:
-        logging.info("Starting cache cleanup")
-        logging.info("Memory usage before cache cleanup:")
-        log_memory_usage()
-        
-        # Clear the cache
-        with app.app_context():
-            cache.clear()
-        
-        # Force garbage collection
-        gc.collect()
-        
-        logging.info("Memory usage after cache cleanup:")
-        log_memory_usage()
-        
-    except Exception as e:
-        logging.error(f"Error during cache cleanup: {e}")
-
-# Schedule more frequent cache cleanup
 def schedule_cache_cleanup():
     while True:
         time.sleep(900)  # Run every 15 minutes instead of hourly
@@ -312,144 +378,45 @@ def not_found(e):
     ), 404
 
 
-# Serve static files from the root directory
-@app.route('/')
-@cache.cached(timeout=60)  # Cache for 60 seconds
-def serve_index(success_message=None, error_message=None):
+# Data caching functions
+def cache_key_prefix():
+    """Generate a cache key prefix based on current time bucket."""
+    # Round to nearest minute for 60-second cache
+    return datetime.datetime.now().replace(second=0, microsecond=0).timestamp()
+
+@cache.memoize(timeout=60)
+def get_cached_nodes():
+    """Cache the nodes data."""
     md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
-    return render_template(
-        "index.html.j2",
-        auth=auth(),
-        config=config,
-        nodes=nodes,
-        active_nodes=utils.active_nodes(nodes),
-        timestamp=datetime.datetime.now(),
-        success_message=success_message,
-        error_message=error_message
-    )
+    if not md:
+        return None
+    return md.get_nodes()
 
+@cache.memoize(timeout=60)
+def get_cached_active_nodes(nodes):
+    """Cache the active nodes calculation."""
+    return utils.active_nodes(nodes)
 
-@app.route('/nodes.html')
-@cache.cached(timeout=60)  # Cache for 60 seconds
-def nodes():
+@cache.memoize(timeout=60)
+def get_cached_latest_node():
+    """Cache the latest node data."""
     md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
-    logging.info(f"/nodes.html: Loaded {len(nodes)} nodes.") # Add this
-    latest = md.get_latest_node()
-    return render_template(
-        "nodes.html.j2",
-        auth=auth(),
-        config=config,
-        nodes=nodes,
-        show_inactive=False,  # Add this line
-        latest=latest,
-        hardware=meshtastic_support.HardwareModel,
-        meshtastic_support=meshtastic_support,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
-    )
+    if not md:
+        return None
+    return md.get_latest_node()
 
-@app.route('/allnodes.html')
-@cache.cached(timeout=60)  # Cache for 60 seconds
-def allnodes():
+@cache.memoize(timeout=60)
+def get_cached_message_map_data(message_id):
+    """Cache the message map data for a specific message."""
     md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
-    latest = md.get_latest_node()
-    return render_template(
-        "nodes.html.j2",  # Change to use nodes.html.j2
-        auth=auth(),
-        config=config,
-        nodes=nodes,
-        show_inactive=True,
-        latest=latest,
-        hardware=meshtastic_support.HardwareModel,
-        meshtastic_support=meshtastic_support,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
-    )
-
-
-@app.route('/chat-classic.html')
-def chat():
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    
-    md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
-    chat_data = md.get_chat(page=page, per_page=per_page)
-    
-    # start_item and end_item for pagination
-    chat_data['start_item'] = (page - 1) * per_page + 1 if chat_data['total'] > 0 else 0
-    chat_data['end_item'] = min(page * per_page, chat_data['total'])
-    
-    return render_template(
-        "chat.html.j2",
-        auth=auth(),
-        config=config,
-        nodes=nodes,
-        chat=chat_data["items"],
-        pagination=chat_data,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
-        debug=False,
-    )
-
-@app.route('/chat.html')
-def chat2():
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    
-    md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
-    chat_data = md.get_chat(page=page, per_page=per_page)
-    
-    chat_data['start_item'] = (page - 1) * per_page + 1 if chat_data['total'] > 0 else 0
-    chat_data['end_item'] = min(page * per_page, chat_data['total'])
-    
-    return render_template(
-        "chat2.html.j2",
-        auth=auth(),
-        config=config,
-        nodes=nodes,
-        chat=chat_data["items"],
-        pagination=chat_data,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
-        meshtastic_support=meshtastic_support,
-        debug=False,
-    )
-
-@app.route('/message_map.html')
-@cache.cached(timeout=60, query_string=True)  # Cache for 60 seconds, vary by query string
-def message_map():
-    message_id = request.args.get('id')
-    if not message_id:
-        return redirect(url_for('chat'))
+    if not md:
+        return None
         
-    meshdata = get_meshdata()
-    if not meshdata:
-        abort(503, description="Database connection unavailable")
-
     # Get current node info for names
-    nodes = meshdata.get_nodes()
+    nodes = md.get_nodes()
     
     # Get message and basic reception data
-    cursor = meshdata.db.cursor(dictionary=True)
+    cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
         SELECT t.*, GROUP_CONCAT(r.received_by_id) as receiver_ids
         FROM text t
@@ -462,7 +429,7 @@ def message_map():
     cursor.close()
 
     if not message_base:
-        return redirect(url_for('chat'))
+        return None
 
     # Get the precise message time
     message_time = message_base['ts_created'].timestamp()
@@ -470,16 +437,16 @@ def message_map():
     # Batch load all positions at once
     receiver_ids_list = [int(r_id) for r_id in message_base['receiver_ids'].split(',')] if message_base['receiver_ids'] else []
     node_ids = [message_base['from_id']] + receiver_ids_list
-    positions = meshdata.get_positions_at_time(node_ids, message_time)
+    positions = md.get_positions_at_time(node_ids, message_time)
 
     # Fallback: If sender position is missing, fetch it directly
     if message_base['from_id'] not in positions:
-        sender_fallback = meshdata.get_position_at_time(message_base['from_id'], message_time)
+        sender_fallback = md.get_position_at_time(message_base['from_id'], message_time)
         if sender_fallback:
             positions[message_base['from_id']] = sender_fallback
 
     # Batch load all reception details
-    reception_details = meshdata.get_reception_details_batch(message_id, receiver_ids_list)
+    reception_details = md.get_reception_details_batch(message_id, receiver_ids_list)
     
     # Ensure keys are int for lookups
     receiver_positions = {int(k): v for k, v in positions.items() if k in receiver_ids_list}
@@ -506,7 +473,12 @@ def message_map():
             x = math.radians(lon) * earth_radius * math.cos(math.radians(avg_lat))
             y = math.radians(lat) * earth_radius
             return (x, y)
-        xy_points = [latlon_to_xy(lon, lat) for lon, lat in hull.exterior.coords]
+        # Handle both LineString and Polygon cases
+        if hasattr(hull, 'exterior'):
+            coords = hull.exterior.coords
+        else:
+            coords = hull.coords
+        xy_points = [latlon_to_xy(lon, lat) for lon, lat in coords]
         hull_xy = MultiPoint(xy_points).convex_hull
         convex_hull_area_km2 = hull_xy.area
     
@@ -519,31 +491,39 @@ def message_map():
         'receiver_ids': receiver_ids_list
     }
 
-    # Info-level logging for debugging
-    logging.info(f"[message_map] Receiver IDs: {receiver_ids_list}")
-    logging.info(f"[message_map] Receiver Positions Keys: {list(receiver_positions.keys())}")
-    logging.info(f"[message_map] Receiver Details Keys: {list(receiver_details.keys())}")
-    logging.info(f"[message_map] Sender Position: {sender_position}")
-    logging.info(f"[message_map] All Positions: {positions}")
-    logging.info(f"[message_map] All Reception Details: {reception_details}")
-    if receiver_ids_list:
-        rid = receiver_ids_list[0]
-        logging.info(f"[message_map] Sample Position for {rid}: {receiver_positions.get(rid)}")
-        logging.info(f"[message_map] Sample Details for {rid}: {receiver_details.get(rid)}")
+    return {
+        'nodes': nodes,
+        'message': message,
+        'sender_position': sender_position,
+        'receiver_positions': receiver_positions,
+        'receiver_details': receiver_details,
+        'convex_hull_area_km2': convex_hull_area_km2
+    }
 
+@app.route('/message_map.html')
+def message_map():
+    message_id = request.args.get('id')
+    if not message_id:
+        return redirect(url_for('chat'))
+    
+    # Get cached data
+    data = get_cached_message_map_data(message_id)
+    if not data:
+        return redirect(url_for('chat'))
+    
     return render_template(
         "message_map.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes,  # Pass current node info for names
-        message=message,
-        sender_position=sender_position,
-        receiver_positions=receiver_positions,
-        receiver_details=receiver_details,
-        convex_hull_area_km2=convex_hull_area_km2,
+        nodes=data['nodes'],
+        message=data['message'],
+        sender_position=data['sender_position'],
+        receiver_positions=data['receiver_positions'],
+        receiver_details=data['receiver_details'],
+        convex_hull_area_km2=data['convex_hull_area_km2'],
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()  # Page generation time
+        timestamp=datetime.datetime.now()
     )
 
 @app.route('/traceroute_map.html')
@@ -646,108 +626,108 @@ def traceroute_map():
         timestamp=datetime.datetime.now()
     )
 
-@app.route('/graph.html')
-@cache.cached(timeout=60, query_string=True) # Cache based on query string (view type)
-def graph():
-    view_type = request.args.get('view', 'merged') # Default to merged view
+@cache.memoize(timeout=60)
+def get_cached_graph_data(view_type='merged', days=1, zero_hop_timeout=43200):
+    """Cache the graph data."""
     md = get_meshdata()
     if not md:
+        return None
+    return md.get_graph_data(view_type, days, zero_hop_timeout)
+
+@cache.memoize(timeout=60)
+def get_cached_neighbors_data(view_type='neighbor_info', days=1, zero_hop_timeout=43200):
+    """Cache the neighbors data."""
+    md = get_meshdata()
+    if not md:
+        return None
+    return md.get_neighbors_data(view_type, days, zero_hop_timeout)
+
+@app.route('/graph.html')
+def graph():
+    view_type = request.args.get('view_type', 'merged')
+    days = int(request.args.get('days', 1))
+    zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
+    
+    # Get cached data
+    data = get_cached_graph_data(view_type, days, zero_hop_timeout)
+    if not data:
         abort(503, description="Database connection unavailable")
-
-    # Get graph data using the new method
-    graph_data = md.get_graph_data(view_type=view_type)
-
-    # Log graph data size for debugging
-    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
-
+    
     return render_template(
         "graph.html.j2",
         auth=auth(),
         config=config,
-        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
-        graph=graph_data,
+        graph=data,
         view_type=view_type,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        days=days,
+        zero_hop_timeout=zero_hop_timeout,
+        timestamp=datetime.datetime.now()
     )
 
 @app.route('/graph2.html')
-@cache.cached(timeout=60, query_string=True)  # Cache based on query string (view type)
 def graph2():
-    view_type = request.args.get('view', 'merged')  # Default to merged view
-    md = get_meshdata()
-    if not md:
+    view_type = request.args.get('view_type', 'merged')
+    days = int(request.args.get('days', 1))
+    zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
+    
+    # Get cached data
+    data = get_cached_graph_data(view_type, days, zero_hop_timeout)
+    if not data:
         abort(503, description="Database connection unavailable")
-
-    # Get graph data using the new method
-    graph_data = md.get_graph_data(view_type=view_type)
-
-    # Log graph data size for debugging
-    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
-
+    
     return render_template(
         "graph2.html.j2",
         auth=auth(),
         config=config,
-        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
-        graph=graph_data,
+        graph=data,
         view_type=view_type,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        days=days,
+        zero_hop_timeout=zero_hop_timeout,
+        timestamp=datetime.datetime.now()
     )
 
 @app.route('/graph3.html')
-@cache.cached(timeout=60, query_string=True)  # Cache based on query string (view type)
 def graph3():
-    view_type = request.args.get('view', 'merged')  # Default to merged view
-    md = get_meshdata()
-    if not md:
+    view_type = request.args.get('view_type', 'merged')
+    days = int(request.args.get('days', 1))
+    zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
+    
+    # Get cached data
+    data = get_cached_graph_data(view_type, days, zero_hop_timeout)
+    if not data:
         abort(503, description="Database connection unavailable")
-
-    # Get graph data using the new method
-    graph_data = md.get_graph_data(view_type=view_type)
-
-    # Log graph data size for debugging
-    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
-
+    
     return render_template(
         "graph3.html.j2",
         auth=auth(),
         config=config,
-        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
-        graph=graph_data,
+        graph=data,
         view_type=view_type,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        days=days,
+        zero_hop_timeout=zero_hop_timeout,
+        timestamp=datetime.datetime.now()
     )
 
 @app.route('/graph4.html')
-@cache.cached(timeout=60, query_string=True)  # Cache based on query string (view type)
 def graph4():
-    view_type = request.args.get('view', 'merged')  # Default to merged view
-    md = get_meshdata()
-    if not md:
+    view_type = request.args.get('view_type', 'merged')
+    days = int(request.args.get('days', 1))
+    zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
+    
+    # Get cached data
+    data = get_cached_graph_data(view_type, days, zero_hop_timeout)
+    if not data:
         abort(503, description="Database connection unavailable")
-
-    # Get graph data using the new method
-    graph_data = md.get_graph_data(view_type=view_type)
-
-    # Log graph data size for debugging
-    logging.debug(f"Graph data for view '{view_type}': {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges.")
-
+    
     return render_template(
         "graph4.html.j2",
         auth=auth(),
         config=config,
-        nodes=md.get_nodes(),  # Pass full nodes list for lookups in template
-        graph=graph_data,
+        graph=data,
         view_type=view_type,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        days=days,
+        zero_hop_timeout=zero_hop_timeout,
+        timestamp=datetime.datetime.now()
     )
 
 @app.route('/map.html')
@@ -1724,6 +1704,142 @@ def api_telemetry(node_id):
     md = get_meshdata()
     telemetry = md.get_telemetry_for_node(node_id)
     return jsonify(telemetry)
+
+@cache.memoize(timeout=60)
+def get_cached_chat_data(page=1, per_page=50):
+    """Cache the chat data."""
+    md = get_meshdata()
+    if not md:
+        return None
+    chat_data = md.get_chat(page=page, per_page=per_page)
+    
+    # Add pagination info
+    chat_data['start_item'] = (page - 1) * per_page + 1 if chat_data['total'] > 0 else 0
+    chat_data['end_item'] = min(page * per_page, chat_data['total'])
+    
+    return chat_data
+
+@app.route('/chat-classic.html')
+def chat():
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    
+    # Get cached data
+    nodes = get_cached_nodes()
+    if not nodes:
+        abort(503, description="Database connection unavailable")
+        
+    chat_data = get_cached_chat_data(page, per_page)
+    if not chat_data:
+        abort(503, description="Database connection unavailable")
+    
+    return render_template(
+        "chat.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=nodes,
+        chat=chat_data["items"],
+        pagination=chat_data,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        debug=False,
+    )
+
+@app.route('/chat.html')
+def chat2():
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    
+    # Get cached data
+    nodes = get_cached_nodes()
+    if not nodes:
+        abort(503, description="Database connection unavailable")
+        
+    chat_data = get_cached_chat_data(page, per_page)
+    if not chat_data:
+        abort(503, description="Database connection unavailable")
+    
+    return render_template(
+        "chat2.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=nodes,
+        chat=chat_data["items"],
+        pagination=chat_data,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        meshtastic_support=meshtastic_support,
+        debug=False,
+    )
+
+@app.route('/')
+def serve_index(success_message=None, error_message=None):
+    # Get cached data
+    nodes = get_cached_nodes()
+    if not nodes:
+        abort(503, description="Database connection unavailable")
+    
+    active_nodes = get_cached_active_nodes(nodes)
+    
+    return render_template(
+        "index.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=nodes,
+        active_nodes=active_nodes,
+        timestamp=datetime.datetime.now(),
+        success_message=success_message,
+        error_message=error_message
+    )
+
+@app.route('/nodes.html')
+def nodes():
+    # Get cached data
+    nodes = get_cached_nodes()
+    if not nodes:
+        abort(503, description="Database connection unavailable")
+    
+    latest = get_cached_latest_node()
+    logging.info(f"/nodes.html: Loaded {len(nodes)} nodes.")
+    
+    return render_template(
+        "nodes.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=nodes,
+        show_inactive=False,
+        latest=latest,
+        hardware=meshtastic_support.HardwareModel,
+        meshtastic_support=meshtastic_support,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+    )
+
+@app.route('/allnodes.html')
+def allnodes():
+    # Get cached data
+    nodes = get_cached_nodes()
+    if not nodes:
+        abort(503, description="Database connection unavailable")
+    
+    latest = get_cached_latest_node()
+    
+    return render_template(
+        "nodes.html.j2",
+        auth=auth(),
+        config=config,
+        nodes=nodes,
+        show_inactive=True,
+        latest=latest,
+        hardware=meshtastic_support.HardwareModel,
+        meshtastic_support=meshtastic_support,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+    )
 
 def run():
     # Enable Waitress logging

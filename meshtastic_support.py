@@ -131,6 +131,7 @@ class Role(Enum):
     CLIENT_HIDDEN = 8
     LOST_AND_FOUND = 9
     ATAK_TRACKER = 10
+    ROUTER_LATE = 11
 
 class ShortRole(Enum):
     """
@@ -147,6 +148,7 @@ class ShortRole(Enum):
     CH = 8
     LF = 9
     AT = 10
+    RL = 11
 
 
 class Channel(Enum):

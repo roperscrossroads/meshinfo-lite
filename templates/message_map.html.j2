@@ -284,6 +284,78 @@
         }
       {% endif %}
     {% endfor %}
+  {% else %}
+    // Fallback: Sender has no position, but try to show receivers with hop counts
+    console.log("Sender has no position, attempting fallback with receivers only");
+    
+    {% for receiver_id in message.receiver_ids %}
+      var currentReceiverId = {{ receiver_id }};
+      {% set receiver_pos = receiver_positions.get(receiver_id) %}
+      var receiverPosData = {{ receiver_pos | tojson if receiver_pos is defined else 'null' }};
+      console.log("Fallback processing receiver:", currentReceiverId, "Position data:", receiverPosData);
+      
+      {% if receiver_pos and receiver_pos.longitude_i is not none and receiver_pos.latitude_i is not none %}
+        console.log("Found receiver with valid position:", currentReceiverId);
+        try {
+          var lon = {{ receiver_pos.longitude_i / 10000000 }};
+          var lat = {{ receiver_pos.latitude_i / 10000000 }};
+          var pointGeom = new Point(fromLonLat([lon, lat]));
+          
+          {% set rid_hex = utils.convert_node_id_from_int_to_hex(receiver_id) %}
+          {% set details = receiver_details.get(receiver_id) %}
+          var hops = {% if details and details.hop_start is not none and details.hop_limit is not none %}{{ details.hop_start - details.hop_limit }}{% else %}0{% endif %};
+          
+          var nodeData = {
+              id: '{{ rid_hex }}',
+              name: '{{ nodes[rid_hex].short_name if rid_hex in nodes else "???" }}',
+              longName: '{{ nodes[rid_hex].long_name if rid_hex in nodes else "Unknown Receiver" }}',
+              snr: {{ details.rx_snr if details else 'null' }},
+              hops: hops,
+              type: 'receiver',
+              lat: lat,
+              lon: lon,
+              positionTime: {{ receiver_pos.position_time }}
+          };
+          
+          // Create receiver style with hop count text
+          var receiverWithHopsStyle = new Style({
+            image: new Circle({
+              radius: 8,
+              fill: new Fill({
+                color: '#4444FF'
+              }),
+              stroke: new Stroke({
+                color: 'white',
+                width: 2
+              })
+            }),
+            text: new Text({
+              text: hops > 0 ? hops.toString() : '',
+              font: 'bold 10px Arial',
+              fill: new Fill({ color: '#FFFFFF' }),
+              stroke: new Stroke({
+                color: '#000000',
+                width: 1
+              })
+            })
+          });
+          
+          var receiver = new Feature({
+              geometry: pointGeom,
+              node: nodeData
+          });
+          
+          receiver.setStyle(receiverWithHopsStyle);
+          features.push(receiver);
+          console.log("Added receiver with hop count:", hops);
+          
+        } catch (e) {
+          console.error("ERROR processing fallback receiver", currentReceiverId, ":", e);
+        }
+      {% else %}
+        console.log("Receiver has no valid position:", currentReceiverId);
+      {% endif %}
+    {% endfor %}
   {% endif %}
 
   console.log("Finished processing features. Total points:", features.length, "Total lines:", lines.length, "Total labels:", labels.length);
@@ -419,13 +491,15 @@
         // Calculate distance using stored coordinates
         if (node.type === 'receiver') {
             var senderFeature = features[0];
-            if (senderFeature) {
+            if (senderFeature && senderFeature.get('node') && senderFeature.get('node').type === 'sender') {
             var senderNode = senderFeature.get('node');
             var distance = calculateDistance(
                 senderNode.lat, senderNode.lon,
                 node.lat, node.lon
             );
             html += `<strong>Distance from Sender:</strong> ${distance} km<br>`;
+            } else {
+            html += `<strong>Sender Location:</strong> Unknown<br>`;
             }
         }
         }
