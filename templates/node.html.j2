@@ -384,8 +384,8 @@
               {% set vid = utils.convert_node_id_from_int_to_hex(node.updated_via) %}
               {% if node.updated_via == node.id %}
               Self
-              {% elif vid in nodes %}
-              <a href='node_{{ vid }}.html'>{{ nodes[vid]["long_name"] }}</a>
+              {% elif vid in linked_nodes_details %}
+              <a href='node_{{ vid }}.html'>{{ linked_nodes_details[vid]["long_name"] }}</a>
               {% else %}
               {{ vid }}
               {% endif %}
@@ -414,7 +414,7 @@
           <!-- Process neighbor data first -->
           {% for neighbor in node.neighbors %}
             {% set nid = utils.convert_node_id_from_int_to_hex(neighbor.neighbor_id) %}
-            {% set nnode = nodes[nid] if nid in nodes else None %}
+            {% set nnode = linked_nodes_details[nid] if nid in linked_nodes_details else None %}
             {% if nid not in processed_nodes %}
               {% set processed_nodes = processed_nodes + [nid] %}
               <tr>
@@ -429,12 +429,12 @@
                   SNR: {{ neighbor.snr }}
                 </td>
                 <td>
-                  {% if nid in nodes %}
-                    {% if nodes[nid].position and node.position %}
-                      {% if nodes[nid].position.latitude_i is not none and nodes[nid].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
-                        {% set dist = utils.calculate_distance_between_nodes(nodes[nid], node) %}
+                  {% if nid in linked_nodes_details %}
+                    {% if linked_nodes_details[nid].position and node.position %}
+                      {% if linked_nodes_details[nid].position.latitude_i is not none and linked_nodes_details[nid].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
+                        {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
                         {% if dist %}
-                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
+                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
                             target="_blank" 
                             title="View elevation profile">
                             {{ dist|round(2) }} km 🏔️
@@ -457,8 +457,8 @@
                 {% set processed_nodes = processed_nodes + [nid] %}
                 <tr>
                   <td>
-                    {% if nid in nodes %}
-                    <a href="node_{{ nid }}.html">{{ nodes[nid].short_name }}</a>
+                    {% if nid in linked_nodes_details %}
+                    <a href="node_{{ nid }}.html">{{ linked_nodes_details[nid].short_name }}</a>
                     {% else %}
                     <span class="text-secondary">UNK</span>
                     {% endif %}
@@ -467,11 +467,11 @@
                     SNR: {{ heard.best_snr }} max / {{ heard.avg_snr|round(1) }} avg
                   </td>
                   <td>
-                    {% if nid in nodes %}
-                    {% set dist = utils.calculate_distance_between_nodes(nodes[nid], node) %}
+                    {% if nid in linked_nodes_details %}
+                    {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
                     {% if dist %}
-                      {% if nodes[nid].position and nodes[nid].position.latitude_i and nodes[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
-                        <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
+                      {% if linked_nodes_details[nid].position and linked_nodes_details[nid].position.latitude_i and linked_nodes_details[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
+                        <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
                           target="_blank" 
                           title="View elevation profile">
                           {{ dist|round(2) }} km 🏔️
@@ -506,42 +506,39 @@
           {% set processed_nodes = [] %}
           
           <!-- Process neighbor data first -->
-          {% for id, nnode in nodes.items() %}
-            {% if nnode.neighbors %}
-              {% for neighbor in nnode.neighbors %}
-                {% if neighbor.neighbor_id == node.id and id not in processed_nodes %}
-                  {% set processed_nodes = processed_nodes + [id] %}
-                  <tr>
-                    <td>
-                      {% if id in nodes %}
-                      <a href="node_{{ id }}.html">{{ nodes[id].short_name }}</a>
-                      {% else %}
-                      <span class="text-secondary">UNK</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      SNR: {{ neighbor.snr }}
-                    </td>
-                    <td>
-                      {% if id in nodes %}
-                        {% if nodes[id].position and node.position %}
-                          {% if nodes[id].position.latitude_i is not none and nodes[id].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
-                            {% set dist = utils.calculate_distance_between_nodes(nodes[id], node) %}
-                            {% if dist %}
-                              <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[id].position.latitude_i / 1e7 }},{{ nodes[id].position.longitude_i / 1e7 }}" 
-                                target="_blank" 
-                                title="View elevation profile">
-                                {{ dist|round(2) }} km 🏔️
-                              </a>
-                            {% endif %}
-                          {% endif %}
+          {% for neighbor in neighbor_heard_by %}
+            {% set nid = utils.convert_node_id_from_int_to_hex(neighbor.id) %}
+            {% if nid not in processed_nodes %}
+              {% set processed_nodes = processed_nodes + [nid] %}
+              <tr>
+                <td>
+                  {% if nid in linked_nodes_details %}
+                  <a href="node_{{ nid }}.html">{{ linked_nodes_details[nid].short_name }}</a>
+                  {% else %}
+                  <span class="text-secondary">UNK</span>
+                  {% endif %}
+                </td>
+                <td>
+                  SNR: {{ neighbor.snr }}
+                </td>
+                <td>
+                  {% if nid in linked_nodes_details %}
+                    {% if linked_nodes_details[nid].position and node.position %}
+                      {% if linked_nodes_details[nid].position.latitude_i is not none and linked_nodes_details[nid].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
+                        {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
+                        {% if dist %}
+                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
+                            target="_blank" 
+                            title="View elevation profile">
+                            {{ dist|round(2) }} km 🏔️
+                          </a>
                         {% endif %}
                       {% endif %}
-                    </td>
-                    <td><span title="Neighbor data">N</span></td>
-                  </tr>
-                {% endif %}
-              {% endfor %}
+                    {% endif %}
+                  {% endif %}
+                </td>
+                <td><span title="Neighbor data">N</span></td>
+              </tr>
             {% endif %}
           {% endfor %}
           
@@ -553,8 +550,8 @@
                 {% set processed_nodes = processed_nodes + [nid] %}
                 <tr>
                   <td>
-                    {% if nid in nodes %}
-                    <a href="node_{{ nid }}.html">{{ nodes[nid].short_name }}</a>
+                    {% if nid in linked_nodes_details %}
+                    <a href="node_{{ nid }}.html">{{ linked_nodes_details[nid].short_name }}</a>
                     {% else %}
                     <span class="text-secondary">UNK</span>
                     {% endif %}
@@ -563,11 +560,11 @@
                     SNR: {{ heard.best_snr }} max / {{ heard.avg_snr|round(1) }} avg
                   </td>
                   <td>
-                    {% if nid in nodes %}
-                    {% set dist = utils.calculate_distance_between_nodes(nodes[nid], node) %}
+                    {% if nid in linked_nodes_details %}
+                    {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
                     {% if dist %}
-                      {% if nodes[nid].position and nodes[nid].position.latitude_i and nodes[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
-                        <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ nodes[nid].position.latitude_i / 1e7 }},{{ nodes[nid].position.longitude_i / 1e7 }}" 
+                      {% if linked_nodes_details[nid].position and linked_nodes_details[nid].position.latitude_i and linked_nodes_details[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
+                        <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
                           target="_blank" 
                           title="View elevation profile">
                           {{ dist|round(2) }} km 🏔️

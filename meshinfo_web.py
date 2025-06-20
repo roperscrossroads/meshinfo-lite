@@ -140,9 +140,12 @@ def cleanup_cache():
     try:
         logging.info("Starting cache cleanup")
         logging.info("Memory usage before cache cleanup:")
-        log_memory_usage()
+        log_memory_usage(force=True)
         logging.info("Cache stats before cleanup:")
         log_cache_stats()
+        
+        # Clear the nodes singleton
+        clear_nodes_singleton()
         
         # Clear the cache
         with app.app_context():
@@ -152,7 +155,7 @@ def cleanup_cache():
         gc.collect()
         
         logging.info("Memory usage after cache cleanup:")
-        log_memory_usage()
+        log_memory_usage(force=True)
         logging.info("Cache stats after cleanup:")
         log_cache_stats()
         
@@ -184,22 +187,26 @@ request_lock = threading.Lock()
 # Add memory usage tracking
 last_memory_log = 0
 last_memory_usage = 0
-MEMORY_LOG_INTERVAL = 300  # Log every 5 minutes
-MEMORY_CHANGE_THRESHOLD = 50 * 1024 * 1024  # 50MB change threshold
+MEMORY_LOG_INTERVAL = 60  # Log every minute instead of 5 minutes
+MEMORY_CHANGE_THRESHOLD = 10 * 1024 * 1024  # 10MB change threshold (reduced from 50MB)
 
 @app.before_request
 def before_request():
     """Track request start."""
     with request_lock:
         active_requests.add(id(request))
-    # log_memory_usage()  # Removed per-request memory logging
+    # Enhanced memory logging for high-activity periods
+    if len(active_requests) > 5:  # If more than 5 concurrent requests
+        log_memory_usage(force=True)
 
 @app.after_request
 def after_request(response):
     """Clean up request context."""
     with request_lock:
         active_requests.discard(id(request))
-    # log_memory_usage()  # Removed per-request memory logging
+    # Enhanced memory logging for high-activity periods
+    if len(active_requests) > 5:  # If more than 5 concurrent requests
+        log_memory_usage(force=True)
     return response
 
 # Modify get_meshdata to use connection pooling
@@ -223,11 +230,22 @@ def teardown_meshdata(exception):
     md = g.pop('meshdata', None)
     if md is not None:
         try:
-            if hasattr(md, 'db') and md.db and md.db.is_connected():
-                md.db.close()
-                logging.debug("Database connection closed in teardown.")
+            if hasattr(md, 'db') and md.db:
+                if md.db.is_connected():
+                    md.db.close()
+                    logging.debug("Database connection closed in teardown.")
+                else:
+                    logging.debug("Database connection was already closed.")
+            else:
+                logging.debug("No database connection to close.")
         except Exception as e:
             logging.error(f"Error handling database connection in teardown: {e}")
+        finally:
+            # Ensure the MeshData instance is properly cleaned up
+            try:
+                del md
+            except:
+                pass
         logging.debug("MeshData instance removed from request context.")
 
 def log_memory_usage(force=False):
@@ -251,25 +269,80 @@ def log_memory_usage(force=False):
         process = psutil.Process()
         mem_info = process.memory_info()
         
-        # Get memory usage by object type
+        # Get memory usage by object type with more detail
         objects_by_type = {}
+        large_objects = []  # Track objects larger than 1MB
+        object_counts = {}
+        
         for obj in gc.get_objects():
             obj_type = type(obj).__name__
-            if obj_type not in objects_by_type:
-                objects_by_type[obj_type] = 0
             try:
-                objects_by_type[obj_type] += sys.getsizeof(obj)
-            except:
+                obj_size = sys.getsizeof(obj)
+                
+                # Track object counts
+                if obj_type not in object_counts:
+                    object_counts[obj_type] = 0
+                object_counts[obj_type] += 1
+                
+                # Track memory by type
+                if obj_type not in objects_by_type:
+                    objects_by_type[obj_type] = 0
+                objects_by_type[obj_type] += obj_size
+                
+                # Track large objects (> 1MB)
+                if obj_size > 1024 * 1024:  # 1MB
+                    large_objects.append({
+                        'type': obj_type,
+                        'size': obj_size,
+                        'repr': str(obj)[:100] + '...' if len(str(obj)) > 100 else str(obj)
+                    })
+                    
+            except (TypeError, ValueError, RecursionError):
                 pass
         
         # Sort object types by memory usage
         sorted_objects = sorted(objects_by_type.items(), key=lambda x: x[1], reverse=True)
         
+        # Sort large objects by size
+        large_objects.sort(key=lambda x: x['size'], reverse=True)
+        
+        # Sort object counts
+        sorted_counts = sorted(object_counts.items(), key=lambda x: x[1], reverse=True)
+        
+        logging.info(f"=== MEMORY USAGE REPORT ===")
         logging.info(f"Memory Usage: {mem_info.rss / 1024 / 1024:.1f} MB")
         logging.info(f"Active Requests: {len(active_requests)}")
-        logging.info("Top 5 memory-consuming object types:")
-        for obj_type, size in sorted_objects[:5]:
-            logging.info(f"  {obj_type}: {size / 1024 / 1024:.1f} MB")
+        logging.info(f"Memory Change: {(current_usage - last_memory_usage) / 1024 / 1024:+.1f} MB")
+        
+        logging.info("Top 10 memory-consuming object types:")
+        for obj_type, size in sorted_objects[:10]:
+            count = object_counts.get(obj_type, 0)
+            logging.info(f"  {obj_type}: {size / 1024 / 1024:.1f} MB ({count:,} objects)")
+            
+        logging.info("Top 10 object counts:")
+        for obj_type, count in sorted_counts[:10]:
+            size = objects_by_type.get(obj_type, 0)
+            logging.info(f"  {obj_type}: {count:,} objects ({size / 1024 / 1024:.1f} MB)")
+            
+        if large_objects:
+            logging.info("Large objects (>1MB):")
+            for obj in large_objects[:10]:  # Show top 10 largest objects
+                logging.info(f"  {obj['type']}: {obj['size'] / 1024 / 1024:.1f} MB - {obj['repr']}")
+        
+        # Check for potential memory leaks
+        if current_usage > last_memory_usage + 50 * 1024 * 1024:  # 50MB increase
+            logging.warning(f"POTENTIAL MEMORY LEAK: Memory increased by {(current_usage - last_memory_usage) / 1024 / 1024:.1f} MB")
+            
+        # Check for specific problematic object types
+        problematic_types = ['dict', 'list', 'SimpleNamespace', 'function', 'type']
+        for obj_type in problematic_types:
+            if obj_type in objects_by_type:
+                size = objects_by_type[obj_type]
+                count = object_counts.get(obj_type, 0)
+                if size > 100 * 1024 * 1024:  # 100MB
+                    logging.warning(f"LARGE {obj_type.upper()} OBJECTS: {size / 1024 / 1024:.1f} MB ({count:,} objects)")
+        
+        logging.info("=== END MEMORY REPORT ===")
             
         last_memory_log = current_time
         last_memory_usage = current_usage
@@ -311,7 +384,80 @@ def monitor_cache_locks():
             logging.error(f"Error monitoring cache locks: {e}")
         time.sleep(300)  # Check every 5 minutes
 
-# Add memory watchdog
+def log_detailed_memory_analysis():
+    """Perform detailed memory analysis to identify potential leaks."""
+    try:
+        import gc
+        gc.collect()
+        
+        logging.info("=== DETAILED MEMORY ANALYSIS ===")
+        
+        # Check database connections
+        db_connections = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'mysql' in str(obj.__class__).lower():
+                db_connections += 1
+        logging.info(f"Database connection objects: {db_connections}")
+        
+        # Check cache objects
+        cache_objects = 0
+        cache_size = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'cache' in str(obj.__class__).lower():
+                cache_objects += 1
+                try:
+                    cache_size += sys.getsizeof(obj)
+                except:
+                    pass
+        logging.info(f"Cache objects: {cache_objects} ({cache_size / 1024 / 1024:.1f} MB)")
+        
+        # Check for Flask/WSGI objects
+        flask_objects = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'flask' in str(obj.__class__).lower():
+                flask_objects += 1
+        logging.info(f"Flask objects: {flask_objects}")
+        
+        # Check for template objects
+        template_objects = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'template' in str(obj.__class__).lower():
+                template_objects += 1
+        logging.info(f"Template objects: {template_objects}")
+        
+        # Check for large dictionaries and lists
+        large_dicts = []
+        large_lists = []
+        for obj in gc.get_objects():
+            try:
+                if isinstance(obj, dict) and len(obj) > 1000:
+                    large_dicts.append((len(obj), str(obj)[:50]))
+                elif isinstance(obj, list) and len(obj) > 1000:
+                    large_lists.append((len(obj), str(obj)[:50]))
+            except:
+                pass
+        
+        if large_dicts:
+            logging.info("Large dictionaries:")
+            for size, repr_str in sorted(large_dicts, reverse=True)[:5]:
+                logging.info(f"  Dict with {size:,} items: {repr_str}")
+                
+        if large_lists:
+            logging.info("Large lists:")
+            for size, repr_str in sorted(large_lists, reverse=True)[:5]:
+                logging.info(f"  List with {size:,} items: {repr_str}")
+        
+        # Check for circular references
+        circular_refs = gc.collect()
+        if circular_refs > 0:
+            logging.warning(f"Found {circular_refs} circular references")
+        
+        logging.info("=== END DETAILED ANALYSIS ===")
+        
+    except Exception as e:
+        logging.error(f"Error in detailed memory analysis: {e}")
+
+# Modify the memory watchdog to include detailed analysis
 def memory_watchdog():
     """Monitor memory usage and take action if it gets too high."""
     while True:
@@ -320,8 +466,9 @@ def memory_watchdog():
             memory_info = process.memory_info()
             memory_mb = memory_info.rss / 1024 / 1024
             
-            if memory_mb > 2000:  # If over 2GB
-                logging.warning(f"Memory usage high ({memory_mb:.2f} MB), clearing cache and forcing GC")
+            if memory_mb > 1000:  # If over 1GB (reduced from 2GB)
+                logging.warning(f"Memory usage high ({memory_mb:.2f} MB), performing detailed analysis")
+                log_detailed_memory_analysis()
                 logging.info("Cache stats before high memory cleanup:")
                 log_cache_stats()
                 with app.app_context():
@@ -330,16 +477,17 @@ def memory_watchdog():
                 logging.info("Cache stats after high memory cleanup:")
                 log_cache_stats()
                 
-            if memory_mb > 4000:  # If over 4GB
+            if memory_mb > 2000:  # If over 2GB (reduced from 4GB)
                 logging.error(f"Memory usage critical ({memory_mb:.2f} MB), logging detailed memory info")
-                log_memory_usage()
+                log_memory_usage(force=True)
+                log_detailed_memory_analysis()
                 logging.info("Cache stats at critical memory level:")
                 log_cache_stats()
                 
         except Exception as e:
             logging.error(f"Error in memory watchdog: {e}")
             
-        time.sleep(60)  # Check every minute
+        time.sleep(30)  # Check every 30 seconds instead of 60
 
 # Start monitoring threads
 connection_monitor_thread = threading.Thread(target=monitor_connections, daemon=True)
@@ -384,13 +532,38 @@ def cache_key_prefix():
     # Round to nearest minute for 60-second cache
     return datetime.datetime.now().replace(second=0, microsecond=0).timestamp()
 
-@cache.memoize(timeout=60)
+# Add a global singleton for nodes to prevent multiple copies
+_nodes_singleton = None
+_nodes_singleton_timestamp = 0
+_nodes_singleton_lock = threading.Lock()
+
 def get_cached_nodes():
-    """Cache the nodes data."""
+    """Get nodes data with singleton pattern to prevent multiple copies."""
+    global _nodes_singleton, _nodes_singleton_timestamp
+    
+    current_time = time.time()
+    
+    # Check if we have a recent singleton
+    with _nodes_singleton_lock:
+        if (_nodes_singleton is not None and 
+            current_time - _nodes_singleton_timestamp < 60):
+            logging.debug("Returning cached nodes singleton")
+            return _nodes_singleton
+    
+    # Fetch fresh data
     md = get_meshdata()
     if not md:
         return None
-    return md.get_nodes()
+    
+    nodes_data = md.get_nodes()
+    
+    # Update singleton
+    with _nodes_singleton_lock:
+        _nodes_singleton = nodes_data
+        _nodes_singleton_timestamp = current_time
+        logging.info(f"Updated nodes singleton with {len(nodes_data)} nodes")
+    
+    return nodes_data
 
 @cache.memoize(timeout=60)
 def get_cached_active_nodes(nodes):
@@ -412,8 +585,8 @@ def get_cached_message_map_data(message_id):
     if not md:
         return None
         
-    # Get current node info for names
-    nodes = md.get_nodes()
+    # Get current node info for names using singleton
+    nodes = get_cached_nodes()
     
     # Get message and basic reception data
     cursor = md.db.cursor(dictionary=True)
@@ -535,7 +708,7 @@ def traceroute_map():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
+    nodes = get_cached_nodes()
     
     # Get traceroute attempt by unique id
     cursor = md.db.cursor(dictionary=True)
@@ -735,7 +908,7 @@ def map():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
+    nodes = get_cached_nodes()
     
     # Get timeout from config
     zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))
@@ -818,13 +991,13 @@ def neighbors():
     if not md:
         abort(503, description="Database connection unavailable")
 
-    # Get base node data (already optimized)
-    nodes = md.get_nodes()
+    # Get base node data using singleton
+    nodes = get_cached_nodes()
     if not nodes:
         # Handle case with no nodes gracefully
         return render_template(
             "neighbors.html.j2",
-            auth=auth(), config=config, nodes={},
+            auth=auth, config=config, nodes={},
             active_nodes_with_connections={}, view_type=view_type,
             utils=utils, datetime=datetime.datetime, timestamp=datetime.datetime.now()
         )
@@ -856,7 +1029,7 @@ def telemetry():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
+    nodes = get_cached_nodes()
     telemetry = md.get_telemetry_all()
     return render_template(
         "telemetry.html.j2",
@@ -878,7 +1051,7 @@ def traceroutes():
     page = request.args.get('page', 1, type=int)
     per_page = 100
     
-    nodes = md.get_nodes()
+    nodes = get_cached_nodes()
     traceroute_data = md.get_traceroutes(page=page, per_page=per_page)
     
     # Calculate pagination info
@@ -939,7 +1112,7 @@ def monday():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
+    nodes = get_cached_nodes()
     chat = md.get_chat()
     monday = MeshtasticMonday(chat["items"]).get_data()
     return render_template(
@@ -959,7 +1132,7 @@ def mynodes():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    nodes = md.get_nodes()
+    nodes = get_cached_nodes()
     owner = auth()
     if not owner:
         return redirect(url_for('login'))
@@ -1070,104 +1243,46 @@ def serve_static(filename):
     userp = r"user\_(\w+)\.html"
 
     if re.match(nodep, filename):
-        md = get_meshdata()
-        if not md: # Check if MeshData failed to initialize
-            abort(503, description="Database connection unavailable")
         match = re.match(nodep, filename)
-        node = match.group(1)
-        nodes = md.get_nodes()
-        if node not in nodes:
-            abort(404)
-        node_id = utils.convert_node_id_from_hex_to_int(node)
-        node_telemetry = md.get_node_telemetry(node_id)
-        node_route = md.get_route_coordinates(node_id)
-        telemetry_graph = draw_graph(node_telemetry)
-        lp = LOSProfile(nodes, node_id, config, cache)
+        node_hex = match.group(1)
 
-        # Get the max_distance from config, default to 5000 meters (5 km)
-        max_distance_km = int(config.get("los", "max_distance", fallback=5000)) / 1000  # Convert to kilometers
+        # Get all node page data directly, bypassing the leaky application cache
+        node_page_data = get_node_page_data(node_hex)
 
-        # Check if LOS Profile rendering is enabled
-        los_enabled = config.getboolean("los", "enabled", fallback=False)
+        # If data fetching fails, handle gracefully
+        if not node_page_data:
+            # We need to check if the node exists first to avoid caching a "not found" result.
+            nodes = get_cached_nodes()
+            if not nodes or node_hex not in nodes:
+                abort(404)
+            abort(503, description="Failed to retrieve node data. Please try again shortly.")
 
-        # Get timeout from config
-        zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))  # Default 12 hours
-        cutoff_time = int(time.time()) - zero_hop_timeout
-        
-        # Query for zero-hop messages heard by this node (within timeout period)
-        db = md.db
-        zero_hop_heard = []
-        cursor = db.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT 
-                r.from_id,
-                COUNT(*) AS count,
-                MAX(r.rx_snr) AS best_snr,
-                AVG(r.rx_snr) AS avg_snr,
-                MAX(r.rx_time) AS last_rx_time
-            FROM 
-                message_reception r
-            WHERE
-                r.received_by_id = %s
-                AND (
-                    (r.hop_limit IS NULL AND r.hop_start IS NULL)
-                    OR
-                    (r.hop_start - r.hop_limit = 0)
-                )
-                AND r.rx_time > %s
-            GROUP BY 
-                r.from_id
-            ORDER BY
-                last_rx_time DESC
-        """, (node_id, cutoff_time))
-        zero_hop_heard = cursor.fetchall()
-        
-        # Query for zero-hop messages sent by this node and heard by others (within timeout period)
-        zero_hop_heard_by = []
-        cursor.execute("""
-            SELECT 
-                r.received_by_id,
-                COUNT(*) AS count,
-                MAX(r.rx_snr) AS best_snr,
-                AVG(r.rx_snr) AS avg_snr,
-                MAX(r.rx_time) AS last_rx_time
-            FROM 
-                message_reception r
-            WHERE
-                r.from_id = %s
-                AND (
-                    (r.hop_limit IS NULL AND r.hop_start IS NULL)
-                    OR
-                    (r.hop_start - r.hop_limit = 0)
-                )
-                AND r.rx_time > %s
-            GROUP BY 
-                r.received_by_id
-            ORDER BY
-                last_rx_time DESC
-        """, (node_id, cutoff_time))
-        zero_hop_heard_by = cursor.fetchall()
-        cursor.close()
-        
-        return render_template(
+        # Render the template
+        response = make_response(render_template(
             f"node.html.j2",
             auth=auth(),
             config=config,
-            node=nodes[node],
-            nodes=nodes,
+            node=node_page_data['node'],
+            linked_nodes_details=node_page_data['linked_nodes_details'],
             hardware=meshtastic_support.HardwareModel,
             meshtastic_support=meshtastic_support,
-            los_profiles=lp.get_profiles() if los_enabled else {},  # Render only if enabled
-            telemetry_graph=telemetry_graph,
-            node_route=node_route,
+            los_profiles=node_page_data['los_profiles'],
+            telemetry_graph=node_page_data['telemetry_graph'],
+            node_route=node_page_data['node_route'],
             utils=utils,
             datetime=datetime.datetime,
             timestamp=datetime.datetime.now(),
-            zero_hop_heard=zero_hop_heard,
-            zero_hop_heard_by=zero_hop_heard_by,
-            zero_hop_timeout=zero_hop_timeout,
-            max_distance=max_distance_km
-        )
+            zero_hop_heard=node_page_data['zero_hop_heard'],
+            zero_hop_heard_by=node_page_data['zero_hop_heard_by'],
+            neighbor_heard_by=node_page_data['neighbor_heard_by'],
+            zero_hop_timeout=node_page_data['zero_hop_timeout'],
+            max_distance=node_page_data['max_distance_km']
+        ))
+        
+        # Set Cache-Control header for client-side caching
+        response.headers['Cache-Control'] = 'public, max-age=60'
+        
+        return response
 
     if re.match(userp, filename):
         match = re.match(userp, filename)
@@ -1178,7 +1293,7 @@ def serve_static(filename):
         owner = md.get_user(username)
         if not owner:
             abort(404)
-        nodes = md.get_nodes()
+        nodes = get_cached_nodes()
         owner_nodes = utils.get_owner_nodes(nodes, owner["email"])
         return render_template(
             "user.html.j2",
@@ -1719,6 +1834,96 @@ def get_cached_chat_data(page=1, per_page=50):
     
     return chat_data
 
+def get_node_page_data(node_hex):
+    """Fetch and process all data for the node page to prevent memory leaks."""
+    md = get_meshdata()
+    if not md: return None
+
+    # We still need all nodes for lookups, but we won't pass the full dict to the template
+    all_nodes = get_cached_nodes()
+    if not all_nodes or node_hex not in all_nodes:
+        return None
+
+    current_node = all_nodes[node_hex]
+    node_id = current_node['id']
+
+    # --- Fetch all raw data ---
+    node_telemetry = md.get_node_telemetry(node_id)
+    node_route = md.get_route_coordinates(node_id)
+    telemetry_graph = draw_graph(node_telemetry)
+    lp = LOSProfile(all_nodes, node_id, config, cache)
+    neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
+    
+    los_enabled = config.getboolean("los", "enabled", fallback=False)
+    zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))
+    max_distance_km = int(config.get("los", "max_distance", fallback=5000)) / 1000
+    cutoff_time = int(time.time()) - zero_hop_timeout
+
+    cursor = md.db.cursor(dictionary=True)
+    # Query for zero-hop messages heard by this node
+    cursor.execute("""
+        SELECT r.from_id, COUNT(*) AS count, MAX(r.rx_snr) AS best_snr,
+               AVG(r.rx_snr) AS avg_snr, MAX(r.rx_time) AS last_rx_time
+        FROM message_reception r
+        WHERE r.received_by_id = %s AND ((r.hop_limit IS NULL AND r.hop_start IS NULL) OR (r.hop_start - r.hop_limit = 0))
+          AND r.rx_time > %s
+        GROUP BY r.from_id ORDER BY last_rx_time DESC
+    """, (node_id, cutoff_time))
+    zero_hop_heard = cursor.fetchall()
+
+    # Query for zero-hop messages sent by this node
+    cursor.execute("""
+        SELECT r.received_by_id, COUNT(*) AS count, MAX(r.rx_snr) AS best_snr,
+               AVG(r.rx_snr) AS avg_snr, MAX(r.rx_time) AS last_rx_time
+        FROM message_reception r
+        WHERE r.from_id = %s AND ((r.hop_limit IS NULL AND r.hop_start IS NULL) OR (r.hop_start - r.hop_limit = 0))
+          AND r.rx_time > %s
+        GROUP BY r.received_by_id ORDER BY last_rx_time DESC
+    """, (node_id, cutoff_time))
+    zero_hop_heard_by = cursor.fetchall()
+    cursor.close()
+
+    # --- Create a lean dictionary of only the linked nodes needed by the template ---
+    linked_node_ids = set()
+    if 'neighbors' in current_node:
+        for neighbor in current_node.get('neighbors', []):
+            linked_node_ids.add(neighbor['neighbor_id'])
+    for heard in zero_hop_heard:
+        linked_node_ids.add(heard['from_id'])
+    for neighbor in neighbor_heard_by:
+        linked_node_ids.add(neighbor['id'])
+    for heard in zero_hop_heard_by:
+        linked_node_ids.add(heard['received_by_id'])
+    if current_node.get('updated_via'):
+        linked_node_ids.add(current_node.get('updated_via'))
+        
+    linked_nodes_details = {}
+    for linked_id_int in linked_node_ids:
+        if not linked_id_int: continue
+        nid_hex = utils.convert_node_id_from_int_to_hex(linked_id_int)
+        node_data = all_nodes.get(nid_hex)
+        if node_data:
+            # Copy only the fields required by the template
+            linked_nodes_details[nid_hex] = {
+                'short_name': node_data.get('short_name'),
+                'long_name': node_data.get('long_name'),
+                'position': node_data.get('position')
+            }
+
+    # Return a dictionary that does NOT include the full `all_nodes` object
+    return {
+        'node': current_node,
+        'linked_nodes_details': linked_nodes_details,
+        'telemetry_graph': telemetry_graph,
+        'node_route': node_route,
+        'los_profiles': lp.get_profiles() if los_enabled else {},
+        'neighbor_heard_by': neighbor_heard_by,
+        'zero_hop_heard': zero_hop_heard,
+        'zero_hop_heard_by': zero_hop_heard_by,
+        'zero_hop_timeout': zero_hop_timeout,
+        'max_distance_km': max_distance_km,
+    }
+
 @app.route('/chat-classic.html')
 def chat():
     page = request.args.get('page', 1, type=int)
@@ -1841,6 +2046,60 @@ def allnodes():
         timestamp=datetime.datetime.now(),
     )
 
+@app.route('/api/debug/memory')
+def debug_memory():
+    """Manual trigger for detailed memory analysis."""
+    if not auth():
+        abort(401)
+    
+    log_memory_usage(force=True)
+    log_detailed_memory_analysis()
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Memory analysis completed. Check logs for details.'
+    })
+
+@app.route('/api/debug/cache')
+def debug_cache():
+    """Manual trigger for cache analysis."""
+    if not auth():
+        abort(401)
+    
+    log_cache_stats()
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Cache analysis completed. Check logs for details.'
+    })
+
+@app.route('/api/debug/cleanup')
+def debug_cleanup():
+    """Manual trigger for cache cleanup."""
+    if not auth():
+        abort(401)
+    
+    cleanup_cache()
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Cache cleanup completed. Check logs for details.'
+    })
+
+@app.route('/api/debug/clear-nodes')
+def debug_clear_nodes():
+    """Manual trigger to clear nodes singleton."""
+    if not auth():
+        abort(401)
+    
+    clear_nodes_singleton()
+    gc.collect()
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Nodes singleton cleared. Check logs for details.'
+    })
+
 def run():
     # Enable Waitress logging
     config = configparser.ConfigParser()
@@ -1858,6 +2117,17 @@ def run():
         ),
         port=port
     )
+
+def clear_nodes_singleton():
+    """Clear the nodes singleton to free memory."""
+    global _nodes_singleton, _nodes_singleton_timestamp
+    with _nodes_singleton_lock:
+        if _nodes_singleton is not None:
+            logging.info(f"Clearing nodes singleton with {len(_nodes_singleton)} nodes")
+            _nodes_singleton = None
+            _nodes_singleton_timestamp = 0
+        else:
+            logging.info("Nodes singleton was already None")
 
 
 if __name__ == '__main__':

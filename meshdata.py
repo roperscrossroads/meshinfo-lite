@@ -609,7 +609,8 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             record['position'] = position
             
             # Get neighbors data
-            record['neighbors'] = self.get_neighbors(row['id'])
+            # record['neighbors'] = self.get_neighbors(row['id'])
+            record['neighbors'] = [] # This will be populated later
             
             # Set other fields
             record['role'] = record.get('role', 0)
@@ -629,6 +630,35 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         # print("Skipped rows due to missing id:", skipped)
         # print("Final nodes count:", len(nodes))
         cur.close()
+
+        # --- Bulk fetch neighbors to avoid N+1 queries ---
+        all_node_ids = [n['id'] for n in nodes.values()]
+        if all_node_ids:
+            neighbor_sql = """
+                SELECT id, neighbor_id, snr
+                FROM neighborinfo
+                WHERE id IN (%s)
+            """ % ','.join(['%s'] * len(all_node_ids))
+            
+            cur = self.db.cursor(dictionary=True)
+            cur.execute(neighbor_sql, all_node_ids)
+            all_neighbors = cur.fetchall()
+            cur.close()
+            
+            # Create a dictionary to map nodes to their neighbors
+            neighbors_map = {node_id: [] for node_id in all_node_ids}
+            for neighbor_row in all_neighbors:
+                neighbors_map[neighbor_row['id']].append({
+                    'neighbor_id': neighbor_row['neighbor_id'],
+                    'snr': neighbor_row['snr'],
+                    'distance': None # Distance calculation is complex, defer if not essential here
+                })
+            
+            # Assign neighbors to each node
+            for node_hex, node_data in nodes.items():
+                if node_data['id'] in neighbors_map:
+                    node_data['neighbors'] = neighbors_map[node_data['id']]
+
         return nodes
 
     def get_chat(self, page=1, per_page=50):
@@ -2281,6 +2311,22 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         finally:
             if cur:
                 cur.close()
+
+    def get_heard_by_from_neighbors(self, node_id):
+        """
+        Get a list of nodes that have the given node_id in their neighbor list.
+        """
+        sql = """
+            SELECT id, snr
+            FROM neighborinfo
+            WHERE neighbor_id = %s
+        """
+        params = (node_id,)
+        cur = self.db.cursor(dictionary=True)
+        cur.execute(sql, params)
+        heard_by = cur.fetchall()
+        cur.close()
+        return heard_by
 
 
 def create_database():
