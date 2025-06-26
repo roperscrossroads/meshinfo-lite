@@ -248,6 +248,9 @@
               {% else %}
               Unknown
               {% endif %}
+              <a href="https://meshtastic.org/docs/configuration/module/mqtt/#map-reporting-enabled" target="_blank" title="Firmware version is only available when the device is connected to MQTT server with Map Reporting enabled">
+                <i class="bi bi-question-circle text-muted" style="font-size: 0.9em;"></i>
+              </a>
             </td>
           </tr>
           <tr>
@@ -276,8 +279,10 @@
               Lost and Found
               {% elif node.role == 10 %}
               ATAK Tracker
+              {% elif node.role == 11 %}
+              Router Late
               {% else %}
-              Unknown
+              Unknown ({{ node.role }})
               {% endif %}
               {% else %}
               Unknown

@@ -31,6 +31,7 @@ class MeshData:
         config.read('config.ini')
         self.config = config
         self.db = None
+        self.debug = config.getboolean("server", "debug", fallback=False)
         self.connect_db()
 
     def __del__(self):
@@ -57,7 +58,10 @@ class MeshData:
             "decoded": {
                 "json_payload": {
                     "long_name": long_name,
-                    "short_name": short_name
+                    "short_name": short_name,
+                    "role": 0,  # Default to Client role
+                    "firmware_version": None,  # Will be updated when real nodeinfo arrives
+                    "hw_model": None  # Will be updated when real nodeinfo arrives
                 }
             }
         }
@@ -572,7 +576,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                     record[key] = value
             
             # Process telemetry data
-            telemetry = types.SimpleNamespace()  # Use SimpleNamespace for attribute access
+            telemetry = {}  # Use plain dict instead of SimpleNamespace
             telemetry_fields = [
                 'air_util_tx', 'battery_level', 'channel_utilization',
                 'uptime_seconds', 'voltage', 'temperature', 'relative_humidity',
@@ -581,15 +585,15 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             ]
             # Initialize all telemetry fields to None first
             for field in telemetry_fields:
-                setattr(telemetry, field, None)
+                telemetry[field] = None
             # Then set values from row if they exist
             for field in telemetry_fields:
                 if field in row and row[field] is not None:
-                    setattr(telemetry, field, row[field])
+                    telemetry[field] = row[field]
             record['telemetry'] = telemetry
             
             # Process position data
-            position = types.SimpleNamespace()  # Use SimpleNamespace for attribute access
+            position = {}  # Use plain dict instead of SimpleNamespace
             position_fields = [
                 'altitude', 'ground_speed', 'ground_track', 'latitude_i',
                 'longitude_i', 'location_source', 'precision_bits',
@@ -597,15 +601,15 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             ]
             # Initialize all position fields to None first
             for field in position_fields:
-                setattr(position, field, None)
+                position[field] = None
             # Then set values from row if they exist
             for field in position_fields:
                 if field in row and row[field] is not None:
-                    setattr(position, field, row[field])
+                    position[field] = row[field]
             
             # Always set latitude and longitude attributes
-            position.latitude = position.latitude_i / 10000000 if position.latitude_i else None
-            position.longitude = position.longitude_i / 10000000 if position.longitude_i else None
+            position['latitude'] = position['latitude_i'] / 10000000 if position['latitude_i'] else None
+            position['longitude'] = position['longitude_i'] / 10000000 if position['longitude_i'] else None
             record['position'] = position
             
             # Get neighbors data
@@ -926,16 +930,43 @@ WHERE id = %s
         if not data:
             return
         payload = dict(data["decoded"]["json_payload"])
-        expected = [
-            "hw_model",
-            "long_name",
-            "short_name",
-            "role",
-            "firmware_version"
-        ]
-        for attr in expected:
-            if attr not in payload:
-                payload[attr] = None
+        
+        # Determine packet type based on available fields
+        is_mapreport = "firmware_version" in payload and "role" not in payload
+        is_nodeinfo = "role" in payload and "firmware_version" not in payload
+        
+        if self.debug:
+            logging.info(f"store_node: Processing node {data['from']} - is_mapreport={is_mapreport}, is_nodeinfo={is_nodeinfo}")
+        
+        # Set up fields based on packet type
+        if is_mapreport:
+            # Mapreport: update firmware_version and hw_model, preserve existing role
+            expected = ["hw_model", "long_name", "short_name", "firmware_version"]
+            for attr in expected:
+                if attr not in payload:
+                    payload[attr] = None
+            # Don't touch role for mapreports
+            payload["role"] = None
+        elif is_nodeinfo:
+            # Nodeinfo: update role and hw_model, preserve existing firmware_version
+            expected = ["hw_model", "long_name", "short_name", "role"]
+            for attr in expected:
+                if attr not in payload:
+                    payload[attr] = None
+            # Don't touch firmware_version for nodeinfo
+            payload["firmware_version"] = None
+        else:
+            # Fallback: try to update all fields
+            expected = ["hw_model", "long_name", "short_name", "role", "firmware_version"]
+            for attr in expected:
+                if attr not in payload:
+                    payload[attr] = None
+
+        # Add logging for debugging
+        if self.debug:
+            logging.info(f"store_node: Processing node {data['from']} with role={payload.get('role')}, hw_model={payload.get('hw_model')}, firmware_version={payload.get('firmware_version')}")
+            logging.info(f"store_node: Full json_payload: {data['decoded']['json_payload']}")
+            logging.info(f"store_node: Available fields in payload: {list(payload.keys())}")
 
         sql = """INSERT INTO nodeinfo (
     id,
@@ -951,8 +982,14 @@ ON DUPLICATE KEY UPDATE
 long_name = VALUES(long_name),
 short_name = VALUES(short_name),
 hw_model = COALESCE(VALUES(hw_model), hw_model),
-role = COALESCE(VALUES(role), role),
-firmware_version = COALESCE(VALUES(firmware_version), firmware_version),
+role = CASE 
+    WHEN VALUES(role) IS NOT NULL THEN VALUES(role)
+    ELSE role
+END,
+firmware_version = CASE 
+    WHEN VALUES(firmware_version) IS NOT NULL THEN VALUES(firmware_version)
+    ELSE firmware_version
+END,
 ts_updated = VALUES(ts_updated)"""
         values = (
             data["from"],
@@ -962,9 +999,20 @@ ts_updated = VALUES(ts_updated)"""
             payload["role"],
             payload["firmware_version"]
         )
-        cur = self.db.cursor()
-        cur.execute(sql, values)
-        self.db.commit()
+        
+        try:
+            cur = self.db.cursor()
+            cur.execute(sql, values)
+            rows_affected = cur.rowcount
+            if self.debug:
+                logging.info(f"store_node: SQL executed successfully, rows affected: {rows_affected}")
+            self.db.commit()
+            if self.debug:
+                logging.info(f"store_node: Transaction committed successfully")
+        except Exception as e:
+            logging.error(f"store_node: Database error for node {data['from']}: {e}")
+            self.db.rollback()
+            raise
 
     def store_position(self, data, source="position"):
         payload = dict(data["decoded"]["json_payload"])
@@ -1552,7 +1600,12 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
         
         # Continue with the regular message type processing
         tp = data["type"]
+        if self.debug:
+            logging.info(f"store: Processing message type '{tp}' from node {data.get('from')}")
+        
         if tp == "nodeinfo":
+            if self.debug:
+                logging.info(f"store: Calling store_node for nodeinfo message from {data.get('from')}")
             self.store_node(data)
         elif tp == "position":
             self.store_position(data)
@@ -1566,6 +1619,18 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             self.store_telemetry(data)
         elif tp == "text":
             self.store_text(data, topic)  # Only one text handler, with topic parameter
+        elif tp == "store_forward":
+            # Store & Forward messages are internal routing messages for delayed message delivery
+            # We'll log them at debug level but not store them in the database
+            if self.debug:
+                logging.debug(f"store: Received Store & Forward message from {data.get('from')} - internal routing message")
+        elif tp in ["range_test", "simulator", "zps", "powerstress", "reticulum_tunnel"]:
+            # These are specialized message types that we don't need to store in the database
+            # but we'll log them at debug level for monitoring
+            if self.debug:
+                logging.debug(f"store: Received {tp} message from {data.get('from')} - specialized message type")
+        else:
+            logging.warning(f"store: Unknown message type '{tp}' from node {data.get('from')}")
 
     def store_reception(self, message_id, from_id, received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start):
         """Store reception information for any message type with hop data."""
@@ -1758,8 +1823,14 @@ ON DUPLICATE KEY UPDATE
 long_name = VALUES(long_name),
 short_name = VALUES(short_name),
 hw_model = COALESCE(VALUES(hw_model), hw_model),
-role = COALESCE(VALUES(role), role),
-firmware_version = COALESCE(VALUES(firmware_version), firmware_version),
+role = CASE 
+    WHEN VALUES(role) IS NOT NULL THEN VALUES(role)
+    ELSE role
+END,
+firmware_version = CASE 
+    WHEN VALUES(firmware_version) IS NOT NULL THEN VALUES(firmware_version)
+    ELSE firmware_version
+END,
 ts_updated = VALUES(ts_updated)"""
             values = (
                 record["id"],

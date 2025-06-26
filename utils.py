@@ -173,7 +173,7 @@ def time_since(epoch_timestamp):
 
 def active_nodes(nodes):
     return {
-        node: dict(nodes[node])
+        node: nodes[node]  # Return reference instead of copying
         for node in nodes if nodes[node]["active"]
     }
 
@@ -199,7 +199,7 @@ def get_role_name(role_value):
 
 def get_owner_nodes(nodes, owner):
     return {
-        node: dict(nodes[node])
+        node: nodes[node]  # Return reference instead of copying
         for node in nodes if nodes[node]["owner"] == owner
     }
 

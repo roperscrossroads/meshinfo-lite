@@ -158,6 +158,49 @@ def get_data(msg):
             j["decoded"]["json_payload"] = to_json(
                 telemetry_pb2.Telemetry().FromString(msg.decoded.payload)
             )
+        elif portnum == portnums_pb2.STORE_FORWARD_APP:
+            j["type"] = "store_forward"
+            # Store & Forward messages contain routing information for delayed message delivery
+            # We'll log them but not store them in the database as they're internal routing messages
+            j["decoded"]["json_payload"] = {
+                "message": "Store & Forward routing message"
+            }
+            logging.debug(f"Received Store & Forward message from {j['from']} - internal routing message")
+        elif portnum == portnums_pb2.RANGE_TEST_APP:
+            j["type"] = "range_test"
+            # Range test messages are used for testing radio range
+            j["decoded"]["json_payload"] = {
+                "message": "Range test message"
+            }
+            logging.debug(f"Received Range Test message from {j['from']}")
+        elif portnum == portnums_pb2.SIMULATOR_APP:
+            j["type"] = "simulator"
+            # Simulator messages are used for testing
+            j["decoded"]["json_payload"] = {
+                "message": "Simulator message"
+            }
+            logging.debug(f"Received Simulator message from {j['from']}")
+        elif portnum == portnums_pb2.ZPS_APP:
+            j["type"] = "zps"
+            # ZPS (Zero Power Sensor) messages
+            j["decoded"]["json_payload"] = {
+                "message": "ZPS message"
+            }
+            logging.debug(f"Received ZPS message from {j['from']}")
+        elif portnum == portnums_pb2.POWERSTRESS_APP:
+            j["type"] = "powerstress"
+            # Power stress test messages
+            j["decoded"]["json_payload"] = {
+                "message": "Power stress test message"
+            }
+            logging.debug(f"Received Power Stress message from {j['from']}")
+        elif portnum == portnums_pb2.RETICULUM_TUNNEL_APP:
+            j["type"] = "reticulum_tunnel"
+            # Reticulum tunnel messages
+            j["decoded"]["json_payload"] = {
+                "message": "Reticulum tunnel message"
+            }
+            logging.debug(f"Received Reticulum Tunnel message from {j['from']}")
         
         if j["type"]:  # Only log if we successfully determined the type
             msg_type = j["type"]

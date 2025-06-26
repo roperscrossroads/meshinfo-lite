@@ -115,6 +115,10 @@
           <span title="Lost and Found">LF</span>
           {% elif node.role == 10 %}
           <span title="ATAK Tracker">AT</span>
+          {% elif node.role == 11 %}
+          <span title="Router Late">RL</span>
+          {% else %}
+          <span title="Unknown ({{ node.role }})">?</span>
           {% endif %}
           {% endif %}
         </td>
