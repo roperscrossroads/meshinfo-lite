@@ -337,7 +337,17 @@
     const positionMap = new Map();
     
     Object.values(nodes).forEach(function(node) {
-      if (node.position) {
+      // Only add features for nodes with valid lat/lon
+      if (
+        node.position &&
+        Array.isArray(node.position) &&
+        node.position[0] !== null &&
+        node.position[1] !== null &&
+        !isNaN(node.position[0]) &&
+        !isNaN(node.position[1]) &&
+        node.position[0] >= -180 && node.position[0] <= 180 &&
+        node.position[1] >= -90 && node.position[1] <= 90
+      ) {
         const posKey = node.position.join(',');
         const offset = positionMap.get(posKey) || 0;
         
@@ -387,7 +397,7 @@
                 image: new Circle({
                   radius: 6,
                   fill: new Fill({
-                    color: 'rgba(33, 150, 243, 1)' // Bright blue for active MQTT
+                    color: 'rgba(33, 150, 243, 1)'
                   }),
                   stroke: new Stroke({
                     color: 'white',
@@ -399,10 +409,8 @@
               // MQTT uplink is old, fall back to regular node status coloring
               const offlineAge = parseInt(settings.nodesOfflineAge);
               if (settings.nodesOfflineAge === 'never' || now - node.ts_seen <= offlineAge) {
-                // Node has been seen within the offline age threshold - show as active
                 style = onlineStyle;
               } else {
-                // Node hasn't been seen within the offline age threshold - show as offline
                 style = offlineStyle;
               }
             }
@@ -410,10 +418,8 @@
             // No MQTT uplink info - check offline age
             const offlineAge = parseInt(settings.nodesOfflineAge);
             if (settings.nodesOfflineAge === 'never' || now - node.ts_seen <= offlineAge) {
-              // Node has been seen within the offline age threshold - show as active
               style = onlineStyle;
             } else {
-              // Node hasn't been seen within the offline age threshold - show as offline
               style = offlineStyle;
             }
           }
@@ -421,7 +427,6 @@
           // Apply channel-specific styling if needed
           if (settings.channelFilter !== 'all') {
             const channelId = parseInt(settings.channelFilter);
-            // Only apply channel-specific styling if node matches the selected channel
             if (node.channel === channelId) {
               const hasActiveUplink = node.ts_uplink !== null && (now - node.ts_uplink) <= parseInt(settings.nodesDisconnectedAge);
               style = new Style({
@@ -437,15 +442,13 @@
                 })
               });
             } else {
-              visible = false; // Hide nodes that don't match the selected channel
+              visible = false;
             }
           }
         }
 
         feature.setStyle(visible ? style : null);
         features.push(feature);
-        
-        // Increment the count for this position
         positionMap.set(posKey, offset + 1);
       }
     });
@@ -889,7 +892,25 @@
           if (node.neighbors) {
             node.neighbors.forEach(function(neighbor) {
               var nnode = nodes[neighbor.id];
-              if (!nnode || !nnode.position) return;
+              if (
+                !nnode ||
+                !nnode.position ||
+                !Array.isArray(nnode.position) ||
+                nnode.position[0] === null ||
+                nnode.position[1] === null ||
+                isNaN(nnode.position[0]) ||
+                isNaN(nnode.position[1]) ||
+                nnode.position[0] < -180 || nnode.position[0] > 180 ||
+                nnode.position[1] < -90 || nnode.position[1] > 90 ||
+                !node.position ||
+                !Array.isArray(node.position) ||
+                node.position[0] === null ||
+                node.position[1] === null ||
+                isNaN(node.position[0]) ||
+                isNaN(node.position[1]) ||
+                node.position[0] < -180 || node.position[0] > 180 ||
+                node.position[1] < -90 || node.position[1] > 90
+              ) return;
               
               const featureLine = new Feature({
                 geometry: new LineString([
@@ -921,7 +942,25 @@
             // Draw lines for heard nodes
             node.zero_hop_data.heard.forEach(function(heard) {
               var nnode = nodes[heard.node_id];
-              if (!nnode || !nnode.position) return;
+              if (
+                !nnode ||
+                !nnode.position ||
+                !Array.isArray(nnode.position) ||
+                nnode.position[0] === null ||
+                nnode.position[1] === null ||
+                isNaN(nnode.position[0]) ||
+                isNaN(nnode.position[1]) ||
+                nnode.position[0] < -180 || nnode.position[0] > 180 ||
+                nnode.position[1] < -90 || nnode.position[1] > 90 ||
+                !node.position ||
+                !Array.isArray(node.position) ||
+                node.position[0] === null ||
+                node.position[1] === null ||
+                isNaN(node.position[0]) ||
+                isNaN(node.position[1]) ||
+                node.position[0] < -180 || node.position[0] > 180 ||
+                node.position[1] < -90 || node.position[1] > 90
+              ) return;
               
               const featureLine = new Feature({
                 geometry: new LineString([
@@ -952,7 +991,25 @@
             // Draw lines for heard-by nodes (if not already drawn)
             node.zero_hop_data.heard_by.forEach(function(heard) {
               var nnode = nodes[heard.node_id];
-              if (!nnode || !nnode.position) return;
+              if (
+                !nnode ||
+                !nnode.position ||
+                !Array.isArray(nnode.position) ||
+                nnode.position[0] === null ||
+                nnode.position[1] === null ||
+                isNaN(nnode.position[0]) ||
+                isNaN(nnode.position[1]) ||
+                nnode.position[0] < -180 || nnode.position[0] > 180 ||
+                nnode.position[1] < -90 || nnode.position[1] > 90 ||
+                !node.position ||
+                !Array.isArray(node.position) ||
+                node.position[0] === null ||
+                node.position[1] === null ||
+                isNaN(node.position[0]) ||
+                isNaN(node.position[1]) ||
+                node.position[0] < -180 || node.position[0] > 180 ||
+                node.position[1] < -90 || node.position[1] > 90
+              ) return;
               
               // Skip if we already drew a line for this connection
               if (node.zero_hop_data.heard.some(h => h.node_id === heard.node_id)) return;
