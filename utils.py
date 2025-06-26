@@ -78,10 +78,32 @@ def geocode_position(api_key: str, latitude: float, longitude: float):
     """Retrieve geolocation data using an API."""
     if latitude is None or longitude is None:
         return None
-    url = f"https://geocode.maps.co/reverse" + \
-        f"?lat={latitude}&lon={longitude}&api_key={api_key}"
-    response = requests.get(url)
-    return response.json() if response.status_code == 200 else None
+    
+    # Try the paid service first if API key is provided
+    if api_key and api_key != 'YOUR_KEY_HERE':
+        try:
+            url = f"https://geocode.maps.co/reverse" + \
+                f"?lat={latitude}&lon={longitude}&api_key={api_key}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            logging.warning(f"Paid geocoding service failed: {e}")
+    
+    # Fallback to Nominatim (free, no API key required)
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse" + \
+            f"?format=json&lat={latitude}&lon={longitude}&zoom=10"
+        headers = {
+            'User-Agent': 'MeshInfo/1.0 (https://github.com/meshinfo-lite)'
+        }
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        logging.warning(f"Nominatim geocoding service failed: {e}")
+    
+    return None
 
 
 def latlon_to_grid(lat, lon):

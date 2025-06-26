@@ -2100,6 +2100,32 @@ def debug_clear_nodes():
         'message': 'Nodes singleton cleared. Check logs for details.'
     })
 
+@app.route('/api/geocode')
+def api_geocode():
+    """API endpoint for reverse geocoding to avoid CORS issues."""
+    try:
+        lat = request.args.get('lat', type=float)
+        lon = request.args.get('lon', type=float)
+        
+        if lat is None or lon is None:
+            return jsonify({'error': 'Missing lat or lon parameters'}), 400
+        
+        # Use the existing geocoding function from utils
+        geocoded = utils.geocode_position(
+            config.get('geocoding', 'apikey', fallback=''),
+            lat,
+            lon
+        )
+        
+        if geocoded:
+            return jsonify(geocoded)
+        else:
+            return jsonify({'error': 'Geocoding failed'}), 500
+            
+    except Exception as e:
+        logging.error(f"Geocoding error: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 def run():
     # Enable Waitress logging
     config = configparser.ConfigParser()

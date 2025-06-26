@@ -619,13 +619,19 @@
     applyFilters();
 
     async function reverseGeocode(lon, lat) {
-      return fetch('https://nominatim.openstreetmap.org/reverse?format=json&lon=' + lon + '&lat=' + lat)
-        .then(function(response) {
-          return response.json();
-        }).then(function(json) {
-          console.log(json);
-          return json;
-        });
+      try {
+        const response = await fetch('/api/geocode?lon=' + lon + '&lat=' + lat);
+        if (!response.ok) {
+          console.warn('Geocoding API returned error:', response.status);
+          return null;
+        }
+        const json = await response.json();
+        console.log('Geocoding result:', json);
+        return json;
+      } catch (error) {
+        console.warn('Geocoding request failed:', error);
+        return null;
+      }
     }
 
     var container = document.getElementById('nodeDetail');
@@ -710,7 +716,21 @@
           var properties = feature.getProperties();
           var node = properties.node;
           var address = await reverseGeocode(node.position[0], node.position[1]);
-          var display_name = [address.address.town, address.address.city, address.address.county, address.address.state, address.address.country].filter(Boolean).join(', ');
+          var display_name = 'Unknown location';
+          
+          if (address && address.address) {
+            // Handle Nominatim format
+            var location_parts = [address.address.town, address.address.city, address.address.county, address.address.state, address.address.country].filter(Boolean);
+            if (location_parts.length > 0) {
+              display_name = location_parts.join(', ');
+            } else if (address.display_name) {
+              // Fallback to display_name if address components are not available
+              display_name = address.display_name;
+            }
+          } else if (address && address.display_name) {
+            // Handle other geocoding service formats
+            display_name = address.display_name;
+          }
 
           // Get all connected node IDs
           const connectedNodeIds = new Set();
