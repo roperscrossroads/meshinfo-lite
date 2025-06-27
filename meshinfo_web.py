@@ -1850,7 +1850,7 @@ def get_cached_chat_data(page=1, per_page=50):
         placeholders = ','.join(['%s'] * len(message_ids))
         cur = md.db.cursor(dictionary=True)
         cur.execute(f"""
-            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start
+            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start, rx_time
             FROM message_reception
             WHERE message_id IN ({placeholders})
         """, message_ids)
@@ -1868,7 +1868,8 @@ def get_cached_chat_data(page=1, per_page=50):
                 "rx_snr": float(reception['rx_snr']) if reception['rx_snr'] is not None else 0,
                 "rx_rssi": int(reception['rx_rssi']) if reception['rx_rssi'] is not None else 0,
                 "hop_limit": int(reception['hop_limit']) if reception['hop_limit'] is not None else None,
-                "hop_start": int(reception['hop_start']) if reception['hop_start'] is not None else None
+                "hop_start": int(reception['hop_start']) if reception['hop_start'] is not None else None,
+                "rx_time": reception['rx_time'].timestamp() if isinstance(reception['rx_time'], datetime.datetime) else reception['rx_time']
             })
     else:
         receptions_by_message = {}

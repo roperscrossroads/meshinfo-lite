@@ -485,6 +485,9 @@ window.addEventListener('load', function() {
                                 {% if reception.hop_start is not none and reception.hop_limit is not none %}
                                 <br>Hops: {{ reception.hop_start - reception.hop_limit }} of {{ reception.hop_start }}
                                 {% endif %}
+                                {% if reception.rx_time and message.ts_created %}
+                                <br>Reception: +{{ format_duration(reception.rx_time - message.ts_created) }} after sent
+                                {% endif %}
                                 </div>">
                                 <span class="snr-indicator"></span>
                                 {{ node.short_name|replace('"', '&quot;') }}
@@ -549,3 +552,10 @@ window.addEventListener('load', function() {
     </div>
 </div>
 {% endblock %}
+
+{% macro format_duration(seconds) %}
+    {%- set s = seconds|int %}
+    {%- set m = s // 60 %}
+    {%- set s = s % 60 %}
+    {%- if m > 0 %}{{ m }}m {% endif %}{{ s }}s
+{% endmacro %}
