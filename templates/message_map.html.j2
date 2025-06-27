@@ -74,6 +74,8 @@
   import { isEmpty } from 'ol/extent.js';
   import Polygon from 'ol/geom/Polygon.js';
 
+  var nodes = {{ nodes|tojson|safe }};
+
   const map = new Map({
     layers: [
       new TileLayer({
