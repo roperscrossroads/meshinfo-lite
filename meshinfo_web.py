@@ -1822,17 +1822,92 @@ def api_telemetry(node_id):
 
 @cache.memoize(timeout=60)
 def get_cached_chat_data(page=1, per_page=50):
-    """Cache the chat data."""
+    """Cache the chat data with optimized query."""
     md = get_meshdata()
     if not md:
         return None
-    chat_data = md.get_chat(page=page, per_page=per_page)
     
-    # Add pagination info
-    chat_data['start_item'] = (page - 1) * per_page + 1 if chat_data['total'] > 0 else 0
-    chat_data['end_item'] = min(page * per_page, chat_data['total'])
+    # Get total count first (this is fast)
+    cur = md.db.cursor()
+    cur.execute("SELECT COUNT(DISTINCT t.message_id) FROM text t")
+    total = cur.fetchone()[0]
+    cur.close()
     
-    return chat_data
+    # Get paginated chat messages (without reception data)
+    offset = (page - 1) * per_page
+    cur = md.db.cursor(dictionary=True)
+    cur.execute("""
+        SELECT t.* FROM text t
+        ORDER BY t.ts_created DESC
+        LIMIT %s OFFSET %s
+    """, (per_page, offset))
+    messages = cur.fetchall()
+    cur.close()
+    
+    # Get reception data for these messages in a separate query
+    if messages:
+        message_ids = [msg['message_id'] for msg in messages]
+        placeholders = ','.join(['%s'] * len(message_ids))
+        cur = md.db.cursor(dictionary=True)
+        cur.execute(f"""
+            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start
+            FROM message_reception
+            WHERE message_id IN ({placeholders})
+        """, message_ids)
+        receptions = cur.fetchall()
+        cur.close()
+        
+        # Group receptions by message_id
+        receptions_by_message = {}
+        for reception in receptions:
+            msg_id = reception['message_id']
+            if msg_id not in receptions_by_message:
+                receptions_by_message[msg_id] = []
+            receptions_by_message[msg_id].append({
+                "node_id": reception['received_by_id'],
+                "rx_snr": float(reception['rx_snr']) if reception['rx_snr'] is not None else 0,
+                "rx_rssi": int(reception['rx_rssi']) if reception['rx_rssi'] is not None else 0,
+                "hop_limit": int(reception['hop_limit']) if reception['hop_limit'] is not None else None,
+                "hop_start": int(reception['hop_start']) if reception['hop_start'] is not None else None
+            })
+    else:
+        receptions_by_message = {}
+    
+    # Process messages
+    chats = []
+    prev_key = ""
+    for row in messages:
+        record = {}
+        for key, value in row.items():
+            if isinstance(value, datetime.datetime):
+                record[key] = value.timestamp()
+            else:
+                record[key] = value
+        
+        # Add reception data
+        record["receptions"] = receptions_by_message.get(record['message_id'], [])
+        
+        # Convert IDs to hex
+        record["from"] = utils.convert_node_id_from_int_to_hex(record["from_id"])
+        record["to"] = utils.convert_node_id_from_int_to_hex(record["to_id"])
+        
+        # Deduplicate messages
+        msg_key = f"{record['from']}{record['to']}{record['text']}{record['message_id']}"
+        if msg_key != prev_key:
+            chats.append(record)
+            prev_key = msg_key
+    
+    return {
+        "items": chats,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": (total + per_page - 1) // per_page,
+        "has_prev": page > 1,
+        "has_next": page * per_page < total,
+        "prev_num": page - 1,
+        "next_num": page + 1
+    }
 
 def get_node_page_data(node_hex):
     """Fetch and process all data for the node page to prevent memory leaks."""
@@ -1951,6 +2026,24 @@ def chat():
         debug=False,
     )
 
+@cache.memoize(timeout=300)  # Cache for 5 minutes
+def calculate_node_distance(node1_hex, node2_hex):
+    """Calculate distance between two nodes, cached to avoid repeated calculations."""
+    nodes = get_cached_nodes()
+    if not nodes:
+        return None
+    
+    node1 = nodes.get(node1_hex)
+    node2 = nodes.get(node2_hex)
+    
+    if not node1 or not node2:
+        return None
+    
+    if not node1.get("position") or not node2.get("position"):
+        return None
+    
+    return utils.calculate_distance_between_nodes(node1, node2)
+
 @app.route('/chat.html')
 def chat2():
     page = request.args.get('page', 1, type=int)
@@ -1965,11 +2058,42 @@ def chat2():
     if not chat_data:
         abort(503, description="Database connection unavailable")
     
+    # Pre-process nodes to reduce template complexity
+    # Only include nodes that are actually used in the chat messages
+    used_node_ids = set()
+    for message in chat_data["items"]:
+        used_node_ids.add(message["from"])
+        if message["to"] != "ffffffff":
+            used_node_ids.add(message["to"])
+        for reception in message.get("receptions", []):
+            node_id = utils.convert_node_id_from_int_to_hex(reception["node_id"])
+            used_node_ids.add(node_id)
+    
+    # Create simplified nodes dict with only needed data
+    simplified_nodes = {}
+    for node_id in used_node_ids:
+        if node_id in nodes:
+            node = nodes[node_id]
+            simplified_nodes[node_id] = {
+                'long_name': node.get('long_name', ''),
+                'short_name': node.get('short_name', ''),
+                'hw_model': node.get('hw_model'),
+                'hw_model_name': meshtastic_support.get_hardware_model_name(node.get('hw_model')) if node.get('hw_model') else None,
+                'role': node.get('role'),
+                'role_name': utils.get_role_name(node.get('role')) if node.get('role') is not None else None,
+                'firmware_version': node.get('firmware_version'),
+                'owner_username': node.get('owner_username'),
+                'owner': node.get('owner'),
+                'position': node.get('position'),
+                'telemetry': node.get('telemetry'),
+                'ts_seen': node.get('ts_seen')
+            }
+    
     return render_template(
         "chat2.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes,
+        nodes=simplified_nodes,
         chat=chat_data["items"],
         pagination=chat_data,
         utils=utils,
@@ -2124,6 +2248,45 @@ def api_geocode():
             
     except Exception as e:
         logging.error(f"Geocoding error: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@cache.memoize(timeout=300)  # Cache for 5 minutes
+def get_node_positions_batch(node_ids):
+    """Get position data for multiple nodes efficiently."""
+    nodes = get_cached_nodes()
+    if not nodes:
+        return {}
+    
+    positions = {}
+    for node_id in node_ids:
+        if node_id in nodes:
+            node = nodes[node_id]
+            if node.get('position') and node['position'].get('latitude') and node['position'].get('longitude'):
+                positions[node_id] = {
+                    'latitude': node['position']['latitude'],
+                    'longitude': node['position']['longitude']
+                }
+    
+    return positions
+
+@app.route('/api/node-positions')
+def api_node_positions():
+    """API endpoint to get position data for specific nodes for client-side distance calculations."""
+    try:
+        # Get list of node IDs from query parameter
+        node_ids = request.args.get('nodes', '').split(',')
+        node_ids = [nid.strip() for nid in node_ids if nid.strip()]
+        
+        if not node_ids:
+            return jsonify({'positions': {}})
+        
+        # Use the cached batch function
+        positions = get_node_positions_batch(tuple(node_ids))  # Convert to tuple for caching
+        
+        return jsonify({'positions': positions})
+        
+    except Exception as e:
+        logging.error(f"Error fetching node positions: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 def run():

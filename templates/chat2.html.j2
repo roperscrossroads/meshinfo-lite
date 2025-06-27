@@ -43,6 +43,117 @@ window.addEventListener('load', function() {
         initializePopovers();
     }
 });
+
+// Client-side distance calculation
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Load position data and update tooltips with distances
+async function loadDistances() {
+    try {
+        console.log('Starting distance calculation...');
+        
+        // Collect all unique node IDs from the current page
+        const nodeIds = new Set();
+        
+        // Get sender IDs from message containers
+        document.querySelectorAll('.message-container[data-sender-id]').forEach(container => {
+            const senderId = container.getAttribute('data-sender-id');
+            if (senderId) nodeIds.add(senderId);
+        });
+        
+        // Get receiver IDs from reception badges
+        document.querySelectorAll('.reception-badge[data-receiver-id]').forEach(badge => {
+            const receiverId = badge.getAttribute('data-receiver-id');
+            if (receiverId) nodeIds.add(receiverId);
+        });
+        
+        console.log('Found node IDs:', Array.from(nodeIds));
+        
+        if (nodeIds.size === 0) {
+            console.warn('No node IDs found for distance calculation');
+            return;
+        }
+        
+        // Convert to array and join for API call
+        const nodeIdsArray = Array.from(nodeIds);
+        const response = await fetch(`/api/node-positions?nodes=${nodeIdsArray.join(',')}`);
+        if (!response.ok) {
+            console.warn('Failed to load node positions for distance calculation');
+            return;
+        }
+        
+        const data = await response.json();
+        const positions = data.positions;
+        console.log('Received positions:', positions);
+        
+        // Update all receiver popovers with distance information
+        let updatedCount = 0;
+        document.querySelectorAll('.reception-badge[data-toggle="popover"]').forEach(badge => {
+            try {
+                const senderId = badge.closest('.message-container').getAttribute('data-sender-id');
+                const receiverId = badge.getAttribute('data-receiver-id');
+                
+                console.log(`Checking ${senderId} -> ${receiverId}`);
+                
+                if (senderId && receiverId && positions[senderId] && positions[receiverId]) {
+                    const senderPos = positions[senderId];
+                    const receiverPos = positions[receiverId];
+                    const distance = calculateDistance(
+                        senderPos.latitude, senderPos.longitude,
+                        receiverPos.latitude, receiverPos.longitude
+                    );
+                    
+                    console.log(`Distance: ${distance.toFixed(2)} km`);
+                    
+                    // Get current content from data-content attribute
+                    const currentContent = badge.getAttribute('data-content');
+                    if (currentContent && !currentContent.includes('Distance:')) {
+                        const newContent = currentContent.replace('</div>', 
+                            `<br>Distance: ${distance.toFixed(2)} km</div>`);
+                        
+                        // Update the data-content attribute
+                        badge.setAttribute('data-content', newContent);
+                        
+                        // Destroy and recreate the popover to pick up the new content
+                        const $badge = $(badge);
+                        $badge.popover('dispose');
+                        $badge.popover({
+                            html: true,
+                            trigger: 'hover',
+                            placement: 'bottom',
+                            container: 'body',
+                            delay: { show: 50, hide: 100 }
+                        });
+                        
+                        updatedCount++;
+                    }
+                }
+            } catch (error) {
+                console.warn('Error updating popover for badge:', error);
+            }
+        });
+        
+        console.log(`Updated ${updatedCount} popovers with distance information`);
+        
+    } catch (error) {
+        console.warn('Error loading distances:', error);
+    }
+}
+
+// Load distances after page is fully loaded
+window.addEventListener('load', function() {
+    // Longer delay to ensure popovers are fully initialized
+    setTimeout(loadDistances, 500);
+});
 </script>
 {% endblock %}
 
@@ -80,7 +191,7 @@ window.addEventListener('load', function() {
 
     <div class="chat-messages">
         {% for message in chat %}
-        <div class="message-container">
+        <div class="message-container" data-sender-id="{{ message.from }}">
             <div class="message-bubble">
                 <div class="message-header d-flex justify-content-between align-items-center"> {# Make header a flex container #}
                     {# Group 1: Sender and optional Recipient #}
@@ -88,79 +199,64 @@ window.addEventListener('load', function() {
                         {# Sender Span (Always Shown) #}
                         <span class="message-sender">
                             {% if message.from in nodes %}
+                                {% set sender = nodes[message.from] %}
                                 <a href="/node_{{ message.from }}.html"
                                 class="node-link"
                                 data-toggle="popover"
                                 data-content="<div class='receiver-popover'>
-                                    <strong>{{ nodes[message.from].long_name|replace('"', '&quot;') }}</strong><br>
+                                    <strong>{{ sender.long_name|replace('"', '&quot;') }}</strong><br>
 
                                     {# Hardware Info #}
-                                    {% if nodes[message.from].hw_model %}
-                                        HW: {{ meshtastic_support.get_hardware_model_name(nodes[message.from].hw_model) }}<br>
+                                    {% if sender.hw_model %}
+                                        HW: {{ sender.hw_model_name if sender.hw_model_name else 'Unknown' }}<br>
                                     {% endif %}
-                                    {% if nodes[message.from].firmware_version %}
-                                        FW: {{ nodes[message.from].firmware_version }}<br>
+                                    {% if sender.firmware_version %}
+                                        FW: {{ sender.firmware_version }}<br>
                                     {% endif %}
 
-                                    {# --- Start Role Display --- #}
-                                    {% if nodes[message.from].role is not none %}
-                                        Role: 
-                                        {% set role_val = nodes[message.from].role %}
-                                        {% if role_val == 0 %}Client
-                                        {% elif role_val == 1 %}Client Mute
-                                        {% elif role_val == 2 %}Router
-                                        {% elif role_val == 3 %}Router Client
-                                        {% elif role_val == 4 %}Repeater
-                                        {% elif role_val == 5 %}Tracker
-                                        {% elif role_val == 6 %}Sensor
-                                        {% elif role_val == 7 %}ATAK
-                                        {% elif role_val == 8 %}Client Hidden
-                                        {% elif role_val == 9 %}Lost and Found
-                                        {% elif role_val == 10 %}ATAK Tracker
-                                        {% elif role_val == 11 %}Router Late
-                                        {% else %}Unknown ({{ role_val }})
-                                        {% endif %}<br>
+                                    {# Role Display #}
+                                    {% if sender.role is not none %}
+                                        Role: {{ sender.role_name }}<br>
                                     {% endif %}
-                                    {# --- End Role Display --- #}
 
                                     {# Owner #}
-                                    {% if nodes[message.from].owner_username %}
-                                        Owner: {{ nodes[message.from].owner_username }}<br>
+                                    {% if sender.owner_username %}
+                                        Owner: {{ sender.owner_username }}<br>
                                     {% endif %}
 
                                     {# Location #}
-                                    {% if nodes[message.from].position %}
-                                        {% if nodes[message.from].position.geocoded %}
-                                            Loc: {{ nodes[message.from].position.geocoded }}<br>
-                                        {% elif nodes[message.from].position.latitude is not none and nodes[message.from].position.longitude is not none %}
-                                            Lat: {{ '%.5f'|format(nodes[message.from].position.latitude) }}, Lon: {{ '%.5f'|format(nodes[message.from].position.longitude) }}
-                                            {% if nodes[message.from].position.altitude is not none %}
-                                                Alt: {{ nodes[message.from].position.altitude }}m
+                                    {% if sender.position %}
+                                        {% if sender.position.geocoded %}
+                                            Loc: {{ sender.position.geocoded }}<br>
+                                        {% elif sender.position.latitude is not none and sender.position.longitude is not none %}
+                                            Lat: {{ '%.5f'|format(sender.position.latitude) }}, Lon: {{ '%.5f'|format(sender.position.longitude) }}
+                                            {% if sender.position.altitude is not none %}
+                                                Alt: {{ sender.position.altitude }}m
                                             {% endif %}<br>
                                         {% endif %}
                                     {% endif %}
 
                                     {# Telemetry Status #}
-                                    {% if nodes[message.from].telemetry %}
-                                        {% if nodes[message.from].telemetry.battery_level is not none %}
-                                            Batt: {{ nodes[message.from].telemetry.battery_level }}%
-                                            {% if nodes[message.from].telemetry.voltage is not none %}
-                                                ({{ '%.2f'|format(nodes[message.from].telemetry.voltage) }}V)
+                                    {% if sender.telemetry %}
+                                        {% if sender.telemetry.battery_level is not none %}
+                                            Batt: {{ sender.telemetry.battery_level }}%
+                                            {% if sender.telemetry.voltage is not none %}
+                                                ({{ '%.2f'|format(sender.telemetry.voltage) }}V)
                                             {% endif %}<br>
-                                        {% elif nodes[message.from].telemetry.voltage is not none %}
-                                            Voltage: {{ '%.2f'|format(nodes[message.from].telemetry.voltage) }}V<br>
+                                        {% elif sender.telemetry.voltage is not none %}
+                                            Voltage: {{ '%.2f'|format(sender.telemetry.voltage) }}V<br>
                                         {% endif %}
                                         {# Optional: Environmentals #}
-                                        {% if nodes[message.from].telemetry.temperature is not none %} Temp: {{ '%.1f'|format(nodes[message.from].telemetry.temperature) }}&deg;C {% endif %}
-                                        {% if nodes[message.from].telemetry.relative_humidity is not none %} RH: {{ '%.1f'|format(nodes[message.from].telemetry.relative_humidity) }}% {% endif %}
-                                        {% if nodes[message.from].telemetry.barometric_pressure is not none %} Pres: {{ '%.1f'|format(nodes[message.from].telemetry.barometric_pressure / 100) }}hPa {% endif %} {# Assuming pressure is in Pa #}
-                                        {% if nodes[message.from].telemetry.temperature is not none or nodes[message.from].telemetry.relative_humidity is not none or nodes[message.from].telemetry.barometric_pressure is not none %}<br>{% endif %}
+                                        {% if sender.telemetry.temperature is not none %} Temp: {{ '%.1f'|format(sender.telemetry.temperature) }}&deg;C {% endif %}
+                                        {% if sender.telemetry.relative_humidity is not none %} RH: {{ '%.1f'|format(sender.telemetry.relative_humidity) }}% {% endif %}
+                                        {% if sender.telemetry.barometric_pressure is not none %} Pres: {{ '%.1f'|format(sender.telemetry.barometric_pressure / 100) }}hPa {% endif %}
+                                        {% if sender.telemetry.temperature is not none or sender.telemetry.relative_humidity is not none or sender.telemetry.barometric_pressure is not none %}<br>{% endif %}
                                     {% endif %}
 
                                     {# Last Seen #}
-                                    Last Seen: {{ time_ago(nodes[message.from].ts_seen) }}
+                                    Last Seen: {{ time_ago(sender.ts_seen) }}
                                 </div>">
-                                    {{ nodes[message.from].long_name|replace('"', '&quot;') }} ({{ nodes[message.from].short_name|replace('"', '&quot;') }})
+                                    {{ sender.long_name|replace('"', '&quot;') }} ({{ sender.short_name|replace('"', '&quot;') }})
                                 </a>
                             {% else %}
                                 {{ message.from }}
@@ -284,6 +380,7 @@ window.addEventListener('load', function() {
                             <a href="/node_{{ node_id }}.html" 
                             class="reception-badge {% if reception.rx_snr > 0 %}snr-good{% elif reception.rx_snr > -5 %}snr-adequate{% elif reception.rx_snr > -10 %}snr-poor{% else %}snr-very-poor{% endif %}"
                             data-toggle="popover"
+                            data-receiver-id="{{ node_id }}"
                             data-content="<div class='receiver-popover'>
                                 <strong>{{ node.long_name|replace('"', '&quot;') }}</strong><br>
                                 SNR: {{ '%.1f'|format(reception.rx_snr) }}dB<br>
