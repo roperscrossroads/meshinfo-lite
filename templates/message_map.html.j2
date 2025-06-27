@@ -185,7 +185,9 @@
             type: 'receiver',
             lat: lat, // Use JS var
             lon: lon, // Use JS var
-            positionTime: {{ receiver_pos.position_time }}
+            positionTime: {{ receiver_pos.position_time }},
+            relayNode: {% if details and details.relay_node %}'{{ details.relay_node }}'{% else %}null{% endif %},
+            actualRelayNode: {% if details and details.relay_node %}{% set actual_relay = find_relay_node_by_suffix(details.relay_node[-2:], nodes, [receiver_id], message.from_id) %}{% if actual_relay %}'{{ actual_relay }}'{% else %}null{% endif %}{% else %}null{% endif %}
         };
         console.log("   Created nodeData object:", nodeData);
 
@@ -314,7 +316,9 @@
               type: 'receiver',
               lat: lat,
               lon: lon,
-              positionTime: {{ receiver_pos.position_time }}
+              positionTime: {{ receiver_pos.position_time }},
+              relayNode: {% if details and details.relay_node %}'{{ details.relay_node }}'{% else %}null{% endif %},
+              actualRelayNode: {% if details and details.relay_node %}{% set actual_relay = find_relay_node_by_suffix(details.relay_node[-2:], nodes, [receiver_id], message.from_id) %}{% if actual_relay %}'{{ actual_relay }}'{% else %}null{% endif %}{% else %}null{% endif %}
           };
           
           // Create receiver style with hop count text
@@ -486,6 +490,20 @@
         }
         if (node.hops !== undefined) {
             html += `<strong>Hops:</strong> ${node.hops}<br>`;
+        }
+        
+        // Add relay information for receivers
+        if (node.relayNode) {
+            if (node.actualRelayNode) {
+                // Show relay node's long_name as a link
+                let relayId = node.actualRelayNode;
+                let relayName = nodes[relayId] ? nodes[relayId].long_name : relayId;
+                html += `<strong>Relay Node:</strong> <a href="node_${relayId}.html">${relayName}</a><br>`;
+            } else {
+                // Show only the last two hex digits
+                let relaySuffix = node.relayNode.slice(-2);
+                html += `<strong>Relay Suffix:</strong> ${relaySuffix} (unconfirmed)<br>`;
+            }
         }
         
         // Calculate distance using stored coordinates

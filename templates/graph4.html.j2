@@ -140,7 +140,7 @@
             name: 'cola',
             animate: true,
             refresh: 1,
-            maxSimulationTime: 15000,
+            maxSimulationTime: 500,
             nodeDimensionsIncludeLabels: true,
             fit: true,
             padding: 50,
@@ -167,9 +167,9 @@
             gridSnapIterations: 100,
 
             // Faster initial layout
-            initialUnconstrainedIterations: 100,
-            initialUserConstraintIterations: 100,
-            initialAllConstraintsIterations: 100,
+            initialUnconstrainedIterations: 1000,
+            initialUserConstraintIterations: 1000,
+            initialAllConstraintsIterations: 1000,
 
             groups: function() {
                 // Create groups of nodes based on their connectivity

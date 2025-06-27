@@ -7,6 +7,8 @@ from .add_message_reception import migrate as add_message_reception
 from .add_traceroute_id import migrate as add_traceroute_id
 from .add_positionlog_log_id import migrate as add_positionlog_log_id
 from .add_message_map_indexes import migrate as add_message_map_indexes
+from .add_relay_node_to_reception import migrate as add_relay_node_to_reception
+from .add_relay_edges_table import migrate as add_relay_edges_table
 
 # List of migrations to run in order
 MIGRATIONS = [
@@ -18,4 +20,6 @@ MIGRATIONS = [
     add_traceroute_id,
     add_positionlog_log_id,
     add_message_map_indexes,
+    add_relay_node_to_reception,
+    add_relay_edges_table,
 ]

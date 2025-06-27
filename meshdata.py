@@ -1586,6 +1586,12 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
         rx_snr = data.get("rx_snr")
         rx_rssi = data.get("rx_rssi")
         
+        # Process relay_node if present (firmware 2.5.x+)
+        relay_node = None
+        if "relay_node" in data and data["relay_node"] is not None:
+            # Convert relay_node to hex format (last 2 bytes of node ID)
+            relay_node = f"{data['relay_node']:04x}"  # Convert to 4-char hex string (last 2 bytes)
+        
         # Store reception information if this is a received message with SNR/RSSI data
         if message_id and rx_snr is not None and rx_rssi is not None:
             received_by = None
@@ -1596,7 +1602,7 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
                 
             if received_by and received_by != data.get("from"):  # Don't store reception by sender
                 self.store_reception(message_id, data["from"], received_by, rx_snr, rx_rssi, 
-                                    data.get("rx_time"), hop_limit, hop_start)
+                                    data.get("rx_time"), hop_limit, hop_start, relay_node)
         
         # Continue with the regular message type processing
         tp = data["type"]
@@ -1632,17 +1638,18 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
         else:
             logging.warning(f"store: Unknown message type '{tp}' from node {data.get('from')}")
 
-    def store_reception(self, message_id, from_id, received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start):
+    def store_reception(self, message_id, from_id, received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node=None):
         """Store reception information for any message type with hop data."""
         sql = """INSERT INTO message_reception
-        (message_id, from_id, received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (message_id, from_id, received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
         rx_snr = VALUES(rx_snr),
         rx_rssi = VALUES(rx_rssi),
         rx_time = VALUES(rx_time),
         hop_limit = VALUES(hop_limit),
-        hop_start = VALUES(hop_start)"""
+        hop_start = VALUES(hop_start),
+        relay_node = VALUES(relay_node)"""
         params = (
             message_id,
             from_id,
@@ -1651,12 +1658,34 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             rx_rssi,
             rx_time,
             hop_limit,
-            hop_start
+            hop_start,
+            relay_node
         )
         cur = self.db.cursor()
         cur.execute(sql, params)
-        cur.close()
         self.db.commit()
+        cur.close()
+
+        # --- Relay Edges Table Update ---
+        # Only update if relay_node is present and not None
+        if relay_node:
+            try:
+                relay_suffix = relay_node[-2:]  # Only last two hex digits
+                from_hex = format(from_id, '08x')
+                to_hex = format(received_by_id, '08x')
+                edge_sql = """
+                    INSERT INTO relay_edges (from_node, relay_suffix, to_node, first_seen, last_seen, count)
+                    VALUES (%s, %s, %s, NOW(), NOW(), 1)
+                    ON DUPLICATE KEY UPDATE last_seen = NOW(), count = count + 1
+                """
+                edge_params = (from_hex, relay_suffix, to_hex)
+                cur = self.db.cursor()
+                cur.execute(edge_sql, edge_params)
+                self.db.commit()
+                cur.close()
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to update relay_edges: {e}")
 
     def setup_database(self):
         creates = [
@@ -2357,7 +2386,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         # Handle single receiver case
         if len(receiver_ids) == 1:
             query = """
-                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start
+                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node
                 FROM message_reception
                 WHERE message_id = %s AND received_by_id = %s
             """
@@ -2365,7 +2394,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         else:
             placeholders = ','.join(['%s'] * len(receiver_ids))
             query = f"""
-                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start
+                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node
                 FROM message_reception
                 WHERE message_id = %s AND received_by_id IN ({placeholders})
             """
@@ -2398,6 +2427,182 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         heard_by = cur.fetchall()
         cur.close()
         return heard_by
+
+    def get_relay_network_data(self, days=30):
+        """Infer relay network data from message_reception table, not relay_edges."""
+        cursor = None
+        try:
+            # Ensure database connection is valid
+            if not self.db or not self.db.is_connected():
+                self.connect_db()
+            
+            # 1. Load all relevant message_reception rows
+            cursor = self.db.cursor(dictionary=True)
+            if days > 0:
+                cutoff = int(time.time()) - days * 86400
+                cursor.execute("""
+                    SELECT message_id, from_id, received_by_id, relay_node, rx_time, hop_limit, hop_start
+                    FROM message_reception
+                    WHERE rx_time > %s
+                """, (cutoff,))
+            else:
+                cursor.execute("""
+                    SELECT message_id, from_id, received_by_id, relay_node, rx_time, hop_limit, hop_start
+                    FROM message_reception
+                """)
+            receptions = cursor.fetchall()
+            
+            # 2. Load all nodes for lookup
+            nodes_dict = self.get_nodes()
+            node_ids_set = set(nodes_dict.keys())
+            node_id_ints = {int(k, 16): k for k in node_ids_set}
+
+            # 3. Build relay edges and virtual relay nodes
+            edge_map = {}  # (from, to) -> {count, relay_suffix, first_seen, last_seen}
+            virtual_nodes = {}  # relay_xx -> {id, relay_suffix}
+            endpoint_nodes = set()  # Only nodes that are endpoints of at least one edge
+            for rec in receptions:
+                sender = rec['from_id']
+                receiver = rec['received_by_id']
+                relay_node = rec['relay_node']
+                rx_time = rec['rx_time']
+                hop_limit = rec['hop_limit']
+                hop_start = rec['hop_start']
+                sender_hex = format(sender, '08x')
+                receiver_hex = format(receiver, '08x')
+                # Determine edge type
+                if relay_node:
+                    relay_suffix = relay_node[-2:].lower()
+                    # Try to match relay_node to a known node
+                    relay_match = None
+                    for node_hex in node_ids_set:
+                        if node_hex[-2:] == relay_suffix:
+                            relay_match = node_hex if not relay_match else None  # Only if unique
+                    if relay_match:
+                        from_node = relay_match
+                    else:
+                        from_node = f"relay_{relay_suffix}"
+                        if from_node not in virtual_nodes:
+                            virtual_nodes[from_node] = {'id': from_node, 'relay_suffix': relay_suffix}
+                    to_node = receiver_hex
+                elif (hop_limit is None and hop_start is None) or (hop_start is not None and hop_limit is not None and hop_start - hop_limit == 0):
+                    # Zero-hop: direct sender->receiver
+                    from_node = sender_hex
+                    to_node = receiver_hex
+                else:
+                    continue  # Ignore receptions that don't fit the above
+                # Edge key
+                edge_key = (from_node, to_node)
+                if edge_key not in edge_map:
+                    edge_map[edge_key] = {
+                        'count': 0,
+                        'relay_suffix': relay_node[-2:].lower() if relay_node else None,
+                        'first_seen': rx_time,
+                        'last_seen': rx_time
+                    }
+                edge_map[edge_key]['count'] += 1
+                if rx_time:
+                    if edge_map[edge_key]['first_seen'] is None or rx_time < edge_map[edge_key]['first_seen']:
+                        edge_map[edge_key]['first_seen'] = rx_time
+                    if edge_map[edge_key]['last_seen'] is None or rx_time > edge_map[edge_key]['last_seen']:
+                        edge_map[edge_key]['last_seen'] = rx_time
+                # Track endpoints
+                endpoint_nodes.add(from_node)
+                endpoint_nodes.add(to_node)
+
+            # 4. Build node list (real + virtual), but only those that are endpoints
+            nodes = []
+            node_stats = {}
+            for node_hex in endpoint_nodes:
+                node_stats[node_hex] = {'message_count': 0, 'relay_count': 0}
+            # Count stats
+            for (from_node, to_node), edge in edge_map.items():
+                node_stats[from_node]['message_count'] += edge['count']
+                node_stats[to_node]['relay_count'] += edge['count']
+            # Real nodes
+            for node_hex in endpoint_nodes:
+                if node_hex in nodes_dict:
+                    node = nodes_dict[node_hex]
+                    # Use graph_icon utility for robust icon path
+                    node_name_for_icon = node.get('long_name', node.get('short_name', ''))
+                    icon_url = utils.graph_icon(node_name_for_icon)
+                    nodes.append({
+                        'id': node_hex,
+                        'long_name': node.get('long_name') or f"Node {node_hex}",
+                        'short_name': node.get('short_name') or f"Node {node_hex}",
+                        'hw_model': node.get('hw_model') or 'Unknown',
+                        'firmware_version': node.get('firmware_version'),
+                        'role': node.get('role'),
+                        'owner': node.get('owner'),
+                        'last_seen': node.get('ts_seen'),
+                        'message_count': node_stats[node_hex]['message_count'],
+                        'relay_count': node_stats[node_hex]['relay_count'],
+                        'icon_url': icon_url
+                    })
+            # Virtual relay nodes
+            for node_hex in endpoint_nodes:
+                if node_hex.startswith('relay_'):
+                    v = virtual_nodes[node_hex]
+                    nodes.append({
+                        'id': v['id'],
+                        'long_name': f"Relay {v['relay_suffix']}",
+                        'short_name': f"relay_{v['relay_suffix']}",
+                        'hw_model': 'Virtual',
+                        'firmware_version': None,
+                        'role': None,
+                        'owner': None,
+                        'last_seen': None,
+                        'message_count': node_stats[v['id']]['message_count'],
+                        'relay_count': node_stats[v['id']]['relay_count'],
+                        'icon_url': None
+                    })
+            # 5. Build edge list
+            edges = []
+            for (from_node, to_node), edge in edge_map.items():
+                edges.append({
+                    'id': f"{from_node}-{to_node}",
+                    'from_node': from_node,
+                    'to_node': to_node,
+                    'relay_suffix': edge['relay_suffix'],
+                    'message_count': edge['count'],
+                    'first_seen': datetime.datetime.fromtimestamp(edge['first_seen']).strftime('%Y-%m-%d %H:%M:%S') if edge['first_seen'] else None,
+                    'last_seen': datetime.datetime.fromtimestamp(edge['last_seen']).strftime('%Y-%m-%d %H:%M:%S') if edge['last_seen'] else None
+                })
+            # 6. Stats
+            total_nodes = len(nodes)
+            total_edges = len(edges)
+            total_messages = sum(e['message_count'] for e in edges)
+            avg_hops = total_edges / total_nodes if total_nodes > 0 else 0
+            stats = {
+                'total_nodes': total_nodes,
+                'total_edges': total_edges,
+                'total_messages': total_messages,
+                'avg_hops': avg_hops
+            }
+            return {
+                'nodes': nodes,
+                'edges': edges,
+                'stats': stats
+            }
+        except Exception as e:
+            logging.error(f"Error in get_relay_network_data: {e}")
+            # Return empty data structure on error
+            return {
+                'nodes': [],
+                'edges': [],
+                'stats': {
+                    'total_nodes': 0,
+                    'total_edges': 0,
+                    'total_messages': 0,
+                    'avg_hops': 0
+                }
+            }
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception as e:
+                    logging.error(f"Error closing cursor: {e}")
 
 
 def create_database():

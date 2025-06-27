@@ -663,7 +663,7 @@ def get_cached_message_map_data(message_id):
         'ts_created': message_time,
         'receiver_ids': receiver_ids_list
     }
-
+    
     return {
         'nodes': nodes,
         'message': message,
@@ -696,7 +696,8 @@ def message_map():
         convex_hull_area_km2=data['convex_hull_area_km2'],
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(),
+        find_relay_node_by_suffix=find_relay_node_by_suffix
     )
 
 @app.route('/traceroute_map.html')
@@ -2319,6 +2320,67 @@ def clear_nodes_singleton():
         else:
             logging.info("Nodes singleton was already None")
 
+@cache.memoize(timeout=300)  # Cache for 5 minutes
+def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=None):
+    """Find the actual relay node by matching the last 2 hex chars against known node IDs."""
+    if not relay_suffix or len(relay_suffix) < 2:
+        return None
+    relay_suffix = relay_suffix.lower()[-2:]  # Only last two hex digits
+
+    # 1. First, check if the sender itself matches the relay suffix
+    if sender_id:
+        sender_id_hex = utils.convert_node_id_from_int_to_hex(sender_id)
+        if sender_id_hex.lower()[-2:] == relay_suffix:
+            return sender_id_hex
+
+    # 2. Check if any of the message receivers match the relay suffix
+    if receiver_ids:
+        for receiver_id in receiver_ids:
+            receiver_id_hex = utils.convert_node_id_from_int_to_hex(receiver_id)
+            if receiver_id_hex.lower()[-2:] == relay_suffix:
+                return receiver_id_hex
+
+    # 3. Check active nodes (nodes that have been seen recently)
+    active_nodes = []
+    for node_id_hex, node_data in nodes.items():
+        if len(node_id_hex) == 8 and node_id_hex.lower()[-2:] == relay_suffix:
+            if (node_data.get('telemetry') or 
+                node_data.get('position') or 
+                node_data.get('ts_seen')):
+                active_nodes.append(node_id_hex)
+    if len(active_nodes) == 1:
+        return active_nodes[0]
+
+    # 4. If no active nodes or multiple active nodes, check all known nodes
+    matching_nodes = []
+    for node_id_hex, node_data in nodes.items():
+        if len(node_id_hex) == 8 and node_id_hex.lower()[-2:] == relay_suffix:
+            matching_nodes.append(node_id_hex)
+    if len(matching_nodes) == 1:
+        return matching_nodes[0]
+    return None
+
+@app.route('/message-paths.html')
+def message_paths():
+    days = float(request.args.get('days', 0.167))  # Default to 4 hours if not provided
+    
+    md = get_meshdata()
+    if not md:
+        abort(503, description="Database connection unavailable")
+    
+    # Get relay network data
+    relay_data = md.get_relay_network_data(days)
+    
+    return render_template(
+        "message-paths.html.j2",
+        auth=auth(),
+        config=config,
+        relay_data=relay_data,
+        stats=relay_data['stats'],
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now()
+    )
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()
