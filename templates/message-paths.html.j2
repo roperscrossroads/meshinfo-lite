@@ -12,12 +12,13 @@
 
     <div class="row mb-3">
       <div class="col-md-6">
+        {% set days_val = request.args.get('days', '0.167') %}
         <div class="btn-group" role="group" aria-label="Time filter">
-          <button type="button" class="btn btn-outline-primary active" data-time="0.167">4h</button>
-          <button type="button" class="btn btn-outline-primary" data-time="0.5">12h</button>
-          <button type="button" class="btn btn-outline-primary" data-time="1">24h</button>
-          <button type="button" class="btn btn-outline-primary" data-time="7">7d</button>
-          <button type="button" class="btn btn-outline-primary" data-time="0">All</button>
+          <button type="button" class="btn btn-outline-primary{% if days_val == '0.167' %} active{% endif %}" data-time="0.167">4h</button>
+          <button type="button" class="btn btn-outline-primary{% if days_val == '0.5' %} active{% endif %}" data-time="0.5">12h</button>
+          <button type="button" class="btn btn-outline-primary{% if days_val == '1' %} active{% endif %}" data-time="1">24h</button>
+          <button type="button" class="btn btn-outline-primary{% if days_val == '7' %} active{% endif %}" data-time="7">7d</button>
+          <button type="button" class="btn btn-outline-primary{% if days_val == '0' %} active{% endif %}" data-time="0">All</button>
         </div>
       </div>
       <div class="col-md-6 text-end">

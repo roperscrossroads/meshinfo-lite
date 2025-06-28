@@ -9,6 +9,7 @@ import re
 from timezone_utils import time_ago  # Import time_ago from timezone_utils
 from meshtastic_support import get_hardware_model_name  # Import get_hardware_model_name from meshtastic_support
 import types
+from collections import defaultdict, deque
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -2432,11 +2433,8 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         """Infer relay network data from message_reception table, not relay_edges."""
         cursor = None
         try:
-            # Ensure database connection is valid
             if not self.db or not self.db.is_connected():
                 self.connect_db()
-            
-            # 1. Load all relevant message_reception rows
             cursor = self.db.cursor(dictionary=True)
             if days > 0:
                 cutoff = int(time.time()) - days * 86400
@@ -2451,16 +2449,30 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     FROM message_reception
                 """)
             receptions = cursor.fetchall()
-            
-            # 2. Load all nodes for lookup
             nodes_dict = self.get_nodes()
             node_ids_set = set(nodes_dict.keys())
             node_id_ints = {int(k, 16): k for k in node_ids_set}
 
-            # 3. Build relay edges and virtual relay nodes
-            edge_map = {}  # (from, to) -> {count, relay_suffix, first_seen, last_seen}
-            virtual_nodes = {}  # relay_xx -> {id, relay_suffix}
-            endpoint_nodes = set()  # Only nodes that are endpoints of at least one edge
+            # 1. Build zero-hop (direct) network
+            zero_hop_edges = []
+            for rec in receptions:
+                hop_limit = rec['hop_limit']
+                hop_start = rec['hop_start']
+                sender = rec['from_id']
+                receiver = rec['received_by_id']
+                sender_hex = format(sender, '08x')
+                receiver_hex = format(receiver, '08x')
+                if (hop_limit is None and hop_start is None) or (hop_start is not None and hop_limit is not None and hop_start - hop_limit == 0):
+                    zero_hop_edges.append((sender_hex, receiver_hex))
+
+            # Build zero-hop adjacency for real nodes
+            zero_hop_graph = defaultdict(set)
+            for a, b in zero_hop_edges:
+                zero_hop_graph[a].add(b)
+                zero_hop_graph[b].add(a)
+
+            # 2. Group relay receptions by suffix
+            relay_suffix_edges = defaultdict(list)
             for rec in receptions:
                 sender = rec['from_id']
                 receiver = rec['received_by_id']
@@ -2470,56 +2482,115 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 hop_start = rec['hop_start']
                 sender_hex = format(sender, '08x')
                 receiver_hex = format(receiver, '08x')
-                # Determine edge type
                 if relay_node:
                     relay_suffix = relay_node[-2:].lower()
-                    # Try to match relay_node to a known node
-                    relay_match = None
-                    for node_hex in node_ids_set:
-                        if node_hex[-2:] == relay_suffix:
-                            relay_match = node_hex if not relay_match else None  # Only if unique
-                    if relay_match:
-                        from_node = relay_match
-                    else:
-                        from_node = f"relay_{relay_suffix}"
-                        if from_node not in virtual_nodes:
-                            virtual_nodes[from_node] = {
-                                'id': from_node,
-                                'relay_suffix': relay_suffix,
-                                'short_name': from_node,
-                                'long_name': f"Relay {relay_suffix}",
-                                'hw_model': 'Virtual',
-                                'firmware_version': None,
-                                'role': None,
-                                'owner': None
-                            }
-                    to_node = receiver_hex
+                    relay_suffix_edges[relay_suffix].append((sender_hex, receiver_hex, rx_time, relay_node))
                 elif (hop_limit is None and hop_start is None) or (hop_start is not None and hop_limit is not None and hop_start - hop_limit == 0):
-                    # Zero-hop: direct sender->receiver
-                    from_node = sender_hex
-                    to_node = receiver_hex
-                else:
-                    continue  # Ignore receptions that don't fit the above
-                # Edge key
-                edge_key = (from_node, to_node)
-                if edge_key not in edge_map:
-                    edge_map[edge_key] = {
-                        'count': 0,
-                        'relay_suffix': relay_node[-2:].lower() if relay_node else None,
-                        'first_seen': rx_time,
-                        'last_seen': rx_time
-                    }
-                edge_map[edge_key]['count'] += 1
-                if rx_time:
-                    if edge_map[edge_key]['first_seen'] is None or rx_time < edge_map[edge_key]['first_seen']:
-                        edge_map[edge_key]['first_seen'] = rx_time
-                    if edge_map[edge_key]['last_seen'] is None or rx_time > edge_map[edge_key]['last_seen']:
-                        edge_map[edge_key]['last_seen'] = rx_time
-                # Track endpoints
-                endpoint_nodes.add(from_node)
-                endpoint_nodes.add(to_node)
+                    relay_suffix_edges[None].append((sender_hex, receiver_hex, rx_time, None))
 
-            # Aggregate first_seen and last_seen for each node from edges
+            # 3. Find connected components for each relay suffix
+            relay_suffix_components = {}
+            relay_suffix_node_to_component = {}
+            for suffix, edges in relay_suffix_edges.items():
+                graph = defaultdict(set)
+                for from_hex, to_hex, _, _ in edges:
+                    graph[from_hex].add(to_hex)
+                    graph[to_hex].add(from_hex)
+                visited = set()
+                components = []
+                for node in graph:
+                    if node in visited:
+                        continue
+                    queue = deque([node])
+                    comp = set()
+                    while queue:
+                        n = queue.popleft()
+                        if n in visited:
+                            continue
+                        visited.add(n)
+                        comp.add(n)
+                        for neighbor in graph[n]:
+                            if neighbor not in visited:
+                                queue.append(neighbor)
+                    if comp:
+                        components.append(comp)
+                for idx, comp in enumerate(components):
+                    relay_suffix_components[(suffix, idx)] = comp
+                    for n in comp:
+                        relay_suffix_node_to_component[(suffix, n)] = idx
+
+            edge_map = {}
+            virtual_nodes = {}
+            endpoint_nodes = set()
+            # 4. Component-local consolidation
+            for suffix, edges in relay_suffix_edges.items():
+                # Group edges by component
+                comp_edges = defaultdict(list)
+                for from_hex, to_hex, rx_time, relay_node in edges:
+                    comp_idx = relay_suffix_node_to_component.get((suffix, from_hex), 0)
+                    comp_edges[comp_idx].append((from_hex, to_hex, rx_time, relay_node))
+                for comp_idx, comp_edge_list in comp_edges.items():
+                    comp_nodes = relay_suffix_components[(suffix, comp_idx)]
+                    # Find all real nodes in the component with this suffix
+                    real_nodes_with_suffix = [n for n in comp_nodes if n in node_ids_set and n[-2:] == (suffix if suffix is not None else '')]
+                    if len(real_nodes_with_suffix) == 1 and suffix is not None:
+                        # Consolidate: use the real node for all edges and endpoints in this component
+                        unique_real_node = real_nodes_with_suffix[0]
+                        for from_hex, to_hex, rx_time, relay_node in comp_edge_list:
+                            edge_from = unique_real_node
+                            edge_to = to_hex if to_hex != from_hex else unique_real_node
+                            edge_key = (edge_from, edge_to)
+                            if edge_key not in edge_map:
+                                edge_map[edge_key] = {
+                                    'count': 0,
+                                    'relay_suffix': suffix,
+                                    'first_seen': rx_time,
+                                    'last_seen': rx_time,
+                                    'virtual_id': None
+                                }
+                            edge_map[edge_key]['count'] += 1
+                            if rx_time:
+                                if edge_map[edge_key]['first_seen'] is None or rx_time < edge_map[edge_key]['first_seen']:
+                                    edge_map[edge_key]['first_seen'] = rx_time
+                                if edge_map[edge_key]['last_seen'] is None or rx_time > edge_map[edge_key]['last_seen']:
+                                    edge_map[edge_key]['last_seen'] = rx_time
+                            endpoint_nodes.add(edge_from)
+                            endpoint_nodes.add(edge_to)
+                    else:
+                        # Use a virtual node for this component
+                        virtual_id = f"relay_{suffix}_{comp_idx+1}" if suffix is not None else None
+                        for from_hex, to_hex, rx_time, relay_node in comp_edge_list:
+                            edge_from = virtual_id if virtual_id else from_hex
+                            if virtual_id and virtual_id not in virtual_nodes:
+                                virtual_nodes[virtual_id] = {
+                                    'id': virtual_id,
+                                    'relay_suffix': suffix,
+                                    'short_name': virtual_id,
+                                    'long_name': f"Relay {suffix} ({comp_idx+1})" if suffix is not None else 'Relay',
+                                    'hw_model': 'Virtual',
+                                    'firmware_version': None,
+                                    'role': None,
+                                    'owner': None
+                                }
+                            edge_to = to_hex
+                            edge_key = (edge_from, edge_to)
+                            if edge_key not in edge_map:
+                                edge_map[edge_key] = {
+                                    'count': 0,
+                                    'relay_suffix': suffix,
+                                    'first_seen': rx_time,
+                                    'last_seen': rx_time,
+                                    'virtual_id': virtual_id if suffix is not None else None
+                                }
+                            edge_map[edge_key]['count'] += 1
+                            if rx_time:
+                                if edge_map[edge_key]['first_seen'] is None or rx_time < edge_map[edge_key]['first_seen']:
+                                    edge_map[edge_key]['first_seen'] = rx_time
+                                if edge_map[edge_key]['last_seen'] is None or rx_time > edge_map[edge_key]['last_seen']:
+                                    edge_map[edge_key]['last_seen'] = rx_time
+                            endpoint_nodes.add(edge_from)
+                            endpoint_nodes.add(edge_to)
+
             node_first_seen = {}
             node_last_seen = {}
             for (from_node, to_node), edge in edge_map.items():
@@ -2531,21 +2602,17 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                         if node not in node_last_seen or edge['last_seen'] > node_last_seen[node]:
                             node_last_seen[node] = edge['last_seen']
 
-            # 4. Build node list (real + virtual), but only those that are endpoints
             nodes = []
             node_stats = {}
             for node_hex in endpoint_nodes:
                 node_stats[node_hex] = {'message_count': 0, 'relay_count': 0}
-            # Count stats
             for (from_node, to_node), edge in edge_map.items():
                 node_stats[from_node]['message_count'] += edge['count']
                 node_stats[to_node]['relay_count'] += edge['count']
-            # Real nodes
             for node_hex in endpoint_nodes:
                 if node_hex in nodes_dict:
                     node = nodes_dict[node_hex]
-                    # Use graph_icon utility for robust icon path
-                    node_name_for_icon = node.get('long_name', node.get('short_name', ''))
+                    node_name_for_icon = node.get('long_name') or node.get('short_name', '')
                     icon_url = utils.graph_icon(node_name_for_icon)
                     nodes.append({
                         'id': node_hex,
@@ -2562,38 +2629,21 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                         'relay_count': node_stats[node_hex]['relay_count'],
                         'icon_url': icon_url
                     })
-            # Virtual relay nodes
             for node_hex in endpoint_nodes:
-                if node_hex.startswith('relay_'):
-                    v = virtual_nodes[node_hex]
-                    # Aggregate from edges where this relay is the from_node
-                    relay_edges = [
-                        edge for (from_node, _), edge in edge_map.items()
-                        if from_node == v['id']
-                    ]
-                    if relay_edges:
-                        # Edge fields: 'first_seen', 'last_seen' are timestamps, 'count' is message count
-                        first_seen = min(e['first_seen'] for e in relay_edges if e['first_seen'] is not None)
-                        last_seen = max(e['last_seen'] for e in relay_edges if e['last_seen'] is not None)
-                        relay_count = sum(e['count'] for e in relay_edges if e.get('count'))
-                    else:
-                        first_seen = None
-                        last_seen = None
-                        relay_count = 0
+                if node_hex.startswith('relay_') and node_hex in virtual_nodes:
                     nodes.append({
-                        'id': v['id'],
-                        'short_name': v['short_name'],
-                        'long_name': v['long_name'],
-                        'hw_model': v['hw_model'],
-                        'hw_model_name': get_hardware_model_name(v['hw_model']) if v['hw_model'] is not None else None,
-                        'last_seen': last_seen,
-                        'first_seen': first_seen,
-                        'last_relay': last_seen,
-                        'message_count': node_stats[v['id']]['message_count'],
-                        'relay_count': relay_count,
+                        'id': virtual_nodes[node_hex]['id'],
+                        'short_name': virtual_nodes[node_hex]['short_name'],
+                        'long_name': virtual_nodes[node_hex]['long_name'],
+                        'hw_model': virtual_nodes[node_hex]['hw_model'],
+                        'hw_model_name': get_hardware_model_name(virtual_nodes[node_hex]['hw_model']) if virtual_nodes[node_hex]['hw_model'] is not None else None,
+                        'last_seen': node_last_seen.get(node_hex),
+                        'first_seen': node_first_seen.get(node_hex),
+                        'last_relay': node_last_seen.get(node_hex),
+                        'message_count': node_stats[node_hex]['message_count'],
+                        'relay_count': node_stats[node_hex]['relay_count'],
                         'icon_url': None
                     })
-            # 5. Build edge list
             edges = []
             for (from_node, to_node), edge in edge_map.items():
                 edges.append({
@@ -2602,10 +2652,9 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     'to_node': to_node,
                     'relay_suffix': edge['relay_suffix'],
                     'message_count': edge['count'],
-                    'first_seen': edge['first_seen'],  # <-- raw timestamp
-                    'last_seen': edge['last_seen']     # <-- raw timestamp
+                    'first_seen': edge['first_seen'],
+                    'last_seen': edge['last_seen']
                 })
-            # 6. Stats
             total_nodes = len(nodes)
             total_edges = len(edges)
             total_messages = sum(e['message_count'] for e in edges)

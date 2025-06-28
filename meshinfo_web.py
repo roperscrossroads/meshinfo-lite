@@ -684,20 +684,36 @@ def message_map():
     if not data:
         return redirect(url_for('chat'))
     
+    # --- Provide zero_hop_links and position data for relay node inference ---
+    md = get_meshdata()
+    nodes = data['nodes']
+    sender_id = data['message']['from_id']
+    receiver_ids = data['message']['receiver_ids']
+    # Get zero-hop links for the last 1 day (or configurable)
+    zero_hop_timeout = 86400
+    cutoff_time = int(time.time()) - zero_hop_timeout
+    zero_hop_links, _ = md.get_zero_hop_links(cutoff_time)
+    # Get sender and receiver positions at message time
+    message_time = data['message']['ts_created']
+    sender_pos = data['sender_position']
+    receiver_positions = data['receiver_positions']
+    # Pass the relay matcher and context to the template
     return render_template(
         "message_map.html.j2",
         auth=auth(),
         config=config,
-        nodes=data['nodes'],
+        nodes=nodes,
         message=data['message'],
-        sender_position=data['sender_position'],
-        receiver_positions=data['receiver_positions'],
+        sender_position=sender_pos,
+        receiver_positions=receiver_positions,
         receiver_details=data['receiver_details'],
         convex_hull_area_km2=data['convex_hull_area_km2'],
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
-        find_relay_node_by_suffix=find_relay_node_by_suffix
+        find_relay_node_by_suffix=lambda relay_suffix, nodes, receiver_ids=None, sender_id=None: find_relay_node_by_suffix(
+            relay_suffix, nodes, receiver_ids, sender_id, zero_hop_links=zero_hop_links, sender_pos=sender_pos, receiver_pos=None
+        )
     )
 
 @app.route('/traceroute_map.html')
@@ -2320,45 +2336,150 @@ def clear_nodes_singleton():
         else:
             logging.info("Nodes singleton was already None")
 
-@cache.memoize(timeout=300)  # Cache for 5 minutes
-def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=None):
-    """Find the actual relay node by matching the last 2 hex chars against known node IDs."""
-    if not relay_suffix or len(relay_suffix) < 2:
+def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=None, zero_hop_links=None, sender_pos=None, receiver_pos=None, debug=False):
+    """
+    Improved relay node matcher: prefer zero-hop/extended neighbors, then select the physically closest candidate to the sender (or receiver), using scoring only as a tiebreaker.
+    """
+    import time
+    relay_suffix = relay_suffix.lower()[-2:]
+    candidates = []
+    for node_id_hex, node_data in nodes.items():
+        if len(node_id_hex) == 8 and node_id_hex.lower()[-2:] == relay_suffix:
+            candidates.append((node_id_hex, node_data))
+
+    if not candidates:
+        if debug:
+            print(f"[RelayMatch] No candidates for suffix {relay_suffix}")
         return None
-    relay_suffix = relay_suffix.lower()[-2:]  # Only last two hex digits
+    if len(candidates) == 1:
+        if debug:
+            print(f"[RelayMatch] Only one candidate for suffix {relay_suffix}: {candidates[0][0]}")
+        return candidates[0][0]
 
-    # 1. First, check if the sender itself matches the relay suffix
-    if sender_id:
-        sender_id_hex = utils.convert_node_id_from_int_to_hex(sender_id)
-        if sender_id_hex.lower()[-2:] == relay_suffix:
-            return sender_id_hex
+    # --- Zero-hop filter: only consider zero-hop neighbors if any exist ---
+    zero_hop_candidates = []
+    if zero_hop_links:
+        for node_id_hex, node_data in candidates:
+            is_zero_hop = False
+            if sender_id and node_id_hex in zero_hop_links.get(sender_id, {}).get('heard', {}):
+                is_zero_hop = True
+            if receiver_ids:
+                for rid in receiver_ids:
+                    if node_id_hex in zero_hop_links.get(rid, {}).get('heard', {}):
+                        is_zero_hop = True
+            if is_zero_hop:
+                zero_hop_candidates.append((node_id_hex, node_data))
+    if zero_hop_candidates:
+        if debug:
+            print(f"[RelayMatch] Restricting to zero-hop candidates: {[c[0] for c in zero_hop_candidates]}")
+        candidates = zero_hop_candidates
+    else:
+        # --- Extended neighbor filter: only consider candidates that have ever been heard by or heard from sender/receivers ---
+        extended_candidates = []
+        if zero_hop_links:
+            local_set = set()
+            if sender_id and sender_id in zero_hop_links:
+                local_set.update(zero_hop_links[sender_id].get('heard', {}).keys())
+                local_set.update(zero_hop_links[sender_id].get('heard_by', {}).keys())
+            if receiver_ids:
+                for rid in receiver_ids:
+                    if rid in zero_hop_links:
+                        local_set.update(zero_hop_links[rid].get('heard', {}).keys())
+                        local_set.update(zero_hop_links[rid].get('heard_by', {}).keys())
+            local_set_hex = set()
+            for n in local_set:
+                try:
+                    if isinstance(n, int):
+                        local_set_hex.add(utils.convert_node_id_from_int_to_hex(n))
+                    elif isinstance(n, str) and len(n) == 8:
+                        local_set_hex.add(n)
+                except Exception:
+                    continue
+            for node_id_hex, node_data in candidates:
+                if node_id_hex in local_set_hex:
+                    extended_candidates.append((node_id_hex, node_data))
+        if extended_candidates:
+            if debug:
+                print(f"[RelayMatch] Restricting to extended neighbor candidates: {[c[0] for c in extended_candidates]}")
+            candidates = extended_candidates
+        else:
+            if debug:
+                print(f"[RelayMatch] No local/extended candidates, using all: {[c[0] for c in candidates]}")
 
-    # 2. Check if any of the message receivers match the relay suffix
-    if receiver_ids:
-        for receiver_id in receiver_ids:
-            receiver_id_hex = utils.convert_node_id_from_int_to_hex(receiver_id)
-            if receiver_id_hex.lower()[-2:] == relay_suffix:
-                return receiver_id_hex
+    # --- Distance-first selection among remaining candidates ---
+    def get_distance(node_data, ref_pos):
+        npos = node_data.get('position')
+        if not npos or not ref_pos:
+            return float('inf')
+        nlat = npos.get('latitude') if isinstance(npos, dict) else getattr(npos, 'latitude', None)
+        nlon = npos.get('longitude') if isinstance(npos, dict) else getattr(npos, 'longitude', None)
+        if nlat is None or nlon is None:
+            return float('inf')
+        return utils.distance_between_two_points(ref_pos['lat'], ref_pos['lon'], nlat, nlon)
 
-    # 3. Check active nodes (nodes that have been seen recently)
-    active_nodes = []
-    for node_id_hex, node_data in nodes.items():
-        if len(node_id_hex) == 8 and node_id_hex.lower()[-2:] == relay_suffix:
-            if (node_data.get('telemetry') or 
-                node_data.get('position') or 
-                node_data.get('ts_seen')):
-                active_nodes.append(node_id_hex)
-    if len(active_nodes) == 1:
-        return active_nodes[0]
+    ref_pos = sender_pos if sender_pos else receiver_pos
+    if ref_pos:
+        # Compute distances
+        distances = [(node_id_hex, node_data, get_distance(node_data, ref_pos)) for node_id_hex, node_data in candidates]
+        min_dist = min(d[2] for d in distances)
+        closest = [d for d in distances if abs(d[2] - min_dist) < 1e-3]  # Allow for float rounding
+        if debug:
+            print(f"[RelayMatch] Closest candidates by distance: {[(c[0], c[2]) for c in closest]}")
+        if len(closest) == 1:
+            return closest[0][0]
+        # If tie, fall back to scoring among closest
+        candidates = [(c[0], c[1]) for c in closest]
 
-    # 4. If no active nodes or multiple active nodes, check all known nodes
-    matching_nodes = []
-    for node_id_hex, node_data in nodes.items():
-        if len(node_id_hex) == 8 and node_id_hex.lower()[-2:] == relay_suffix:
-            matching_nodes.append(node_id_hex)
-    if len(matching_nodes) == 1:
-        return matching_nodes[0]
-    return None
+    # --- Scoring system as tiebreaker ---
+    scores = {}
+    now = time.time()
+    for node_id_hex, node_data in candidates:
+        score = 0
+        reasons = []
+        if zero_hop_links:
+            if sender_id and node_id_hex in zero_hop_links.get(sender_id, {}).get('heard', {}):
+                score += 100
+                reasons.append('zero-hop-sender')
+            if receiver_ids:
+                for rid in receiver_ids:
+                    if node_id_hex in zero_hop_links.get(rid, {}).get('heard', {}):
+                        score += 100
+                        reasons.append(f'zero-hop-receiver-{rid}')
+        proximity_score = 0
+        pos_fresh = False
+        if sender_pos and node_data.get('position'):
+            npos = node_data['position']
+            nlat = npos.get('latitude') if isinstance(npos, dict) else getattr(npos, 'latitude', None)
+            nlon = npos.get('longitude') if isinstance(npos, dict) else getattr(npos, 'longitude', None)
+            ntime = npos.get('position_time') if isinstance(npos, dict) else getattr(npos, 'position_time', None)
+            if nlat is not None and nlon is not None and ntime is not None:
+                if now - ntime > 21600:
+                    score -= 50
+                    reasons.append('stale-position')
+                else:
+                    pos_fresh = True
+                    dist = utils.distance_between_two_points(sender_pos['lat'], sender_pos['lon'], nlat, nlon)
+                    proximity_score = max(0, 100 - dist * 2)
+                    score += proximity_score
+                    reasons.append(f'proximity:{dist:.1f}km(+{proximity_score:.1f})')
+            else:
+                score -= 100
+                reasons.append('missing-position')
+        if node_data.get('ts_seen') and (now - node_data['ts_seen'] < 3600):
+            score += 10
+            reasons.append('recently-seen')
+        if node_data.get('role') not in [1, 8]:
+            score += 5
+            reasons.append('relay-capable')
+        scores[node_id_hex] = (score, reasons)
+    if debug:
+        print(f"[RelayMatch] Candidates for suffix {relay_suffix}:")
+        for nid, (score, reasons) in scores.items():
+            print(f"  {nid}: score={score}, reasons={reasons}")
+    best = max(scores.items(), key=lambda x: x[1][0])
+    if debug:
+        print(f"[RelayMatch] Selected {best[0]} for suffix {relay_suffix} (score={best[1][0]})")
+    return best[0]
 
 @app.route('/message-paths.html')
 def message_paths():
