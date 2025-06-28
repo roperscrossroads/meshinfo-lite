@@ -122,11 +122,35 @@
                element.isNode() ? element.renderedPosition() : true;
       }
       
-      // Helper function to format timestamp
-      function formatTimestamp(ts) {
-        if (!ts || isNaN(ts)) return 'Never';
-        var d = new Date(ts * 1000);
-        return d.toLocaleString();
+      // Helper function to format timestamp as 'time ago'
+      function timeAgo(ts) {
+        if (!ts || ts === 'None' || ts === 'null') return 'Never';
+        let date;
+        if (typeof ts === 'number') {
+          date = new Date(ts * 1000);
+        } else if (typeof ts === 'string' && !isNaN(Number(ts))) {
+          date = new Date(Number(ts) * 1000);
+        } else {
+          return 'Never';
+        }
+        if (!date || isNaN(date.getTime())) return 'Never';
+        const now = new Date();
+        let seconds = Math.floor((now - date) / 1000);
+        const future = seconds < 0;
+        seconds = Math.abs(seconds);
+        // Clamp: If more than 5 minutes in the future, treat as 'just now'
+        if (future && seconds > 300) return 'just now';
+        if (seconds < 60) return future ? `in ${seconds} seconds` : `${seconds} seconds ago`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return future ? `in ${minutes} minutes` : `${minutes} minutes ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return future ? `in ${hours} hours` : `${hours} hours ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 30) return future ? `in ${days} days` : `${days} days ago`;
+        const months = Math.floor(days / 30);
+        if (months < 12) return future ? `in ${months} months` : `${months} months ago`;
+        const years = Math.floor(months / 12);
+        return future ? `in ${years} years` : `${years} years ago`;
       }
       
       // Store the original data
@@ -151,7 +175,9 @@
               short: node.short_name || node.id,
               long_name: node.long_name || 'Unknown',
               hw_model: node.hw_model || 'Unknown',
-              last_seen: node.last_seen || 'Never',
+              last_seen: node.last_seen,
+              last_relay: node.last_relay || node.last_seen,
+              first_seen: node.first_seen,
               message_count: node.message_count || 0,
               relay_count: node.relay_count || 0
             }, node.icon_url ? { image: node.icon_url } : {})
@@ -352,9 +378,10 @@
 
         // Handle node clicks
         cy.on('tap', 'node', function(e) {
-          e.preventDefault();
           var nodeId = e.target.id();
-          window.location.href = "node_" + nodeId.replace("!", "") + ".html";
+          if (!nodeId.startsWith('relay_')) {
+            window.location.href = "node_" + nodeId.replace("!", "") + ".html";
+          }
         });
 
         // Add panzoom controls if available
@@ -393,51 +420,47 @@
       // Node tooltip handler
       cy.on('mouseover', 'node', function(e) {
         const node = e.target;
-        
         // Defensive: destroy any existing tooltip
         destroyCurrentTippy();
-        
         // Defensive: check node is still valid and visible
         if (!isElementValid(node)) {
           console.warn('Node not valid for tooltip:', node.id());
           return;
         }
-        
         // Highlight connected elements
         const connectedEdges = node.connectedEdges();
         const connectedNodes = node.neighborhood().nodes();
-        
         // Add highlighting classes
         node.addClass('highlighted-node');
         connectedEdges.addClass('highlighted');
         connectedNodes.addClass('highlighted-node');
-        
         // Fade other elements
         cy.elements().removeClass('faded');
         cy.elements().difference(connectedEdges.union(connectedNodes).union(node)).addClass('faded');
-        
         try {
           const nodeData = node.data();
+          const isVirtualRelay = nodeData.id && nodeData.id.startsWith('relay_');
+          const nodeNameHtml = isVirtualRelay
+            ? `<strong>${nodeData.long_name || nodeData.id}</strong>`
+            : `<strong><a href="node_${nodeData.id}.html">${nodeData.long_name || nodeData.id}</a></strong>`;
           const content = `
             <div style="text-align: left; min-width: 200px;">
-              <strong>${nodeData.long_name || 'Unknown'}</strong><br>
+              ${nodeNameHtml}<br>
               <small class="text-muted">${nodeData.id}</small><br><br>
-              <strong>Hardware:</strong> ${nodeData.hw_model || 'Unknown'}<br>
-              <strong>Last Seen:</strong> ${formatTimestamp(nodeData.last_seen)}<br>
+              <strong>Hardware:</strong> ${nodeData.hw_model_name || nodeData.hw_model || 'Unknown'}<br>
+              <strong>First Relay:</strong> ${timeAgo(nodeData.first_seen)}<br>
+              <strong>Last Relay:</strong> ${timeAgo(nodeData.last_relay || nodeData.last_seen)}<br>
               <strong>Messages Sent:</strong> ${nodeData.message_count || 0}<br>
               <strong>Relay Count:</strong> ${nodeData.relay_count || 0}<br>
               <strong>Connections:</strong> ${node.neighborhood().length - 1}
             </div>
           `;
-          
           // Create dummy element for tippy
           const dummyDomEle = document.createElement('div');
           dummyDomEle.innerHTML = content;
           document.body.appendChild(dummyDomEle);
-          
           // Get reference for positioning
           const ref = node.popperRef();
-          
           // Create tippy instance
           currentTippy = tippy(dummyDomEle, {
             getReferenceClientRect: ref.getBoundingClientRect,
@@ -451,10 +474,8 @@
             theme: 'light-border',
             appendTo: document.body
           });
-          
           // Show the tooltip
           currentTippy.show();
-          
         } catch (error) {
           console.error('Error creating node tooltip:', error);
           destroyCurrentTippy();
@@ -464,59 +485,48 @@
       // Edge tooltip handler
       cy.on('mouseover', 'edge', function(e) {
         const edge = e.target;
-        
         // Defensive: destroy any existing tooltip
         destroyCurrentTippy();
-        
         // Defensive: check edge is still valid and visible
         if (!isElementValid(edge)) {
           console.warn('Edge not valid for tooltip:', edge.id());
           return;
         }
-        
         // Highlight connected elements
         const sourceNode = edge.source();
         const targetNode = edge.target();
-        
         // Add highlighting classes
         edge.addClass('highlighted');
         sourceNode.addClass('highlighted-node');
         targetNode.addClass('highlighted-node');
-        
         // Fade other elements
         cy.elements().removeClass('faded');
         cy.elements().difference(cy.collection([edge, sourceNode, targetNode])).addClass('faded');
-        
         try {
           const edgeData = edge.data();
           const sourceNode = edge.source();
           const targetNode = edge.target();
-          
           let relayInfo = '';
           if (edgeData.relay_suffix && edgeData.relay_suffix !== 'null' && edgeData.relay_suffix !== null && edgeData.relay_suffix !== undefined && edgeData.relay_suffix !== '') {
             relayInfo = `<br><strong>Relay:</strong> ${edgeData.relay_suffix}`;
           } else {
             relayInfo = '<br><strong>Type:</strong> Direct';
           }
-          
           const content = `
             <div style="text-align: left; min-width: 200px;">
               <strong>${sourceNode.data('short') || sourceNode.id()} → ${targetNode.data('short') || targetNode.id()}</strong><br>
               <small class="text-muted">${edgeData.id}</small><br><br>
               <strong>Messages:</strong> ${edgeData.message_count || 0}${relayInfo}<br>
-              <strong>First Seen:</strong> ${formatTimestamp(edgeData.first_seen)}<br>
-              <strong>Last Seen:</strong> ${formatTimestamp(edgeData.last_seen)}
+              <strong>First Seen:</strong> ${timeAgo(edgeData.first_seen)}<br>
+              <strong>Last Seen:</strong> ${timeAgo(edgeData.last_seen)}
             </div>
           `;
-          
           // Create dummy element for tippy
           const dummyDomEle = document.createElement('div');
           dummyDomEle.innerHTML = content;
           document.body.appendChild(dummyDomEle);
-          
           // Get reference for positioning (use edge midpoint)
           const ref = edge.popperRef();
-          
           // Create tippy instance
           currentTippy = tippy(dummyDomEle, {
             getReferenceClientRect: ref.getBoundingClientRect,
@@ -530,10 +540,8 @@
             theme: 'light-border',
             appendTo: document.body
           });
-          
           // Show the tooltip
           currentTippy.show();
-          
         } catch (error) {
           console.error('Error creating edge tooltip:', error);
           destroyCurrentTippy();

@@ -2483,7 +2483,16 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     else:
                         from_node = f"relay_{relay_suffix}"
                         if from_node not in virtual_nodes:
-                            virtual_nodes[from_node] = {'id': from_node, 'relay_suffix': relay_suffix}
+                            virtual_nodes[from_node] = {
+                                'id': from_node,
+                                'relay_suffix': relay_suffix,
+                                'short_name': from_node,
+                                'long_name': f"Relay {relay_suffix}",
+                                'hw_model': 'Virtual',
+                                'firmware_version': None,
+                                'role': None,
+                                'owner': None
+                            }
                     to_node = receiver_hex
                 elif (hop_limit is None and hop_start is None) or (hop_start is not None and hop_limit is not None and hop_start - hop_limit == 0):
                     # Zero-hop: direct sender->receiver
@@ -2510,6 +2519,18 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 endpoint_nodes.add(from_node)
                 endpoint_nodes.add(to_node)
 
+            # Aggregate first_seen and last_seen for each node from edges
+            node_first_seen = {}
+            node_last_seen = {}
+            for (from_node, to_node), edge in edge_map.items():
+                for node in [from_node, to_node]:
+                    if edge['first_seen']:
+                        if node not in node_first_seen or edge['first_seen'] < node_first_seen[node]:
+                            node_first_seen[node] = edge['first_seen']
+                    if edge['last_seen']:
+                        if node not in node_last_seen or edge['last_seen'] > node_last_seen[node]:
+                            node_last_seen[node] = edge['last_seen']
+
             # 4. Build node list (real + virtual), but only those that are endpoints
             nodes = []
             node_stats = {}
@@ -2535,6 +2556,8 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                         'role': node.get('role'),
                         'owner': node.get('owner'),
                         'last_seen': node.get('ts_seen'),
+                        'first_seen': node_first_seen.get(node_hex),
+                        'last_relay': node_last_seen.get(node_hex),
                         'message_count': node_stats[node_hex]['message_count'],
                         'relay_count': node_stats[node_hex]['relay_count'],
                         'icon_url': icon_url
@@ -2543,17 +2566,31 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             for node_hex in endpoint_nodes:
                 if node_hex.startswith('relay_'):
                     v = virtual_nodes[node_hex]
+                    # Aggregate from edges where this relay is the from_node
+                    relay_edges = [
+                        edge for (from_node, _), edge in edge_map.items()
+                        if from_node == v['id']
+                    ]
+                    if relay_edges:
+                        # Edge fields: 'first_seen', 'last_seen' are timestamps, 'count' is message count
+                        first_seen = min(e['first_seen'] for e in relay_edges if e['first_seen'] is not None)
+                        last_seen = max(e['last_seen'] for e in relay_edges if e['last_seen'] is not None)
+                        relay_count = sum(e['count'] for e in relay_edges if e.get('count'))
+                    else:
+                        first_seen = None
+                        last_seen = None
+                        relay_count = 0
                     nodes.append({
                         'id': v['id'],
-                        'long_name': f"Relay {v['relay_suffix']}",
-                        'short_name': f"relay_{v['relay_suffix']}",
-                        'hw_model': 'Virtual',
-                        'firmware_version': None,
-                        'role': None,
-                        'owner': None,
-                        'last_seen': None,
+                        'short_name': v['short_name'],
+                        'long_name': v['long_name'],
+                        'hw_model': v['hw_model'],
+                        'hw_model_name': get_hardware_model_name(v['hw_model']) if v['hw_model'] is not None else None,
+                        'last_seen': last_seen,
+                        'first_seen': first_seen,
+                        'last_relay': last_seen,
                         'message_count': node_stats[v['id']]['message_count'],
-                        'relay_count': node_stats[v['id']]['relay_count'],
+                        'relay_count': relay_count,
                         'icon_url': None
                     })
             # 5. Build edge list
@@ -2565,8 +2602,8 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     'to_node': to_node,
                     'relay_suffix': edge['relay_suffix'],
                     'message_count': edge['count'],
-                    'first_seen': datetime.datetime.fromtimestamp(edge['first_seen']).strftime('%Y-%m-%d %H:%M:%S') if edge['first_seen'] else None,
-                    'last_seen': datetime.datetime.fromtimestamp(edge['last_seen']).strftime('%Y-%m-%d %H:%M:%S') if edge['last_seen'] else None
+                    'first_seen': edge['first_seen'],  # <-- raw timestamp
+                    'last_seen': edge['last_seen']     # <-- raw timestamp
                 })
             # 6. Stats
             total_nodes = len(nodes)
