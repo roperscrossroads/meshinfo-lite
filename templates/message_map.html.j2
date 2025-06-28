@@ -530,11 +530,6 @@
             html += `<strong>Position Updated:</strong> ${formatTimestamp(node.positionTime)}<br>`;
         }
         
-        // Add hint about relay information if available but not shown
-        if (node.relayNode && !showRelayInfo) {
-            html += '<em style="color: #666; font-size: 0.9em;">Hold Shift for relay details</em><br>';
-        }
-        
         html += '</div>';
         
         content.innerHTML = html;
