@@ -474,6 +474,7 @@
     if (feature && feature.get('node')) {
         var node = feature.get('node');
         var coordinates = feature.getGeometry().getCoordinates();
+        var showRelayInfo = evt.originalEvent && evt.originalEvent.shiftKey;
         
         var html = '<div class="p-2">';
         
@@ -494,8 +495,8 @@
             html += `<strong>Hops:</strong> ${node.hops}<br>`;
         }
         
-        // Add relay information for receivers
-        if (node.relayNode) {
+        // Add relay information for receivers only when Shift is held
+        if (node.relayNode && showRelayInfo) {
             if (node.actualRelayNode) {
                 // Show relay node's long_name as a link
                 let relayId = node.actualRelayNode;
@@ -527,6 +528,11 @@
         // Add position time information
         if (node.positionTime) {
             html += `<strong>Position Updated:</strong> ${formatTimestamp(node.positionTime)}<br>`;
+        }
+        
+        // Add hint about relay information if available but not shown
+        if (node.relayNode && !showRelayInfo) {
+            html += '<em style="color: #666; font-size: 0.9em;">Hold Shift for relay details</em><br>';
         }
         
         html += '</div>';
