@@ -473,6 +473,8 @@ def memory_watchdog():
                 log_cache_stats()
                 with app.app_context():
                     cache.clear()
+                # Also clear the nodes singleton to free memory
+                clear_nodes_singleton()
                 gc.collect()
                 logging.info("Cache stats after high memory cleanup:")
                 log_cache_stats()
@@ -483,6 +485,9 @@ def memory_watchdog():
                 log_detailed_memory_analysis()
                 logging.info("Cache stats at critical memory level:")
                 log_cache_stats()
+                # Force clear nodes singleton at critical levels
+                clear_nodes_singleton()
+                gc.collect()
                 
         except Exception as e:
             logging.error(f"Error in memory watchdog: {e}")
@@ -2239,6 +2244,10 @@ def debug_cleanup():
     
     cleanup_cache()
     
+    # Also clear nodes singleton and force garbage collection
+    clear_nodes_singleton()
+    gc.collect()
+    
     return jsonify({
         'status': 'success',
         'message': 'Cache cleanup completed. Check logs for details.'
@@ -2539,13 +2548,13 @@ def message_paths():
         timestamp=datetime.datetime.now()
     )
 
-@app.route('/api/hardware-models')
-def get_hardware_models():
+@cache.memoize(timeout=300)  # Cache for 5 minutes
+def get_cached_hardware_models():
     """Get hardware model statistics for the most and least common models."""
     try:
         md = get_meshdata()
         if not md:
-            return jsonify({'error': 'Database connection unavailable'}), 503
+            return {'error': 'Database connection unavailable'}
         
         # Get hardware model statistics
         cur = md.db.cursor(dictionary=True)
@@ -2566,7 +2575,7 @@ def get_hardware_models():
         results = cur.fetchall()
         cur.close()
         
-        # Process results and get hardware model names
+        # Process results and get hardware model names - use tuples to reduce memory
         hardware_stats = []
         for row in results:
             hw_model_id = row['hw_model']
@@ -2575,13 +2584,14 @@ def get_hardware_models():
             # Get a sample node for icon
             sample_node = row['sample_names'].split(', ')[0] if row['sample_names'] else f"Model {hw_model_id}"
             
-            hardware_stats.append({
-                'model_id': hw_model_id,
-                'model_name': hw_model_name or f"Unknown Model {hw_model_id}",
-                'node_count': row['node_count'],
-                'sample_names': row['sample_names'],
-                'icon_url': utils.graph_icon(sample_node)
-            })
+            # Use tuple instead of dict to reduce memory overhead
+            hardware_stats.append((
+                hw_model_id,
+                hw_model_name or f"Unknown Model {hw_model_id}",
+                row['node_count'],
+                row['sample_names'],
+                utils.graph_icon(sample_node)
+            ))
         
         # Get top 15 most common
         most_common = hardware_stats[:15]
@@ -2589,17 +2599,37 @@ def get_hardware_models():
         # Get bottom 15 least common (but only if we have more than 15 total models)
         # Sort in ascending order (lowest count first)
         least_common = hardware_stats[-15:] if len(hardware_stats) > 15 else hardware_stats
-        least_common = sorted(least_common, key=lambda x: x['node_count'])
+        least_common = sorted(least_common, key=lambda x: x[2])  # Sort by node_count (index 2)
         
-        return jsonify({
-            'most_common': most_common,
-            'least_common': least_common,
+        # Convert tuples to dicts only for JSON serialization
+        def tuple_to_dict(hw_tuple):
+            return {
+                'model_id': hw_tuple[0],
+                'model_name': hw_tuple[1],
+                'node_count': hw_tuple[2],
+                'sample_names': hw_tuple[3],
+                'icon_url': hw_tuple[4]
+            }
+        
+        return {
+            'most_common': [tuple_to_dict(hw) for hw in most_common],
+            'least_common': [tuple_to_dict(hw) for hw in least_common],
             'total_models': len(hardware_stats)
-        })
+        }
         
     except Exception as e:
         logging.error(f"Error fetching hardware models: {e}")
-        return jsonify({'error': 'Failed to fetch hardware model data'}), 500
+        return {'error': 'Failed to fetch hardware model data'}
+
+@app.route('/api/hardware-models')
+def get_hardware_models():
+    """Get hardware model statistics for the most and least common models."""
+    result = get_cached_hardware_models()
+    
+    if 'error' in result:
+        return jsonify(result), 503 if result['error'] == 'Database connection unavailable' else 500
+    
+    return jsonify(result)
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()

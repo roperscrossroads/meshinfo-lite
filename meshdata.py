@@ -2232,7 +2232,25 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 continue  # Skip inactive nodes
                 
             node_id_int = utils.convert_node_id_from_hex_to_int(node_id_hex)
-            final_node_data = dict(node_base_data)  # Start with base data
+            
+            # Only copy the fields we need instead of the entire dict
+            final_node_data = {
+                'id': node_base_data.get('id'),
+                'long_name': node_base_data.get('long_name'),
+                'short_name': node_base_data.get('short_name'),
+                'hw_model': node_base_data.get('hw_model'),
+                'role': node_base_data.get('role'),
+                'firmware_version': node_base_data.get('firmware_version'),
+                'owner': node_base_data.get('owner'),
+                'ts_seen': node_base_data.get('ts_seen'),
+                'ts_created': node_base_data.get('ts_created'),
+                'ts_updated': node_base_data.get('ts_updated'),
+                'active': node_base_data.get('active'),
+                'last_seen': node_base_data.get('last_seen'),
+                'channel': node_base_data.get('channel'),
+                'position': node_base_data.get('position'),
+                'telemetry': node_base_data.get('telemetry')
+            }
             
             # Initialize lists
             final_node_data['neighbors'] = []
