@@ -1,7 +1,7 @@
-{% set this_page = "nodes" %}
+{% set this_page = "allnodes" %}
 {% extends "layout.html.j2" %}
 
-{% block title %}Nodes | MeshInfo{% endblock %}
+{% block title %}All Nodes | MeshInfo{% endblock %}
 
 {% block content %}
 {% if latest and latest.id is not none %}
@@ -17,13 +17,13 @@
 {% if hw_model_filter and hw_name_filter %}
 <div class="p-3 mt-1 fw-bold" style="background: #E3F2FD;">
   🔧 Showing nodes with hardware model: <strong>{{ hw_name_filter }}</strong>
-  <a href="/nodes.html" class="btn btn-sm btn-outline-secondary ms-2">Clear Filter</a>
+  <a href="/allnodes.html" class="btn btn-sm btn-outline-secondary ms-2">Clear Filter</a>
 </div>
 {% endif %}
 
 <div class="container pt-3">
-  <h5>{{ this_page.title() }}</h5>
+  <h5>All Nodes (Including Offline)</h5>
   {% include 'node_search.html.j2' %}
   {% include 'node_table.html.j2' %}
 </div>
-{% endblock %}
+{% endblock %} 

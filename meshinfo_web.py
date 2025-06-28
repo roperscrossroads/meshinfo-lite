@@ -2152,9 +2152,12 @@ def nodes():
     nodes = get_cached_nodes()
     if not nodes:
         abort(503, description="Database connection unavailable")
-    
     latest = get_cached_latest_node()
     logging.info(f"/nodes.html: Loaded {len(nodes)} nodes.")
+    
+    # Get hardware model filter from query parameters
+    hw_model_filter = request.args.get('hw_model')
+    hw_name_filter = request.args.get('hw_name')
     
     return render_template(
         "nodes.html.j2",
@@ -2163,11 +2166,13 @@ def nodes():
         nodes=nodes,
         show_inactive=False,
         latest=latest,
+        hw_model_filter=hw_model_filter,
+        hw_name_filter=hw_name_filter,
         hardware=meshtastic_support.HardwareModel,
         meshtastic_support=meshtastic_support,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now()
     )
 
 @app.route('/allnodes.html')
@@ -2176,21 +2181,27 @@ def allnodes():
     nodes = get_cached_nodes()
     if not nodes:
         abort(503, description="Database connection unavailable")
-    
     latest = get_cached_latest_node()
+    logging.info(f"/allnodes.html: Loaded {len(nodes)} nodes.")
+    
+    # Get hardware model filter from query parameters
+    hw_model_filter = request.args.get('hw_model')
+    hw_name_filter = request.args.get('hw_name')
     
     return render_template(
-        "nodes.html.j2",
+        "allnodes.html.j2",
         auth=auth(),
         config=config,
         nodes=nodes,
         show_inactive=True,
         latest=latest,
+        hw_model_filter=hw_model_filter,
+        hw_name_filter=hw_name_filter,
         hardware=meshtastic_support.HardwareModel,
         meshtastic_support=meshtastic_support,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now()
     )
 
 @app.route('/api/debug/memory')
@@ -2527,6 +2538,68 @@ def message_paths():
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now()
     )
+
+@app.route('/api/hardware-models')
+def get_hardware_models():
+    """Get hardware model statistics for the most and least common models."""
+    try:
+        md = get_meshdata()
+        if not md:
+            return jsonify({'error': 'Database connection unavailable'}), 503
+        
+        # Get hardware model statistics
+        cur = md.db.cursor(dictionary=True)
+        
+        # Query to get hardware model counts with model names
+        sql = """
+        SELECT 
+            hw_model,
+            COUNT(*) as node_count,
+            GROUP_CONCAT(DISTINCT short_name ORDER BY short_name SEPARATOR ', ') as sample_names
+        FROM nodeinfo 
+        WHERE hw_model IS NOT NULL 
+        GROUP BY hw_model 
+        ORDER BY node_count DESC
+        """
+        
+        cur.execute(sql)
+        results = cur.fetchall()
+        cur.close()
+        
+        # Process results and get hardware model names
+        hardware_stats = []
+        for row in results:
+            hw_model_id = row['hw_model']
+            hw_model_name = meshtastic_support.get_hardware_model_name(hw_model_id)
+            
+            # Get a sample node for icon
+            sample_node = row['sample_names'].split(', ')[0] if row['sample_names'] else f"Model {hw_model_id}"
+            
+            hardware_stats.append({
+                'model_id': hw_model_id,
+                'model_name': hw_model_name or f"Unknown Model {hw_model_id}",
+                'node_count': row['node_count'],
+                'sample_names': row['sample_names'],
+                'icon_url': utils.graph_icon(sample_node)
+            })
+        
+        # Get top 15 most common
+        most_common = hardware_stats[:15]
+        
+        # Get bottom 15 least common (but only if we have more than 15 total models)
+        # Sort in ascending order (lowest count first)
+        least_common = hardware_stats[-15:] if len(hardware_stats) > 15 else hardware_stats
+        least_common = sorted(least_common, key=lambda x: x['node_count'])
+        
+        return jsonify({
+            'most_common': most_common,
+            'least_common': least_common,
+            'total_models': len(hardware_stats)
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching hardware models: {e}")
+        return jsonify({'error': 'Failed to fetch hardware model data'}), 500
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()

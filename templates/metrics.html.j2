@@ -222,6 +222,16 @@ Mesh Metrics
         <h2>Signal Strength (SNR)</h2>
         <canvas id="snrChart"></canvas>
     </div>
+    
+    <div class="chart-container" style="height: 600px;">
+        <h2>Most Common Hardware Models</h2>
+        <canvas id="mostCommonHardwareChart"></canvas>
+    </div>
+    
+    <div class="chart-container" style="height: 600px;">
+        <h2>Least Common Hardware Models</h2>
+        <canvas id="leastCommonHardwareChart"></canvas>
+    </div>
 </div>
 
 <div class="chattiest-nodes">
@@ -276,6 +286,8 @@ Mesh Metrics
     let batteryLevelChart;
     let temperatureChart;
     let snrChart;
+    let mostCommonHardwareChart;
+    let leastCommonHardwareChart;
     
     // Chart colors
     const chartColors = {
@@ -284,7 +296,9 @@ Mesh Metrics
         channelUtil: '#FF9800',
         batteryLevel: '#9C27B0',
         temperature: '#F44336',
-        snr: '#009688'
+        snr: '#009688',
+        mostCommonHardware: '#4CAF50',
+        leastCommonHardware: '#FF5722'
     };
     
     // Initialize charts when the page loads
@@ -292,6 +306,7 @@ Mesh Metrics
         initializeCharts();
         refreshData();
         updateChattiestNodes();
+        updateHardwareModels();
         
         // Set up auto-refresh every 5 minutes
         setInterval(refreshData, 5 * 60 * 1000);
@@ -528,11 +543,172 @@ Mesh Metrics
                 }
             }
         });
+        
+        // Most Common Hardware Models Chart
+        mostCommonHardwareChart = new Chart(document.getElementById('mostCommonHardwareChart'), {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Number of Nodes',
+                    data: [],
+                    backgroundColor: chartColors.mostCommonHardware + '90',
+                    borderColor: chartColors.mostCommonHardware,
+                    borderWidth: 1,
+                    borderRadius: 2,
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.9
+                }]
+            },
+            options: {
+                ...commonOptions,
+                indexAxis: 'y', // Horizontal bar chart
+                onClick: function(event, elements) {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const modelName = this.data.labels[index];
+                        const modelId = this.data.datasets[0].modelIds[index];
+                        window.open(`/allnodes.html?hw_model=${encodeURIComponent(modelId)}&hw_name=${encodeURIComponent(modelName)}`, '_blank');
+                    }
+                },
+                onHover: function(event, elements) {
+                    event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+                },
+                scales: {
+                    x: {
+                        ...commonOptions.scales.x,
+                        title: {
+                            display: true,
+                            text: 'Number of Nodes'
+                        }
+                    },
+                    y: {
+                        ...commonOptions.scales.y,
+                        title: {
+                            display: false
+                        },
+                        ticks: {
+                            ...commonOptions.scales.y.ticks,
+                            callback: function(value, index) {
+                                const label = this.getLabelForValue(value);
+                                // Truncate long labels but ensure they're readable
+                                if (label.length > 25) {
+                                    return label.substring(0, 22) + '...';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    ...commonOptions.plugins,
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                // Show full name in tooltip
+                                return context[0].label;
+                            },
+                            afterBody: function(context) {
+                                return 'Click to view nodes with this hardware model';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Least Common Hardware Models Chart
+        leastCommonHardwareChart = new Chart(document.getElementById('leastCommonHardwareChart'), {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Number of Nodes',
+                    data: [],
+                    backgroundColor: chartColors.leastCommonHardware + '90',
+                    borderColor: chartColors.leastCommonHardware,
+                    borderWidth: 1,
+                    borderRadius: 2,
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.9
+                }]
+            },
+            options: {
+                ...commonOptions,
+                indexAxis: 'y', // Horizontal bar chart
+                onClick: function(event, elements) {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const modelName = this.data.labels[index];
+                        const modelId = this.data.datasets[0].modelIds[index];
+                        window.open(`/allnodes.html?hw_model=${encodeURIComponent(modelId)}&hw_name=${encodeURIComponent(modelName)}`, '_blank');
+                    }
+                },
+                onHover: function(event, elements) {
+                    event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+                },
+                scales: {
+                    x: {
+                        ...commonOptions.scales.x,
+                        title: {
+                            display: true,
+                            text: 'Number of Nodes'
+                        },
+                        ticks: {
+                            ...commonOptions.scales.x.ticks,
+                            stepSize: 1,
+                            callback: function(value) {
+                                // Only show whole numbers
+                                return Math.floor(value) === value ? value : '';
+                            }
+                        }
+                    },
+                    y: {
+                        ...commonOptions.scales.y,
+                        title: {
+                            display: false
+                        },
+                        ticks: {
+                            ...commonOptions.scales.y.ticks,
+                            callback: function(value, index) {
+                                const label = this.getLabelForValue(value);
+                                // Truncate long labels but ensure they're readable
+                                if (label.length > 25) {
+                                    return label.substring(0, 22) + '...';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    ...commonOptions.plugins,
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                // Show full name in tooltip
+                                return context[0].label;
+                            },
+                            afterBody: function(context) {
+                                return 'Click to view nodes with this hardware model';
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
     
     // Refresh all data
     function refreshData() {
         updateMetrics();
+        updateHardwareModels();
     }
     
     // Update metrics based on selected time range
@@ -579,6 +755,69 @@ Mesh Metrics
                     container.style.opacity = '1';
                 });
             });
+    }
+    
+    // Update hardware models data
+    function updateHardwareModels() {
+        // Show loading state for hardware charts
+        document.querySelectorAll('#mostCommonHardwareChart, #leastCommonHardwareChart').forEach(canvas => {
+            canvas.parentElement.style.opacity = '0.7';
+        });
+        
+        // Fetch data from API
+        fetch('/api/hardware-models')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    console.error('Error fetching hardware models:', data.error);
+                    return;
+                }
+                
+                // Update most common hardware chart
+                updateHardwareChart(mostCommonHardwareChart, data.most_common, 'Most Common Hardware Models');
+                
+                // Update least common hardware chart
+                updateHardwareChart(leastCommonHardwareChart, data.least_common, 'Least Common Hardware Models');
+                
+                // Reset loading state
+                document.querySelectorAll('#mostCommonHardwareChart, #leastCommonHardwareChart').forEach(canvas => {
+                    canvas.parentElement.style.opacity = '1';
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching hardware models data:', error);
+                // Reset loading state
+                document.querySelectorAll('#mostCommonHardwareChart, #leastCommonHardwareChart').forEach(canvas => {
+                    canvas.parentElement.style.opacity = '1';
+                });
+            });
+    }
+    
+    // Update a hardware chart with new data
+    function updateHardwareChart(chart, data, title) {
+        if (!data || !Array.isArray(data)) {
+            console.error('Invalid data format for hardware chart update');
+            return;
+        }
+
+        // Prepare labels and data
+        const labels = data.map(item => item.model_name);
+        const values = data.map(item => item.node_count);
+        const modelIds = data.map(item => item.model_id);
+        
+        // Update chart data
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = values;
+        chart.data.datasets[0].label = 'Number of Nodes';
+        chart.data.datasets[0].modelIds = modelIds; // Store model IDs for click handlers
+        
+        // Update chart
+        chart.update('none');
     }
     
     // Update a chart with new data

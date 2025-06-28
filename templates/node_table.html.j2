@@ -44,6 +44,7 @@
     <tbody>
       {% for id, node in nodes.items()|sort(attribute='1.short_name') %}
       {% if node.active or show_inactive %}
+      {% if not hw_model_filter or node.hw_model == hw_model_filter|int %}
       <tr style="{% if not node.active %}opacity: 0.5;{% endif %}">
         <td class="p-0" style="width:50px;">
           <img src="https://api.dicebear.com/9.x/bottts-neutral/svg?seed={{ id }}" alt="Avatar"
@@ -186,6 +187,7 @@
             {% endif %}
           </td>
       </tr>
+      {% endif %}
       {% endif %}
       {% endfor %}
     </tbody>
