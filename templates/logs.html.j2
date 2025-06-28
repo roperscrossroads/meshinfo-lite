@@ -33,7 +33,7 @@
         <form class="row g-3 align-items-end flex-nowrap">
           <div class="col-md-4 col-12 flex-grow-1">
             <label for="senderFilter" class="form-label mb-1 small text-muted">Sender Node ID</label>
-            <input type="text" class="form-control form-control-sm w-100 filter-control" id="senderFilter" placeholder="Enter hex (e.g., 7c5e2e94) or dec (e.g., 2086295188)">
+            <input type="text" class="form-control form-control-sm w-100 filter-control" id="senderFilter" placeholder="Enter hex (e.g., 7c5e2e94) or dec (e.g., 2086295188)" value="{{ node_filter or '' }}">
           </div>
           <div class="col-md-3 col-6 flex-grow-1">
             <label for="messageTypeFilter" class="form-label mb-1 small text-muted">Message Type</label>
@@ -289,6 +289,16 @@ document.addEventListener('DOMContentLoaded', function() {
         channelFilter.value = '';
         applyFilters();
     });
+
+    // Auto-apply filter if node parameter is provided
+    {% if node_filter %}
+    // If a node filter was provided via URL, apply it automatically
+    console.log('Auto-applying node filter for: {{ node_filter }}');
+    // Trigger the input event to ensure the filter is applied
+    setTimeout(() => {
+        senderFilter.dispatchEvent(new Event('input', { bubbles: true }));
+    }, 100); // Small delay to ensure DOM is ready
+    {% endif %}
 
     // Initial filter application
     applyFilters();

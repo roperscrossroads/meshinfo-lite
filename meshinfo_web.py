@@ -1111,12 +1111,17 @@ def logs():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
+    
+    # Get node filter from query parameter
+    node_filter = request.args.get('node')
+    
     logs = md.get_logs()
     return render_template(
         "logs.html.j2",
         auth=auth(),
         config=config,
         logs=logs,
+        node_filter=node_filter,  # Pass the node filter to template
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
@@ -2458,6 +2463,9 @@ def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=
             nlon = npos.get('longitude') if isinstance(npos, dict) else getattr(npos, 'longitude', None)
             ntime = npos.get('position_time') if isinstance(npos, dict) else getattr(npos, 'position_time', None)
             if nlat is not None and nlon is not None and ntime is not None:
+                # Convert datetime to timestamp if needed
+                if isinstance(ntime, datetime.datetime):
+                    ntime = ntime.timestamp()
                 if now - ntime > 21600:
                     score -= 50
                     reasons.append('stale-position')
@@ -2477,9 +2485,14 @@ def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=
             else:
                 score -= 100
                 reasons.append('missing-position')
-        if node_data.get('ts_seen') and (now - node_data['ts_seen'] < 3600):
-            score += 10
-            reasons.append('recently-seen')
+        ts_seen = node_data.get('ts_seen')
+        if ts_seen:
+            # Convert datetime to timestamp if needed
+            if isinstance(ts_seen, datetime.datetime):
+                ts_seen = ts_seen.timestamp()
+            if now - ts_seen < 3600:
+                score += 10
+                reasons.append('recently-seen')
         if node_data.get('role') not in [1, 8]:
             score += 5
             reasons.append('relay-capable')

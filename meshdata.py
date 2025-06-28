@@ -1524,7 +1524,13 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
         cur = self.db.cursor()
         cur.execute(f"SELECT COUNT(*) FROM meshlog")
         count = cur.fetchone()[0]
-        if count >= 1000:
+        
+        # Get configurable retention count, default to 1000 if not set
+        retention_count = self.config.getint("server", "log_retention_count", fallback=1000)
+        
+        if count >= retention_count:
+            if self.debug:
+                logging.debug(f"Log retention limit reached ({count} >= {retention_count}), removing oldest log entry")
             cur.execute(f"DELETE FROM meshlog ORDER BY ts_created ASC LIMIT 1")
         self.db.commit()
 
