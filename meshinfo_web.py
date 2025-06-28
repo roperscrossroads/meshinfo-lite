@@ -2415,7 +2415,12 @@ def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=
         nlon = npos.get('longitude') if isinstance(npos, dict) else getattr(npos, 'longitude', None)
         if nlat is None or nlon is None:
             return float('inf')
-        return utils.distance_between_two_points(ref_pos['lat'], ref_pos['lon'], nlat, nlon)
+        # Fix: Use 'latitude' and 'longitude' keys, not 'lat' and 'lon'
+        ref_lat = ref_pos.get('latitude') if isinstance(ref_pos, dict) else getattr(ref_pos, 'latitude', None)
+        ref_lon = ref_pos.get('longitude') if isinstance(ref_pos, dict) else getattr(ref_pos, 'longitude', None)
+        if ref_lat is None or ref_lon is None:
+            return float('inf')
+        return utils.distance_between_two_points(ref_lat, ref_lon, nlat, nlon)
 
     ref_pos = sender_pos if sender_pos else receiver_pos
     if ref_pos:
@@ -2458,10 +2463,17 @@ def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=
                     reasons.append('stale-position')
                 else:
                     pos_fresh = True
-                    dist = utils.distance_between_two_points(sender_pos['lat'], sender_pos['lon'], nlat, nlon)
-                    proximity_score = max(0, 100 - dist * 2)
-                    score += proximity_score
-                    reasons.append(f'proximity:{dist:.1f}km(+{proximity_score:.1f})')
+                    # Fix: Use 'latitude' and 'longitude' keys, not 'lat' and 'lon'
+                    sender_lat = sender_pos.get('latitude') if isinstance(sender_pos, dict) else getattr(sender_pos, 'latitude', None)
+                    sender_lon = sender_pos.get('longitude') if isinstance(sender_pos, dict) else getattr(sender_pos, 'longitude', None)
+                    if sender_lat is not None and sender_lon is not None:
+                        dist = utils.distance_between_two_points(sender_lat, sender_lon, nlat, nlon)
+                        proximity_score = max(0, 100 - dist * 2)
+                        score += proximity_score
+                        reasons.append(f'proximity:{dist:.1f}km(+{proximity_score:.1f})')
+                    else:
+                        score -= 50
+                        reasons.append('missing-sender-position')
             else:
                 score -= 100
                 reasons.append('missing-position')
