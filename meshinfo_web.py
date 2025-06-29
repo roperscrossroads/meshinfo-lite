@@ -171,7 +171,7 @@ app.jinja_env.globals.update(format_timestamp=format_timestamp)
 app.jinja_env.globals.update(time_ago=time_ago)
 app.jinja_env.globals.update(min=min)
 app.jinja_env.globals.update(max=max)
-app.jinja_env.globals.update(datetime=datetime)
+app.jinja_env.globals.update(datetime=datetime.datetime)
 
 # Add template filters
 @app.template_filter('safe_hw_model')
