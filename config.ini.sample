@@ -75,3 +75,5 @@ meshsense=https://meshsense.affirmatech.com/
 header_color=#9fdef9
 # Accent color (login/logout button, etc.)
 accent_color=#17a2b8
+# Page background color
+page_background_color=#ffffff

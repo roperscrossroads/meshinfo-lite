@@ -36,6 +36,9 @@
     .btn-accent:hover, .btn-info:hover {
       filter: brightness(0.9);
     }
+    body {
+      background-color: {{ config['theme'].get('page_background_color', '#f8f9fa') }} !important;
+    }
   </style>
 
   {% block head %}{% endblock %}
