@@ -71,9 +71,11 @@
             {% endfor %}
           </div>
         </li>
+        {% if datetime.datetime.now().weekday() == 0 %}
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
           <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
         </li>
+        {% endif %}
       </ul>
       {% if not auth %}
       <a href="{{ url_for("login") }}" class="btn btn-accent" role="button">Login</a>
