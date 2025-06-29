@@ -26,6 +26,11 @@ RUN apt-get update && \
     fonts-symbola \
     fontconfig \
     freetype2-demos \
+    libgdal-dev \
+    gdal-bin \
+    libgeos-dev \
+    libproj-dev \
+    proj-bin \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
