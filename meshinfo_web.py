@@ -147,6 +147,9 @@ def cleanup_cache():
         # Clear the nodes singleton
         clear_nodes_singleton()
         
+        # Clear nodes-related cache entries
+        clear_nodes_related_cache()
+        
         # Clear the cache
         with app.app_context():
             cache.clear()
@@ -475,6 +478,8 @@ def memory_watchdog():
                     cache.clear()
                 # Also clear the nodes singleton to free memory
                 clear_nodes_singleton()
+                # Clear nodes-related cache entries
+                clear_nodes_related_cache()
                 gc.collect()
                 logging.info("Cache stats after high memory cleanup:")
                 log_cache_stats()
@@ -487,6 +492,7 @@ def memory_watchdog():
                 log_cache_stats()
                 # Force clear nodes singleton at critical levels
                 clear_nodes_singleton()
+                clear_nodes_related_cache()
                 gc.collect()
                 
         except Exception as e:
@@ -571,8 +577,11 @@ def get_cached_nodes():
     return nodes_data
 
 @cache.memoize(timeout=60)
-def get_cached_active_nodes(nodes):
+def get_cached_active_nodes():
     """Cache the active nodes calculation."""
+    nodes = get_cached_nodes()
+    if not nodes:
+        return {}
     return utils.active_nodes(nodes)
 
 @cache.memoize(timeout=60)
@@ -590,9 +599,6 @@ def get_cached_message_map_data(message_id):
     if not md:
         return None
         
-    # Get current node info for names using singleton
-    nodes = get_cached_nodes()
-    
     # Get message and basic reception data
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
@@ -670,7 +676,6 @@ def get_cached_message_map_data(message_id):
     }
     
     return {
-        'nodes': nodes,
         'message': message,
         'sender_position': sender_position,
         'receiver_positions': receiver_positions,
@@ -689,9 +694,11 @@ def message_map():
     if not data:
         return redirect(url_for('chat'))
     
+    # Get nodes separately to avoid caching multiple copies
+    nodes = get_cached_nodes()
+    
     # --- Provide zero_hop_links and position data for relay node inference ---
     md = get_meshdata()
-    nodes = data['nodes']
     sender_id = data['message']['from_id']
     receiver_ids = data['message']['receiver_ids']
     # Get zero-hop links for the last 1 day (or configurable)
@@ -2138,7 +2145,7 @@ def serve_index(success_message=None, error_message=None):
     if not nodes:
         abort(503, description="Database connection unavailable")
     
-    active_nodes = get_cached_active_nodes(nodes)
+    active_nodes = get_cached_active_nodes()
     
     return render_template(
         "index.html.j2",
@@ -2246,6 +2253,7 @@ def debug_cleanup():
     
     # Also clear nodes singleton and force garbage collection
     clear_nodes_singleton()
+    clear_nodes_related_cache()
     gc.collect()
     
     return jsonify({
@@ -2260,6 +2268,7 @@ def debug_clear_nodes():
         abort(401)
     
     clear_nodes_singleton()
+    clear_nodes_related_cache()
     gc.collect()
     
     return jsonify({
@@ -2360,6 +2369,18 @@ def clear_nodes_singleton():
             _nodes_singleton_timestamp = 0
         else:
             logging.info("Nodes singleton was already None")
+
+def clear_nodes_related_cache():
+    """Clear cache entries that might be holding onto nodes dictionaries."""
+    try:
+        # Clear specific cached functions that might hold nodes data
+        cache.delete_memoized(get_cached_active_nodes)
+        cache.delete_memoized(get_cached_message_map_data)
+        cache.delete_memoized(get_cached_graph_data)
+        cache.delete_memoized(get_cached_neighbors_data)
+        logging.info("Cleared nodes-related cache entries")
+    except Exception as e:
+        logging.error(f"Error clearing nodes-related cache: {e}")
 
 def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=None, zero_hop_links=None, sender_pos=None, receiver_pos=None, debug=False):
     """
