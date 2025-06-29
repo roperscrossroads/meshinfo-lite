@@ -21,6 +21,7 @@ RUN groupadd --system app && \
 WORKDIR /app
 
 # Install system dependencies
+ARG TARGETPLATFORM
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libexpat1 \
@@ -34,13 +35,13 @@ RUN apt-get update && \
     libgeos-dev \
     libproj-dev \
     proj-bin \
+    $([ "$TARGETPLATFORM" = "linux/arm64" ] && echo "curl") \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 RUN fc-cache -fv
 
 # Architecture-specific rasterio installation
-ARG TARGETPLATFORM
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 
 # For ARM64: Install conda/mamba and use conda-forge for rasterio
