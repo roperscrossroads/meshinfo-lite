@@ -9,7 +9,10 @@ ENV PYTHONUNBUFFERED=1 \
     # Set standard locations
     PATH="/app/.local/bin:${PATH}" \
     # Consistent port for the app
-    APP_PORT=8000
+    APP_PORT=8000 \
+    # Optimize pip for faster builds
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN groupadd --system app && \
     useradd --system --gid app --home-dir /app --create-home app
@@ -38,7 +41,8 @@ RUN fc-cache -fv
 
 COPY requirements.txt banner run.sh ./
 
-RUN pip install --upgrade pip
+# Upgrade pip and install all packages with optimizations
+RUN pip install --upgrade pip setuptools wheel
 RUN su app -c "pip install --no-cache-dir --user -r requirements.txt"
 
 COPY --chown=app:app banner run.sh ./
