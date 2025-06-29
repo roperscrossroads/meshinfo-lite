@@ -146,8 +146,8 @@
         node: {
             id: '{{ from_id_hex }}',
             {# Get names from the main nodes dict #}
-            name: '{{ nodes[from_id_hex].short_name if from_id_hex in nodes else "???" }}',
-            longName: '{{ nodes[from_id_hex].long_name if from_id_hex in nodes else "Unknown Sender" }}',
+            name: {{ nodes[from_id_hex].short_name|tojson if from_id_hex in nodes else '"???"' }},
+            longName: {{ nodes[from_id_hex].long_name|tojson if from_id_hex in nodes else '"Unknown Sender"' }},
             type: 'sender',
             lat: {{ sender_position.latitude_i / 10000000 }},
             lon: {{ sender_position.longitude_i / 10000000 }},
@@ -180,8 +180,8 @@
         {% set details = receiver_details.get(receiver_id) %}
         var nodeData = {
             id: '{{ rid_hex }}',
-            name: '{{ nodes[rid_hex].short_name if rid_hex in nodes else "???" }}',
-            longName: '{{ nodes[rid_hex].long_name if rid_hex in nodes else "Unknown Receiver" }}',
+            name: {{ nodes[rid_hex].short_name|tojson if rid_hex in nodes else '"???"' }},
+            longName: {{ nodes[rid_hex].long_name|tojson if rid_hex in nodes else '"Unknown Receiver"' }},
             snr: {{ details.rx_snr if details else 'null' }},
             hops: {% if details and details.hop_start is not none and details.hop_limit is not none %}{{ details.hop_start - details.hop_limit }}{% else %}0{% endif %},
             type: 'receiver',
@@ -311,8 +311,8 @@
           
           var nodeData = {
               id: '{{ rid_hex }}',
-              name: '{{ nodes[rid_hex].short_name if rid_hex in nodes else "???" }}',
-              longName: '{{ nodes[rid_hex].long_name if rid_hex in nodes else "Unknown Receiver" }}',
+              name: {{ nodes[rid_hex].short_name|tojson if rid_hex in nodes else '"???"' }},
+              longName: {{ nodes[rid_hex].long_name|tojson if rid_hex in nodes else '"Unknown Receiver"' }},
               snr: {{ details.rx_snr if details else 'null' }},
               hops: hops,
               type: 'receiver',

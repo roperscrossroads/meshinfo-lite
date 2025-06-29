@@ -171,6 +171,7 @@ app.jinja_env.globals.update(format_timestamp=format_timestamp)
 app.jinja_env.globals.update(time_ago=time_ago)
 app.jinja_env.globals.update(min=min)
 app.jinja_env.globals.update(max=max)
+app.jinja_env.globals.update(datetime=datetime)
 
 # Add template filters
 @app.template_filter('safe_hw_model')
@@ -2542,6 +2543,8 @@ def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=
         print(f"[RelayMatch] Candidates for suffix {relay_suffix}:")
         for nid, (score, reasons) in scores.items():
             print(f"  {nid}: score={score}, reasons={reasons}")
+    if not scores:
+        return None
     best = max(scores.items(), key=lambda x: x[1][0])
     if debug:
         print(f"[RelayMatch] Selected {best[0]} for suffix {relay_suffix} (score={best[1][0]})")
