@@ -1,17 +1,22 @@
 [mesh]
-name=ZA Mesh
-short_name=ZA Mesh
-description=Serving Meshtastic to South Africa.
-contact=dade@dade.co.za
-url=https://mesh.zr1rf.za.net
-latitude=-33.918861
-longitude=18.423300
+name=Your Mesh Name
+short_name=YourMesh
+region=Your Mesh Region
+description=Serving Meshtastic to your region.
+contact=https://yourmesh.org
+url=https://yourmesh.org
+# Optional: link to your mesh's configuration guide
+config_url=https://yourmesh.org/config-instructions
+# Optional: link to your mesh's Discord or community chat
+discord_url=https://discord.gg/yourdiscord
+latitude=0.0
+longitude=0.0
 channel_key=1PG7OiApB1nwvP+rz05pAQ==
 
 [mqtt]
-broker=mqtt.zr1rf.za.net
+broker=mqtt.yourmesh.org
 port=1883
-topic=msh/ZA/#
+topic=msh/US/#
 username=meshdev
 password=large4cats
 
@@ -36,7 +41,7 @@ metrics_average_interval=7200
 
 [channels]
 # Comma-separated list of channel names to ignore
-#ignored_channels=MVR_Commo
+#ignored_channels=PKI
 
 [geocoding]
 enabled=false
@@ -44,7 +49,7 @@ apikey=YOUR_KEY_HERE
 
 [registrations]
 enabled=true
-jwt_secret=6219c1c2364499639ce9d16c33863c4f6fedb7a4a1a0f29524c20d95cb00e5f5
+jwt_secret=YOUR_JWT_SECRET
 
 [smtp]
 email=YOUR_EMAIL_ADDRESS
@@ -56,3 +61,17 @@ port=SMTP_PORT
 enabled=false
 max_distance=10000
 cache_duration=43200
+
+[tools]
+meshmap_label=MeshMap
+meshmap=https://meshmap.net/
+pugetmesh_map_label=PugetMesh Map
+pugetmesh_map=https://mqtt.davekeogh.com/?lat=47.60292227835496&lng=237.49420166015628&zoom=10
+meshsense_label=MeshSense Map
+meshsense=https://meshsense.affirmatech.com/
+
+[theme]
+# Header background color (navbar)
+header_color=#9fdef9
+# Accent color (login/logout button, etc.)
+accent_color=#17a2b8

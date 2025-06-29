@@ -24,6 +24,20 @@
   <link href="/css/meshinfo.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">  
 
+  <style>
+    .navbar {
+      background-color: {{ config['theme'].get('header_color', '#9fdef9') }} !important;
+    }
+    .btn-accent, .btn-info {
+      background-color: {{ config['theme'].get('accent_color', '#17a2b8') }} !important;
+      border-color: {{ config['theme'].get('accent_color', '#17a2b8') }} !important;
+      color: #fff !important;
+    }
+    .btn-accent:hover, .btn-info:hover {
+      filter: brightness(0.9);
+    }
+  </style>
+
   {% block head %}{% endblock %}
 </head>
 
@@ -51,10 +65,10 @@
             Tools
           </a>
           <div class="dropdown-menu" aria-labelledby="toolsDropdown">
-            <!-- <a class="dropdown-item" href="https://meshview.zr1rf.za.net/">MeshView</a> -->
-            <a class="dropdown-item" href="https://mqtt.davekeogh.com/?lat=47.60292227835496&lng=237.49420166015628&zoom=10">PugetMesh Map</a>
-            <a class="dropdown-item" href="https://meshmap.net/">MeshMap</a>
-            <a class="dropdown-item" href="https://meshsense.affirmatech.com/">MeshSense Map</a>
+            {% for key, value in config['tools'].items() if not key.endswith('_label') %}
+              {% set label = config['tools'].get(key + '_label', key.replace('_', ' ').title()) %}
+              <a class="dropdown-item" href="{{ value }}" target="_blank">{{ label }}</a>
+            {% endfor %}
           </div>
         </li>
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
@@ -62,9 +76,9 @@
         </li>
       </ul>
       {% if not auth %}
-      <a href="{{ url_for("login") }}" class="btn btn-info" role="button">Login</a>
+      <a href="{{ url_for("login") }}" class="btn btn-accent" role="button">Login</a>
       {% else %}
-      <a href="{{ url_for("logout") }}" class="btn btn-info" role="button">Logout</a>
+      <a href="{{ url_for("logout") }}" class="btn btn-accent" role="button">Logout</a>
       {% endif %}
     </div>
   </nav>
