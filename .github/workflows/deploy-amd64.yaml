@@ -43,6 +43,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
+          provenance: false
           tags: |
             ghcr.io/agessaman/meshinfo-lite:latest-amd64
             ghcr.io/agessaman/meshinfo-lite:${{ steps.version.outputs.version }}-amd64
