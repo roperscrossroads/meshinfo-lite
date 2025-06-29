@@ -39,26 +39,34 @@ RUN apt-get update && \
 
 RUN fc-cache -fv
 
-COPY requirements.txt banner run.sh ./
-
-# Upgrade pip and install all packages with optimizations
-RUN pip install --upgrade pip setuptools wheel
-
-# Architecture-specific optimizations for rasterio
+# Architecture-specific rasterio installation
 ARG TARGETPLATFORM
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 
-# For ARM64, install build tools to speed up compilation
+# For ARM64: Install conda/mamba and use conda-forge for rasterio
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    python3-dev \
-    && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*; \
+    curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh && \
+    bash Miniforge3-Linux-aarch64.sh -b -p /opt/conda && \
+    rm Miniforge3-Linux-aarch64.sh && \
+    /opt/conda/bin/mamba install -c conda-forge rasterio -y; \
     fi
 
-RUN su app -c "pip install --no-cache-dir --user -r requirements.txt"
+# Update PATH to include conda if installed
+ENV PATH="/opt/conda/bin:${PATH}"
+
+COPY requirements.txt banner run.sh ./
+
+# Upgrade pip and install packages
+RUN pip install --upgrade pip setuptools wheel
+
+# Install requirements, excluding rasterio for ARM64 (already installed via conda)
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+    grep -v "^rasterio" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt; \
+    else \
+    cp requirements.txt requirements_filtered.txt; \
+    fi
+
+RUN su app -c "pip install --no-cache-dir --user -r requirements_filtered.txt"
 
 COPY --chown=app:app banner run.sh ./
 COPY --chown=app:app *.py ./
