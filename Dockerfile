@@ -43,6 +43,21 @@ COPY requirements.txt banner run.sh ./
 
 # Upgrade pip and install all packages with optimizations
 RUN pip install --upgrade pip setuptools wheel
+
+# Architecture-specific optimizations for rasterio
+ARG TARGETPLATFORM
+ENV GDAL_CONFIG=/usr/bin/gdal-config
+
+# For ARM64, install build tools to speed up compilation
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*; \
+    fi
+
 RUN su app -c "pip install --no-cache-dir --user -r requirements.txt"
 
 COPY --chown=app:app banner run.sh ./
