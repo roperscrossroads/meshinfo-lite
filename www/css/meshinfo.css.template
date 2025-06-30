@@ -691,4 +691,43 @@ a:hover, a:focus {
 
 .newest-node-welcome, .banner {
   background: {{banner_background_color}} !important;
+}
+
+/* Themed Bootstrap Popover Styles */
+.popover {
+    background-color: {{page_background_color}} !important;
+    border: 1px solid {{table_border_color}} !important;
+    color: {{header_link_color}} !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.98em;
+    z-index: 1060;
+}
+.popover-header {
+    background-color: {{table_header_color}} !important;
+    color: {{header_link_color}} !important;
+    border-bottom: 1px solid {{table_border_color}} !important;
+    font-weight: 600;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+.popover-body {
+    background-color: {{page_background_color}} !important;
+    color: {{header_link_color}} !important;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+.receiver-popover {
+    font-size: 0.98em;
+    line-height: 1.5;
+    color: {{header_link_color}} !important;
+    font-family: inherit;
+}
+
+.badge.bg-secondary {
+    background-color: #e0e0e0 !important; /* Light gray for high contrast */
+    color: #222 !important;              /* Dark text for readability */
+    border: 1px solid {{table_border_color}} !important;
+    font-weight: 600;
 } 
