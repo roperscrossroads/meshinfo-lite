@@ -21,6 +21,7 @@ services:
     volumes:
       - ./config.ini:/app/config.ini
       - ./srtm_data:/app/srtm_data
+      # - ./logo.webp:/app/www/images/logos/logo.webp
     environment:
       - PYTHONUNBUFFERED=1
     ports:

@@ -57,7 +57,8 @@
             {% endfor %}
           </div>
         </li>
-        {% if datetime.now().weekday() == 0 %}
+        {% set current_local_time = convert_to_local(datetime.now().timestamp()) %}
+        {% if current_local_time.weekday() == 0 %}
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
           <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
         </li>
