@@ -1,0 +1,687 @@
+body {
+    font-family: monospace;
+    font-size: 12px;
+    background-color: {{page_background_color}} !important;
+}
+
+th {
+    background-color: {{table_header_color}};
+    text-align: center;
+}
+
+nav {
+    background-color: {{header_color}};
+}
+
+.table-striped>tbody>tr:nth-child(2n+1)>td,
+.table-striped>tbody>tr:nth-child(2n+1)>th {
+    background-color: {{table_alternating_row_color}};
+}
+
+/* Main table striping - consolidated rule for odd rows only */
+.table-striped>tbody>tr:nth-of-type(odd) {
+    background-color: {{table_alternating_row_color}} !important;
+}
+
+/* Make inner tables completely transparent */
+.neighbor-table {
+    border-style: hidden !important;
+    background: transparent !important;
+}
+
+.neighbor-table tr {
+    background: transparent !important;
+    border-style: hidden !important;
+}
+
+.neighbor-table td {
+    border-style: hidden !important;
+    padding-right: 8px;
+    background: transparent !important;
+}
+
+/* Badge styling */
+.badge.bg-good-snr {
+    background-color: #2d8659;
+    /* Dark green */
+    color: white;
+}
+
+.badge.bg-neighbor {
+    background-color: #2b5797;
+    /* Dark blue */
+    color: white;
+}
+
+.badge.bg-message {
+    background-color: #505050;
+    /* Dark gray */
+    color: white;
+}
+
+/* Additional badge styles */
+.badge.bg-purple {
+    background-color: #6f42c1;
+    color: white;
+}
+
+.badge.bg-success {
+    background-color: #28a745;
+    color: white;
+}
+
+/* Layout classes */
+.neighbor-table td.node-id {
+    min-width: 85px;
+    /* Increased from 60px to accommodate 4 letters + badge */
+    white-space: nowrap;
+    /* Prevent wrapping */
+    padding-right: 8px;
+}
+
+.neighbor-table td.snr-value,
+.neighbor-table td.distance,
+.neighbor-table td.message-count {
+    white-space: nowrap;
+}
+
+.neighbor-table td.node-id .badge {
+    margin-right: 4px;
+    /* Add consistent spacing between badge and name */
+    display: inline-block;
+    /* Ensure badge and text stay together */
+}
+
+/* SNR badge styling */
+.badge.snr-good {
+    background-color: #C8E6C9;
+    /* Muted light green */
+    color: black;
+}
+
+.badge.snr-adequate {
+    background-color: #FFF9C4;
+    /* Muted light yellow */
+    color: black;
+}
+
+.badge.snr-poor {
+    background-color: #FFE0B2;
+    /* Muted light orange */
+    color: black;
+}
+
+.badge.snr-very-poor {
+    background-color: #FFCCBC;
+    /* Muted light red-orange */
+    color: black;
+}
+
+/* Additional Styles for Chat2 */
+.chat-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.message-container {
+    width: 100%;
+}
+
+.message-bubble {
+    background: {{table_alternating_row_color}};
+    border-radius: 12px;
+    padding: 12px 16px;
+    position: relative;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.message-sender {
+    font-weight: 500;
+    flex-grow: 1;
+}
+
+.map-link,
+.map-link-placeholder {
+    width: 32px;
+    /* Set a fixed width */
+    text-align: center;
+}
+
+.node-link:hover {
+    text-decoration: underline;
+}
+
+.message-timestamp {
+    color: #666;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.map-link {
+    color: #2b5797;
+    font-size: 1.1em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    display: inline-block;
+}
+
+.map-link:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    text-decoration: none;
+}
+
+.map-link-placeholder {
+    display: inline-block;
+}
+
+.message-content {
+    word-wrap: break-word;
+    font-size: 1.1em;
+    margin: 8px 0;
+}
+
+.message-receptions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.reception-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #f8f9fa;
+    border: 1px solid {{table_border_color}};
+    border-radius: 12px;
+    padding: 4px 10px;
+    font-size: 0.85em;
+    text-decoration: none;
+    color: inherit;
+    transition: background-color 0.2s;
+    margin: 2px;
+}
+
+.reception-badge .snr-indicator {
+    margin-right: 6px;
+}
+
+.reception-badge:hover {
+    background-color: #e9ecef;
+    text-decoration: none;
+    color: inherit;
+}
+
+.snr-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.snr-good .snr-indicator {
+    background-color: #2d8659;
+}
+
+.snr-adequate .snr-indicator {
+    background-color: #ffd700;
+}
+
+.snr-poor .snr-indicator {
+    background-color: #ff9800;
+}
+
+.snr-very-poor .snr-indicator {
+    background-color: #f44336;
+}
+
+.receiver-popover {
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.load-more {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.load-more button {
+    background: transparent;
+    border: 1px solid {{header_color}};
+    color: #2b5797;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.load-more button:hover {
+    background: {{header_color}};
+}
+
+.load-more button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .chat-container {
+        padding: 10px;
+    }
+
+    .message-header {
+        flex-wrap: wrap;
+    }
+
+    .message-receptions {
+        gap: 4px;
+    }
+
+    .reception-badge {
+        font-size: 0.8em;
+    }
+}
+
+.message-channel {
+    color: #666;
+    font-size: 0.85em;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    white-space: nowrap;
+    margin-right: 0.5em;
+}
+
+.btn-group .btn {
+    padding: 0.25rem 0.5rem;
+}
+
+.btn-group .btn i {
+    font-size: 1rem;
+}
+
+/* Mobile Reception Styles */
+.mobile-receptions {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.mobile-reception-row {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.mobile-node-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.mobile-node-name a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.mobile-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.mobile-metrics .metric {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #f5f5f5;
+}
+
+.mobile-metrics .snr .snr-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+/* Desktop/Mobile visibility */
+.desktop-receptions {
+    display: flex;
+}
+
+@media (max-width: 768px) {
+    .desktop-receptions {
+        display: none !important;
+    }
+
+    .mobile-receptions {
+        display: flex !important;
+    }
+
+    .message-receptions {
+        margin-top: 12px;
+    }
+
+    /* Hide popovers on mobile */
+    .popover {
+        display: none !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .desktop-receptions {
+        display: flex !important;
+    }
+
+    .mobile-receptions {
+        display: none !important;
+    }
+
+    /* Ensure popovers display properly on desktop */
+    .popover {
+        max-width: 276px;
+        font-family: inherit;
+        z-index: 1060;
+        display: block;
+    }
+}
+
+/* Map Settings Panel Styles */
+#settings {
+    max-width: 350px;
+    font-size: 0.9em;
+    transition: all 0.3s ease;
+}
+
+#settings h5 {
+    font-size: 1.1em;
+    font-weight: 500;
+}
+
+#settings .form-label {
+    font-weight: 500;
+    font-size: 0.9em;
+    margin-bottom: 0.25rem;
+}
+
+#settings .form-select-sm,
+#settings .form-control-sm {
+    font-size: 0.85em;
+    padding: 0.25rem 0.5rem;
+}
+
+#settings .text-muted {
+    font-size: 0.8em;
+    opacity: 0.8;
+}
+
+#settings .mb-3:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* Make settings panel collapsible on mobile */
+@media (max-width: 768px) {
+    #settings {
+        max-height: 60vh;
+        overflow-y: auto;
+        max-width: calc(100% - 40px);
+        margin: 20px;
+    }
+}
+
+/* Add smooth transitions for filter changes */
+.ol-layer {
+    transition: opacity 0.3s ease;
+}
+
+/* Improve visibility of map controls */
+.ol-control button {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    color: #333 !important;
+}
+
+.ol-control button:hover {
+    background-color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Settings Toggle Button */
+.settings-toggle {
+    position: fixed;
+    top: 70px; /* Below navbar */
+    right: 20px;
+    z-index: 1001;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: white;
+    border: 1px solid {{table_border_color}};
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.settings-toggle:hover {
+    background: #f8f9fa;
+    transform: rotate(30deg);
+}
+
+.settings-toggle i {
+    font-size: 1.2em;
+    color: #333;
+}
+
+/* Settings Panel */
+.settings-panel {
+    position: fixed;
+    top: 120px; /* Below settings toggle */
+    right: 20px;
+    z-index: 1000;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1rem;
+    max-width: 350px;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+    font-size: 0.9em;
+}
+
+/* Node Info Panel */
+.node-info-panel {
+    position: fixed;
+    top: 180px; /* Increased from 200px to move it down 70px */
+    right: 20px;
+    z-index: 999;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1rem;
+    max-width: 350px;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+}
+
+/* Make settings and node info panels responsive */
+@media (max-width: 768px) {
+    .settings-panel,
+    .node-info-panel {
+        max-width: calc(100% - 40px);
+        margin: 20px;
+    }
+
+    .settings-panel {
+        top: 70px;
+        max-height: calc(100vh - 90px);
+    }
+
+    .node-info-panel {
+        top: auto;
+        bottom: 20px;
+        max-height: 60vh;
+    }
+}
+
+/* Improve map controls visibility */
+.ol-control {
+    background: none;
+}
+
+.ol-control button {
+    background-color: white !important;
+    color: #333 !important;
+    border: 1px solid {{table_border_color}} !important;
+    border-radius: 4px !important;
+    margin: 2px !important;
+    transition: all 0.2s ease;
+}
+
+.ol-control button:hover {
+    background-color: #f8f9fa !important;
+    color: #000 !important;
+}
+
+/* Make OpenStreetMap attribution less prominent on all OpenLayers maps */
+.ol-attribution, .ol-attribution ul {
+    font-size: 0.75em !important;
+    opacity: 0.7;
+}
+
+/* --- THEME AND CUSTOM STYLES FROM layout.html.j2 --- */
+
+.navbar {
+  background-color: {{header_color}} !important;
+  color: {{header_link_color}} !important;
+}
+
+.navbar-brand {
+  color: {{header_brand_color}} !important;
+}
+
+.navbar .navbar-brand:hover, .navbar .navbar-brand:focus {
+  color: {{header_link_color}} !important;
+  text-decoration: none !important;
+}
+
+.navbar .nav-link, .navbar .dropdown-item {
+  color: {{header_link_color}} !important;
+  text-decoration: none !important;
+}
+.navbar .nav-link.active, .navbar .active > .nav-link, .navbar .nav-link:active {
+  color: {{header_link_active_color}} !important;
+  text-decoration: none !important;
+}
+.navbar .nav-link:hover, .navbar .nav-link:focus, .navbar .dropdown-item:hover, .navbar .dropdown-item:focus {
+  color: {{header_link_active_color}} !important;
+  text-decoration: none !important;
+}
+
+a {
+  color: {{link_color}} !important;
+}
+a:hover, a:focus {
+  color: {{link_color_hover}} !important;
+  text-decoration: underline;
+}
+
+.btn, .form-control, .page-link {
+  border-color: {{control_color}} !important;
+  color: #fff !important;
+}
+.btn-primary, .btn-accent, .btn-info {
+  background-color: {{control_color}} !important;
+  border-color: {{control_color}} !important;
+  color: #fff !important;
+}
+.btn-primary:hover, .btn-accent:hover, .btn-info:hover,
+.btn-primary:focus, .btn-accent:focus, .btn-info:focus,
+.btn-primary:active, .btn-accent:active, .btn-info:active {
+  background-color: {{control_color_hover}} !important;
+  border-color: {{control_color_hover}} !important;
+  color: #fff !important;
+  filter: brightness(0.95);
+}
+.btn-outline-primary {
+  color: {{control_color}} !important;
+  border-color: {{control_color}} !important;
+  background-color: #fff !important;
+}
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:active,
+.btn-outline-primary.active {
+  color: #fff !important;
+  background-color: {{control_color_hover}} !important;
+  border-color: {{control_color_hover}} !important;
+}
+
+/* Prevent global link color from affecting chat node links */
+.chat-messages a,
+.message-container a {
+  color: #000 !important;
+}
+
+/* Table theming */
+.table thead th {
+  background-color: {{table_header_color}} !important;
+}
+.table {
+  border-color: {{table_border_color}} !important;
+}
+.table td, .table th {
+  border-color: {{table_border_color}} !important;
+}
+
+/* Pagination link and icon theming */
+.page-link, .btn-outline-secondary {
+  color: {{control_color}} !important;
+  border-color: {{control_color}} !important;
+  background-color: #fff !important;
+}
+.page-link:hover, .page-link:focus, .btn-outline-secondary:hover, .btn-outline-secondary:focus {
+  color: #fff !important;
+  background-color: {{control_color_hover}} !important;
+  border-color: {{control_color_hover}} !important;
+}
+.page-link .bi, .btn-outline-secondary .bi {
+  color: inherit !important;
+}
+.page-link:disabled, .btn-outline-secondary:disabled {
+  color: #ccc !important;
+  background-color: #f8f9fa !important;
+  border-color: #dee2e6 !important;
+}
+
+/* --- END MIGRATED STYLES --- */ 

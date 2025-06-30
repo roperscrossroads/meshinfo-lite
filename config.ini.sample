@@ -73,7 +73,27 @@ meshsense=https://meshsense.affirmatech.com/
 [theme]
 # Header background color (navbar)
 header_color=#9fdef9
+# Header brand/title color
+header_brand_color=#000
+# Header navigation link color
+header_link_color=#555
+# Header active navigation link color
+header_link_active_color=#000
 # Accent color (login/logout button, etc.)
 accent_color=#17a2b8
 # Page background color
 page_background_color=#ffffff
+# Table header background color
+table_header_color=#D7F9FF
+# Table border color
+table_border_color=#dee2e6
+# Table alternating row background color
+table_alternating_row_color=#f0f0f0
+# Link color
+link_color=#007bff
+# Link hover color  
+link_color_hover=#0056b3
+# Control color (buttons, form controls)
+control_color=#17a2b8
+# Control hover color
+control_color_hover=#1396a5

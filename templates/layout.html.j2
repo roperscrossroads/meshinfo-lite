@@ -24,23 +24,6 @@
   <link href="/css/meshinfo.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">  
 
-  <style>
-    .navbar {
-      background-color: {{ config['theme'].get('header_color', '#9fdef9') }} !important;
-    }
-    .btn-accent, .btn-info {
-      background-color: {{ config['theme'].get('accent_color', '#17a2b8') }} !important;
-      border-color: {{ config['theme'].get('accent_color', '#17a2b8') }} !important;
-      color: #fff !important;
-    }
-    .btn-accent:hover, .btn-info:hover {
-      filter: brightness(0.9);
-    }
-    body {
-      background-color: {{ config['theme'].get('page_background_color', '#f8f9fa') }} !important;
-    }
-  </style>
-
   {% block head %}{% endblock %}
 </head>
 
