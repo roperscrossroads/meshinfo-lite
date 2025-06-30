@@ -1311,7 +1311,8 @@ def serve_static(filename):
             zero_hop_heard_by=node_page_data['zero_hop_heard_by'],
             neighbor_heard_by=node_page_data['neighbor_heard_by'],
             zero_hop_timeout=node_page_data['zero_hop_timeout'],
-            max_distance=node_page_data['max_distance_km']
+            max_distance=node_page_data['max_distance_km'],
+            elsewhere_links=node_page_data['elsewhere_links']
         ))
         
         # Set Cache-Control header for client-side caching
@@ -2030,6 +2031,10 @@ def get_node_page_data(node_hex):
                 'position': node_data.get('position')
             }
 
+    # Build elsewhere links
+    node_hex_id = utils.convert_node_id_from_int_to_hex(node_id)
+    elsewhere_links = get_elsewhere_links(node_id, node_hex_id)
+    
     # Return a dictionary that does NOT include the full `all_nodes` object
     return {
         'node': current_node,
@@ -2042,6 +2047,7 @@ def get_node_page_data(node_hex):
         'zero_hop_heard_by': zero_hop_heard_by,
         'zero_hop_timeout': zero_hop_timeout,
         'max_distance_km': max_distance_km,
+        'elsewhere_links': elsewhere_links,
     }
 
 @app.route('/chat-classic.html')
@@ -2663,6 +2669,74 @@ def get_hardware_models():
         return jsonify(result), 503 if result['error'] == 'Database connection unavailable' else 500
     
     return jsonify(result)
+
+def get_elsewhere_links(node_id, node_hex_id):
+    """
+    Build Elsewhere links for a node based on config.ini [tools] section.
+    
+    Args:
+        node_id: The node ID as integer
+        node_hex_id: The node ID as hex string
+        
+    Returns:
+        List of (label, url, icon) tuples for the Elsewhere section
+    """
+    elsewhere_links = []
+    
+    def get_icon_for_tool(label, url):
+        """Determine appropriate icon based on tool name and URL."""
+        label_lower = label.lower()
+        url_lower = url.lower()
+        
+        # Map-related tools
+        if 'map' in label_lower or 'map' in url_lower:
+            return '🗺️'
+        
+        # Logs/Logging tools
+        if 'log' in label_lower or 'log' in url_lower:
+            return '📋'
+        
+        # Dashboard/Monitoring tools
+        if 'dashboard' in label_lower or 'monitor' in label_lower:
+            return '📊'
+        
+        # Network/Graph tools
+        if 'graph' in label_lower or 'network' in label_lower:
+            return '🕸️'
+        
+        # Chat/Message tools
+        if 'chat' in label_lower or 'message' in label_lower:
+            return '💬'
+        
+        # Settings/Config tools
+        if 'config' in label_lower or 'setting' in label_lower:
+            return '⚙️'
+        
+        # Default icon for external links
+        return '🔗'
+    
+    # Process keys ending with _node_link
+    for key, value in config.items('tools'):
+        if key.endswith('_node_link'):
+            # Extract the base key (remove _node_link suffix)
+            base_key = key[:-10]  # Remove '_node_link'
+            
+            # Get the label from the corresponding _label key
+            label_key = base_key + '_label'
+            label = config.get('tools', label_key, fallback=None)
+            if not label:
+                # Fallback to a generated label if no _label is found
+                label = base_key.replace('_', ' ').title()
+            
+            # Replace placeholders in URL and strip any extra quotes
+            url = value.replace('{{ node.id }}', str(node_id)).replace('{{ node.hex_id }}', node_hex_id).strip('"')
+            
+            # Get appropriate icon
+            icon = get_icon_for_tool(label, url)
+            
+            elsewhere_links.append((label, url, icon))
+    
+    return elsewhere_links
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()

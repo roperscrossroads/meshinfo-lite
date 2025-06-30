@@ -63,10 +63,12 @@ max_distance=10000
 cache_duration=43200
 
 [tools]
-meshmap_label=MeshMap
 meshmap=https://meshmap.net/
-pugetmesh_map_label=PugetMesh Map
+meshmap_label=MeshMap
+meshmap_link="https://meshmap.net/#{{ node.id }}"
 pugetmesh_map=https://mqtt.davekeogh.com/?lat=47.60292227835496&lng=237.49420166015628&zoom=10
+pugetmesh_map_label=PugetMesh Map
+pugetmesh_map_link="https://meshtastic.pugetmesh.org/?node_id={{ node.id }}"
 meshsense_label=MeshSense Map
 meshsense=https://meshsense.affirmatech.com/
 

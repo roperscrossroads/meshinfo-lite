@@ -400,6 +400,18 @@
                 {% endif %}
               </td>
             </tr>
+            {% if elsewhere_links %}
+            <tr>
+              <th scope="row" style="background: #F2F6F9; text-align: left;">Elsewhere</th>
+              <td class="text-left">
+                {% for label, url, icon in elsewhere_links %}
+                  <a href="{{ url }}" target="_blank" class="me-2">{{ icon }} {{ label }}</a>
+                {% endfor %}
+                <a href="logs.html?node={{ utils.convert_node_id_from_int_to_hex(node.id) }}" target="_blank">📋 Logs</a>
+              </td>
+            </tr>
+            {% endif %}
+            
           </tbody>
         </table>
         <table class="table table-striped table-sm">
