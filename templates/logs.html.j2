@@ -52,12 +52,9 @@
             <label for="channelFilter" class="form-label mb-1 small text-muted">Channel</label>
             <select class="form-select form-select-sm w-100 filter-control" id="channelFilter">
               <option value="">All Channels</option>
-              <option value="8">LongFast (8)</option>
-              <option value="31">MediumFast (31)</option>
-              <option value="112">ShortFast (112)</option>
-              <option value="0">LongSlow (0)</option>
-              <option value="1">MediumSlow (1)</option>
-              <option value="2">ShortSlow (2)</option>
+              {% for channel in Channel %}
+                <option value="{{ channel.value }}">{{ utils.get_channel_name(channel.value) }} ({{ channel.value }})</option>
+              {% endfor %}
             </select>
           </div>
           <div class="col-md-2 col-12 d-flex flex-column align-items-end justify-content-end flex-nowrap mt-md-0 mt-2">

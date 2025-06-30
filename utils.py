@@ -312,6 +312,7 @@ def get_channel_color(channel_value):
     # Define a set of visually pleasing colors for known channels
     channel_colors = {
         8: "#4CAF50",    # Green for LongFast
+        24: "#9C27B0",   # Purple for MediumSlow
         31: "#2196F3",   # Blue for MediumFast
         112: "#FF9800",  # Orange for ShortFast
         # Add more channels as they are discovered

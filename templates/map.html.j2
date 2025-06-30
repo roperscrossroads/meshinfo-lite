@@ -170,6 +170,7 @@
     // Add channel color utility function
     const channelColors = {
       8: '#4CAF50',    // Green for LongFast
+      24: '#9C27B0',   // Purple for MediumSlow
       31: '#2196F3',   // Blue for MediumFast
       112: '#FF9800',  // Orange for ShortFast
     };
@@ -315,6 +316,7 @@
         position: [{% if node.position and node.position.longitude_i and node.position.latitude_i %}{{ node.position.longitude_i / 10000000 }}, {{ node.position.latitude_i / 10000000 }}{% else %}null, null{% endif %}],
         online: {% if node.active %}true{% else %}false{% endif %},
         channel: {% if node.channel is not none %}{{ node.channel }}{% else %}null{% endif %},
+        channel_name: {% if node.channel is not none %}'{{ utils.get_channel_name(node.channel) }}'{% else %}'LongFast (8) [default]'{% endif %},
         zero_hop_data: {{ zero_hop_data.get(id, {'heard': [], 'heard_by': []}) | tojson | safe }}
       };
       {% if node.neighbors %}
@@ -803,11 +805,7 @@
             + '<div class="mb-2"><i class="text-muted">Position:</i> ' + node.position + '</div>'
             + '<div class="mb-2"><i class="text-muted">Location:</i> ' + display_name + '</div>'
             + '<div class="mb-2"><i class="text-muted">Channel:</i> ' 
-            + (node.channel === null ? 'LongFast (8) [default]' : 
-               node.channel === 8 ? 'LongFast (8)' :
-               node.channel === 31 ? 'MediumFast (31)' :
-               node.channel === 112 ? 'ShortFast (112)' :
-               'Channel ' + node.channel)
+            + node.channel_name
             + '</div>'
             + '</div>';
 
