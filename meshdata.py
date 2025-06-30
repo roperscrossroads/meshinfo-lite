@@ -1343,7 +1343,7 @@ ts_updated = VALUES(ts_updated)"""
                     elif field_name == 'voltage':
                         # Voltage should be positive and reasonable
                         # Allow up to 100V to accommodate various power systems
-                        if float_val < 0 or float_val > 100:
+                        if float_val <= 0 or float_val > 100:
                             return None
                     elif field_name == 'temperature':
                         # Temperature should be within reasonable sensor range

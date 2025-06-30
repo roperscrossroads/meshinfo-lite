@@ -765,6 +765,60 @@ a:hover, a:focus {
     }
 }
 
+/* Node Filter Input Theming */
+#nodeFilter,
+#senderFilter,
+#messageTypeFilter,
+#channelFilter {
+    background-color: #fff !important;
+    color: #333 !important;
+    border: 1px solid {{control_color}} !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace, monospace;
+    transition: border-color 0.2s ease;
+}
+#nodeFilter:focus,
+#senderFilter:focus,
+#messageTypeFilter:focus,
+#channelFilter:focus {
+    border-color: {{control_color_hover}} !important;
+    outline: none !important;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.15);
+    background-color: #fff !important;
+    color: #333 !important;
+}
+#nodeFilter::placeholder,
+#senderFilter::placeholder {
+    color: #6c757d !important;
+    opacity: 1;
+}
+
+/* Logs Page Filter Controls Theming */
+#senderFilter,
+#messageTypeFilter,
+#channelFilter {
+    background-color: #fff !important;
+    color: #333 !important;
+    border: 1px solid {{control_color}} !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace, monospace;
+    font-size: 12px;
+    transition: border-color 0.2s ease;
+}
+#senderFilter:focus,
+#messageTypeFilter:focus,
+#channelFilter:focus {
+    border-color: {{control_color_hover}} !important;
+    outline: none !important;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.15);
+    background-color: #fff !important;
+    color: #333 !important;
+}
+#senderFilter::placeholder {
+    color: #6c757d !important;
+    opacity: 1;
+}
+
 /* Ensure gap between time range and telemetry selector at desktop widths */
 @media (min-width: 768px) {
   #environmentalTelemetryContainer .btn-group + #environmentalTabs {

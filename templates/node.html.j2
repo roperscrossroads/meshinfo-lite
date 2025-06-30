@@ -595,7 +595,7 @@
   {% if node.telemetry %}
   <div class="row mt-4">
     <div class="col-12">
-      <div class="w-100" id="environmentalTelemetryContainer">
+      <div class="w-100" id="environmentalTelemetryContainer" style="display:none;">
         <h6 class="mb-2">Environmental Telemetry</h6>
         <div class="d-flex flex-row align-items-center flex-nowrap gap-2 gap-md-4 mb-2">
           <div id="timeRangeBtnGroup" class="btn-group btn-group-sm" role="group">
@@ -646,7 +646,6 @@
             .then(data => {
               currentData = data;
               if (!data || data.length === 0) {
-                envContainer.style.display = 'none';
                 return;
               }
               const envTypes = {
@@ -659,15 +658,21 @@
               };
               currentAvailableTypes = {};
               for (const [key, config] of Object.entries(envTypes)) {
-                const nonNullCount = data.reduce((acc, d) => (d[key] !== null && d[key] !== undefined ? acc + 1 : acc), 0);
+                let nonNullCount = 0;
+                if (key === 'voltage') {
+                  // Only count voltage values that are > 0
+                  nonNullCount = data.reduce((acc, d) => (d[key] !== null && d[key] !== undefined && d[key] > 0 ? acc + 1 : acc), 0);
+                } else {
+                  nonNullCount = data.reduce((acc, d) => (d[key] !== null && d[key] !== undefined ? acc + 1 : acc), 0);
+                }
                 if (nonNullCount > 0) {
                   currentAvailableTypes[key] = config;
                 }
               }
               if (Object.keys(currentAvailableTypes).length === 0) {
-                envContainer.style.display = 'none';
                 return;
               }
+              envContainer.style.display = '';
               // --- TABS (md+) ---
               tabsContainer.innerHTML = '';
               const typeKeys = Object.keys(currentAvailableTypes);
