@@ -316,7 +316,11 @@
         position: [{% if node.position and node.position.longitude_i and node.position.latitude_i %}{{ node.position.longitude_i / 10000000 }}, {{ node.position.latitude_i / 10000000 }}{% else %}null, null{% endif %}],
         online: {% if node.active %}true{% else %}false{% endif %},
         channel: {% if node.channel is not none %}{{ node.channel }}{% else %}null{% endif %},
-        channel_name: {% if node.channel is not none %}'{{ utils.get_channel_name(node.channel) }}'{% else %}'LongFast (8) [default]'{% endif %},
+        channel_name: {% if node.channel is not none %}'{{ utils.get_channel_name(node.channel) }}'{% else %}'Unknown'{% endif %},
+        has_default_channel: {% if node.has_default_channel is not none %}{{ node.has_default_channel | tojson }}{% else %}null{% endif %},
+        num_online_local_nodes: {% if node.num_online_local_nodes is not none %}{{ node.num_online_local_nodes }}{% else %}null{% endif %},
+        region: {% if node.region is not none %}{{ node.region }}{% else %}null{% endif %},
+        modem_preset: {% if node.modem_preset is not none %}{{ node.modem_preset }}{% else %}null{% endif %},
         zero_hop_data: {{ zero_hop_data.get(id, {'heard': [], 'heard_by': []}) | tojson | safe }}
       };
       {% if node.neighbors %}
@@ -374,8 +378,7 @@
         // Apply channel filter
         if (settings.channelFilter !== 'all') {
           const channelId = parseInt(settings.channelFilter);
-          const nodeChannel = node.channel === null ? 8 : node.channel;
-          if (nodeChannel !== channelId) {
+          if (node.channel === null || node.channel !== channelId) {
             visible = false;
           }
         }
@@ -443,8 +446,6 @@
                   })
                 })
               });
-            } else {
-              visible = false;
             }
           }
         }
@@ -507,14 +508,15 @@
         let visible = true;
         let style = null;  // Start with no style
 
-        // Apply channel filter FIRST
+                // Apply channel filter FIRST
         if (settings.channelFilter !== 'all') {
           const channelId = parseInt(settings.channelFilter);
-          const nodeChannel = node.channel === null ? 8 : node.channel; // Treat null as LongFast (8)
-          
-          if (nodeChannel !== channelId) {
+          if (node.channel === null || node.channel !== channelId) {
             visible = false;
           }
+        }
+          
+          
         }
 
         // Apply node max age filter
@@ -806,8 +808,56 @@
             + '<div class="mb-2"><i class="text-muted">Location:</i> ' + display_name + '</div>'
             + '<div class="mb-2"><i class="text-muted">Channel:</i> ' 
             + node.channel_name
-            + '</div>'
             + '</div>';
+          
+          // Add mapreport-specific fields if available
+          if (node.has_default_channel !== null && node.has_default_channel !== undefined) {
+            panel += '<div class="mb-2"><i class="text-muted">Default Channel:</i> ' 
+              + (node.has_default_channel ? '<span style="color: green;">Yes</span>' : '<span style="color: orange;">No</span>')
+              + '</div>';
+          }
+          
+          if (node.num_online_local_nodes !== null && node.num_online_local_nodes !== undefined) {
+            panel += '<div class="mb-2"><i class="text-muted">Local Nodes:</i> ' 
+              + node.num_online_local_nodes + ' nodes</div>';
+          }
+          
+          if (node.region !== null && node.region !== undefined) {
+            var regionNames = {
+              1: 'US (915 MHz)',
+              2: 'EU (433 MHz)', 
+              3: 'CN (470 MHz)',
+              4: 'JP (923 MHz)',
+              5: 'ANZ (915 MHz)',
+              6: 'KR (920 MHz)',
+              7: 'TW (920 MHz)',
+              8: 'RU (868 MHz)',
+              9: 'IN (865 MHz)',
+              10: 'NZ (915 MHz)',
+              11: 'TH (920 MHz)',
+              12: 'LORA_24 (2.4 GHz)'
+            };
+            panel += '<div class="mb-2"><i class="text-muted">LoRa Region:</i> ' 
+              + (regionNames[node.region] || 'Unknown (' + node.region + ')') + '</div>';
+          }
+          
+          if (node.modem_preset !== null && node.modem_preset !== undefined) {
+            var modemPresetNames = {
+              0: 'Long Fast',
+              1: 'Long Slow',
+              2: 'Very Long Slow',
+              3: 'Medium Slow',
+              4: 'Medium Fast',
+              5: 'Short Slow',
+              6: 'Short Fast',
+              7: 'Long Moderate',
+              8: 'Short Turbo'
+            };
+            panel += '<div class="mb-2"><i class="text-muted">Modem Preset:</i> ' 
+              + (modemPresetNames[node.modem_preset] || 'Unknown (' + node.modem_preset + ')') + '</div>';
+          }
+          
+          panel += '</div>';
 
           // Add the heard section
           panel += '<b>Heard (zero hop)</b><br/>';

@@ -255,6 +255,95 @@
               </td>
             </tr>
             <tr>
+              <th scope="row" style="background: #F2F6F9; text-align: left;">Channel</th>
+              <td class="text-left">
+                {% if node.channel %}
+                <span class="badge" style="background-color: {{ utils.get_channel_color(node.channel) }}; color: white; padding: 2px 6px; border-radius: 4px;" title="Channel {{ node.channel }} ({{ utils.get_channel_name(node.channel) }})">{{ utils.get_channel_name(node.channel, use_short_names=False) }}</span>
+                {% else %}
+                <span class="text-secondary">Unknown</span>
+                {% endif %}
+                
+                {% if node.has_default_channel is not none %}
+                  {% if node.has_default_channel %}
+                    <span class="badge bg-success ms-2" title="Node is using the default channel configuration">Default</span>
+                  {% else %}
+                    <span class="badge bg-warning ms-2" title="Node is using a custom channel configuration">Custom</span>
+                  {% endif %}
+                {% else %}
+                  <span class="badge bg-secondary ms-2" title="Default channel status unknown">Unknown</span>
+                {% endif %}
+                
+                <a href="https://meshtastic.org/docs/configuration/radio/channels/" target="_blank" title="Channel configuration information">
+                  <i class="bi bi-question-circle text-muted" style="font-size: 0.9em;"></i>
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" style="background: #F2F6F9; text-align: left;">Local Nodes</th>
+              <td class="text-left">
+                {% if node.num_online_local_nodes is not none %}
+                  {{ node.num_online_local_nodes }} nodes
+                {% else %}
+                  Unknown
+                {% endif %}
+                <a href="https://meshtastic.org/docs/configuration/module/mqtt/#map-reporting-enabled" target="_blank" title="Number of local nodes visible to this node (from mapreport)">
+                  <i class="bi bi-question-circle text-muted" style="font-size: 0.9em;"></i>
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" style="background: #F2F6F9; text-align: left;">LoRa Region</th>
+              <td class="text-left">
+                {% if node.region is not none %}
+                  {% if node.region == 1 %}
+                    US (915 MHz)
+                  {% elif node.region == 2 %}
+                    EU (433 MHz)
+                  {% elif node.region == 3 %}
+                    CN (470 MHz)
+                  {% elif node.region == 4 %}
+                    JP (923 MHz)
+                  {% elif node.region == 5 %}
+                    ANZ (915 MHz)
+                  {% elif node.region == 6 %}
+                    KR (920 MHz)
+                  {% elif node.region == 7 %}
+                    TW (920 MHz)
+                  {% elif node.region == 8 %}
+                    RU (868 MHz)
+                  {% elif node.region == 9 %}
+                    IN (865 MHz)
+                  {% elif node.region == 10 %}
+                    NZ (915 MHz)
+                  {% elif node.region == 11 %}
+                    TH (920 MHz)
+                  {% elif node.region == 12 %}
+                    LORA_24 (2.4 GHz)
+                  {% else %}
+                    Unknown ({{ node.region }})
+                  {% endif %}
+                {% else %}
+                  Unknown
+                {% endif %}
+                <a href="https://meshtastic.org/docs/configuration/radio/lora/" target="_blank" title="LoRa radio region preset">
+                  <i class="bi bi-question-circle text-muted" style="font-size: 0.9em;"></i>
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" style="background: #F2F6F9; text-align: left;">Modem Preset</th>
+              <td class="text-left">
+                {% if node.modem_preset is not none %}
+                  {{ utils.get_modem_preset_name(node.modem_preset) }}
+                {% else %}
+                  Unknown
+                {% endif %}
+                <a href="https://meshtastic.org/docs/configuration/radio/lora/" target="_blank" title="LoRa modem preset configuration">
+                  <i class="bi bi-question-circle text-muted" style="font-size: 0.9em;"></i>
+                </a>
+              </td>
+            </tr>
+            <tr>
               <th scope="row" style="background: #F2F6F9; text-align: left;">Role</th>
               <td class="text-left">
                 {% if node.role is not none %}
@@ -368,16 +457,6 @@
               <td class="text-left">
                 {% if node.owner_username %}
                 <a href='user_{{ node.owner_username }}.html'>{{ node.owner_username }}</a>
-                {% else %}
-                Unknown
-                {% endif %}
-              </td>
-            </tr>
-            <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Channel</th>
-              <td class="text-left">
-                {% if node.channel %}
-                <span class="badge" style="background-color: {{ utils.get_channel_color(node.channel) }}; color: white; padding: 2px 6px; border-radius: 4px;" title="Channel {{ node.channel }} ({{ utils.get_channel_name(node.channel) }})">{{ utils.get_channel_name(node.channel, use_short_names=False) }}</span>
                 {% else %}
                 Unknown
                 {% endif %}

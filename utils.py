@@ -357,3 +357,31 @@ def get_channel_color(channel_value):
     
     # Convert back to hex
     return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def get_modem_preset_name(modem_preset_value):
+    """
+    Convert a modem preset value to a human-readable name.
+    
+    Args:
+        modem_preset_value: The numeric modem preset value
+        
+    Returns:
+        A human-readable modem preset name or "Unknown (value)" if not recognized
+    """
+    if modem_preset_value is None:
+        return "Unknown"
+    
+    try:
+        from meshtastic_support import ModemPreset
+        for preset in ModemPreset:
+            if preset.value == modem_preset_value:
+                # Convert the enum name to a more readable format
+                words = preset.name.split('_')
+                formatted_words = [word.capitalize() for word in words]
+                return ' '.join(formatted_words)
+        
+        # If not found in our enum, return unknown with the value
+        return f"Unknown ({modem_preset_value})"
+    except Exception:
+        return f"Unknown ({modem_preset_value})"

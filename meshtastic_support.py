@@ -175,6 +175,22 @@ class ShortChannel(Enum):
     MS = 24
     # Additional channels will be added as they are discovered
 
+
+class ModemPreset(Enum):
+    """
+    Meshtastic modem preset configuration
+    from https://buf.build/meshtastic/protobufs/docs/main:meshtastic#meshtastic.ModemPreset
+    """
+    LONG_FAST = 0
+    LONG_SLOW = 1
+    VERY_LONG_SLOW = 2  # Deprecated in 2.5: Works only with txco and is unusably slow
+    MEDIUM_SLOW = 3
+    MEDIUM_FAST = 4
+    SHORT_SLOW = 5
+    SHORT_FAST = 6
+    LONG_MODERATE = 7
+    SHORT_TURBO = 8  # Fastest preset with 500kHz bandwidth, not legal in all regions
+
 def get_channel_name(channel_value, use_short_names=False):
     """
     Convert a channel number to a human-readable name.
@@ -636,3 +652,30 @@ def get_hardware_model_name(hw_model_value):
         return model.name.replace('_', ' ')
     except ValueError:
         return f"Unknown ({hw_model_value})"
+
+
+def get_modem_preset_name(modem_preset_value):
+    """
+    Convert a modem preset value to a human-readable name.
+    
+    Args:
+        modem_preset_value: The numeric modem preset value
+        
+    Returns:
+        A human-readable modem preset name or "Unknown (value)" if not recognized
+    """
+    if modem_preset_value is None:
+        return "Unknown"
+    
+    try:
+        for preset in ModemPreset:
+            if preset.value == modem_preset_value:
+                # Convert the enum name to a more readable format
+                words = preset.name.split('_')
+                formatted_words = [word.capitalize() for word in words]
+                return ' '.join(formatted_words)
+        
+        # If not found in our enum, return unknown with the value
+        return f"Unknown ({modem_preset_value})"
+    except Exception:
+        return f"Unknown ({modem_preset_value})"

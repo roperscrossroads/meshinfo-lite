@@ -7,7 +7,7 @@ import utils
 import logging
 import re
 from timezone_utils import time_ago  # Import time_ago from timezone_utils
-from meshtastic_support import get_hardware_model_name  # Import get_hardware_model_name from meshtastic_support
+from meshtastic_support import get_hardware_model_name, get_modem_preset_name  # Import functions from meshtastic_support
 import types
 from collections import defaultdict, deque
 
@@ -513,6 +513,10 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             n.hw_model,
             n.role,
             n.firmware_version,
+            n.has_default_channel,
+            n.num_online_local_nodes,
+            n.region,
+            n.modem_preset,
             n.owner,
             n.updated_via,
             n.ts_seen,
@@ -933,7 +937,7 @@ WHERE id = %s
         payload = dict(data["decoded"]["json_payload"])
         
         # Determine packet type based on available fields
-        is_mapreport = "firmware_version" in payload and "role" not in payload
+        is_mapreport = "firmware_version" in payload
         is_nodeinfo = "role" in payload and "firmware_version" not in payload
         
         if self.debug:
@@ -941,24 +945,26 @@ WHERE id = %s
         
         # Set up fields based on packet type
         if is_mapreport:
-            # Mapreport: update firmware_version and hw_model, preserve existing role
-            expected = ["hw_model", "long_name", "short_name", "firmware_version"]
+            # Mapreport: update firmware_version, hw_model, role, and mapreport-specific fields
+            expected = ["hw_model", "long_name", "short_name", "firmware_version", "has_default_channel", "num_online_local_nodes", "region", "modem_preset", "role"]
             for attr in expected:
                 if attr not in payload:
                     payload[attr] = None
-            # Don't touch role for mapreports
-            payload["role"] = None
         elif is_nodeinfo:
-            # Nodeinfo: update role and hw_model, preserve existing firmware_version
+            # Nodeinfo: update role and hw_model, preserve existing firmware_version and mapreport fields
             expected = ["hw_model", "long_name", "short_name", "role"]
             for attr in expected:
                 if attr not in payload:
                     payload[attr] = None
-            # Don't touch firmware_version for nodeinfo
+            # Don't touch firmware_version and mapreport fields for nodeinfo
             payload["firmware_version"] = None
+            payload["has_default_channel"] = None
+            payload["num_online_local_nodes"] = None
+            payload["region"] = None
+            payload["modem_preset"] = None
         else:
             # Fallback: try to update all fields
-            expected = ["hw_model", "long_name", "short_name", "role", "firmware_version"]
+            expected = ["hw_model", "long_name", "short_name", "role", "firmware_version", "has_default_channel", "num_online_local_nodes", "region", "modem_preset"]
             for attr in expected:
                 if attr not in payload:
                     payload[attr] = None
@@ -976,9 +982,13 @@ WHERE id = %s
     hw_model,
     role,
     firmware_version,
+    has_default_channel,
+    num_online_local_nodes,
+    region,
+    modem_preset,
     ts_updated
 )
-VALUES (%s, %s, %s, %s, %s, %s, NOW())
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
 ON DUPLICATE KEY UPDATE
 long_name = VALUES(long_name),
 short_name = VALUES(short_name),
@@ -991,6 +1001,22 @@ firmware_version = CASE
     WHEN VALUES(firmware_version) IS NOT NULL THEN VALUES(firmware_version)
     ELSE firmware_version
 END,
+has_default_channel = CASE 
+    WHEN VALUES(has_default_channel) IS NOT NULL THEN VALUES(has_default_channel)
+    ELSE has_default_channel
+END,
+num_online_local_nodes = CASE 
+    WHEN VALUES(num_online_local_nodes) IS NOT NULL THEN VALUES(num_online_local_nodes)
+    ELSE num_online_local_nodes
+END,
+region = CASE 
+    WHEN VALUES(region) IS NOT NULL THEN VALUES(region)
+    ELSE region
+END,
+modem_preset = CASE 
+    WHEN VALUES(modem_preset) IS NOT NULL THEN VALUES(modem_preset)
+    ELSE modem_preset
+END,
 ts_updated = VALUES(ts_updated)"""
         values = (
             data["from"],
@@ -998,7 +1024,11 @@ ts_updated = VALUES(ts_updated)"""
             payload["short_name"],
             payload["hw_model"],
             payload["role"],
-            payload["firmware_version"]
+            payload["firmware_version"],
+            payload["has_default_channel"],
+            payload["num_online_local_nodes"],
+            payload["region"],
+            payload["modem_preset"]
         )
         
         try:
@@ -1846,8 +1876,17 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             if "mapreport" in node and "firmware_version" in node["mapreport"]:
                 record["firmware_version"] = \
                     node["mapreport"]["firmware_version"]
+                # Add mapreport-specific fields
+                record["has_default_channel"] = node["mapreport"].get("has_default_channel")
+                record["num_online_local_nodes"] = node["mapreport"].get("num_online_local_nodes")
+                record["region"] = node["mapreport"].get("region")
+                record["modem_preset"] = node["mapreport"].get("modem_preset")
             else:
                 record["firmware_version"] = None
+                record["has_default_channel"] = None
+                record["num_online_local_nodes"] = None
+                record["region"] = None
+                record["modem_preset"] = None
             records.append(record)
 
         for record in records:
@@ -1858,9 +1897,13 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     hw_model,
     role,
     firmware_version,
+    has_default_channel,
+    num_online_local_nodes,
+    region,
+    modem_preset,
     ts_updated
 )
-VALUES (%s, %s, %s, %s, %s, %s, NOW())
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
 ON DUPLICATE KEY UPDATE
 long_name = VALUES(long_name),
 short_name = VALUES(short_name),
@@ -1873,6 +1916,22 @@ firmware_version = CASE
     WHEN VALUES(firmware_version) IS NOT NULL THEN VALUES(firmware_version)
     ELSE firmware_version
 END,
+has_default_channel = CASE 
+    WHEN VALUES(has_default_channel) IS NOT NULL THEN VALUES(has_default_channel)
+    ELSE has_default_channel
+END,
+num_online_local_nodes = CASE 
+    WHEN VALUES(num_online_local_nodes) IS NOT NULL THEN VALUES(num_online_local_nodes)
+    ELSE num_online_local_nodes
+END,
+region = CASE 
+    WHEN VALUES(region) IS NOT NULL THEN VALUES(region)
+    ELSE region
+END,
+modem_preset = CASE 
+    WHEN VALUES(modem_preset) IS NOT NULL THEN VALUES(modem_preset)
+    ELSE modem_preset
+END,
 ts_updated = VALUES(ts_updated)"""
             values = (
                 record["id"],
@@ -1880,7 +1939,11 @@ ts_updated = VALUES(ts_updated)"""
                 record["short_name"],
                 record["hw_model"],
                 record["role"],
-                record["firmware_version"]
+                record["firmware_version"],
+                record["has_default_channel"],
+                record["num_online_local_nodes"],
+                record["region"],
+                record["modem_preset"]
             )
             cur = self.db.cursor()
             cur.execute(sql, values)
