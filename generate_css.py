@@ -21,6 +21,8 @@ DEFAULTS = {
     'header_link_color': '#555',
     'header_link_active_color': '#000',
     'header_brand_color': '#000',
+    'chat_box_background_color': '#f8f9fa',
+    'chat_box_border_color': '',
 }
 
 config = configparser.ConfigParser()

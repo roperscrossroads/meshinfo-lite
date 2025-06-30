@@ -97,3 +97,7 @@ link_color_hover=#0056b3
 control_color=#17a2b8
 # Control hover color
 control_color_hover=#1396a5
+# Chat box background color
+chat_box_background_color=#f8f9fa
+# Chat box border color (leave empty for no border)
+chat_box_border_color=
