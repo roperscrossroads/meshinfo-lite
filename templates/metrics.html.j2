@@ -1020,14 +1020,14 @@ Mesh Metrics
                         const firstMessage = new Date(node.first_message).toLocaleString();
                         const lastMessage = new Date(node.last_message).toLocaleString();
                         
-                        // Format channels
-                        const channelsText = node.channels && node.channels.length > 0 
-                            ? node.channels.map(ch => {
-                                const channelName = ch.name || `Channel ${ch.id}`;
-                                return `<span style="background-color: ${getChannelColor(ch.id)}; color: white; padding: 2px 6px; border-radius: 4px; margin-right: 4px;" title="Channel ${ch.id} (${channelName})">${channelName}</span>`;
-                            }).join('')
-                            : '-';
-                        
+                        // Format channels using Jinja2 for color consistency
+                        let channelsText = '-';
+                        if (node.channels && node.channels.length > 0) {
+                            channelsText = node.channels.map(function(ch) {
+                                // The backend should provide ch.color and ch.name for each channel
+                                return `<span style="background-color: ${ch.color}; color: white; padding: 2px 6px; border-radius: 4px; margin-right: 4px;" title="Channel ${ch.id} (${ch.name})">${ch.name}</span>`;
+                            }).join('');
+                        }
                         row.innerHTML = `
                             <td>${index + 1}</td>
                             <td class="node-id">
@@ -1060,19 +1060,6 @@ Mesh Metrics
                     loadingIndicator.remove();
                 }
             });
-    }
-
-    // Add this function to get channel colors
-    function getChannelColor(channelId) {
-        // Define channel colors based on the same logic used in utils.get_channel_color
-        const channelColors = {
-            8: '#4CAF50',   // Long Fast
-            31: '#2196F3',  // Medium Fast
-            112: '#FF9800',  // Short Fast
-            // Add more channels as needed
-        };
-        
-        return channelColors[channelId] || '#9E9E9E'; // Default gray for unknown channels
     }
 </script>
 {% endblock %} 

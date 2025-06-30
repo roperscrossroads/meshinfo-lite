@@ -1806,7 +1806,8 @@ def get_chattiest_nodes():
                 if channel != 'all':
                     channels.append({
                         'id': int(channel),
-                        'name': utils.get_channel_name(int(channel))
+                        'name': utils.get_channel_name(int(channel)),
+                        'color': utils.get_channel_color(int(channel))
                     })
                 else:
                     # Otherwise process the concatenated list of channels
@@ -1816,7 +1817,8 @@ def get_chattiest_nodes():
                             ch_id_int = int(ch_id)
                             channels.append({
                                 'id': ch_id_int,
-                                'name': utils.get_channel_name(ch_id_int)
+                                'name': utils.get_channel_name(ch_id_int),
+                                'color': utils.get_channel_color(ch_id_int)
                             })
                         except (ValueError, TypeError):
                             continue
