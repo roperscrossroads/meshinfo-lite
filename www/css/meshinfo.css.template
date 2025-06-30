@@ -730,4 +730,44 @@ a:hover, a:focus {
     color: #222 !important;              /* Dark text for readability */
     border: 1px solid {{table_border_color}} !important;
     font-weight: 600;
+}
+
+/* Environmental Telemetry Dropdown Theming */
+#environmentalDropdown {
+    border: 2px solid {{control_color}} !important;
+    border-radius: 0.375rem !important;
+    color: {{control_color}} !important;
+    font-family: monospace, monospace;
+    font-weight: 600;
+    background: #fff !important;
+    height: 2.25rem !important;
+    min-width: 120px;
+    margin-left: 1rem;
+    margin-top: 0.15rem;
+    margin-bottom: 0.15rem;
+    display: inline-block;
+    vertical-align: middle;
+    box-shadow: none;
+    transition: border-color 0.2s;
+}
+#environmentalDropdown:focus, #environmentalDropdown:hover {
+    border-color: {{control_color_hover}} !important;
+    outline: none !important;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.15);
+}
+@media (max-width: 767.98px) {
+    #environmentalDropdown {
+        margin-left: 0.5rem;
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+/* Ensure gap between time range and telemetry selector at desktop widths */
+@media (min-width: 768px) {
+  #environmentalTelemetryContainer .btn-group + #environmentalTabs {
+    margin-left: 2rem !important;
+  }
 } 

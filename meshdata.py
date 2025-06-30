@@ -1281,25 +1281,31 @@ ts_updated = VALUES(ts_updated)"""
         # Use class-level config that's already loaded
         retention_days = self.config.getint("server", "telemetry_retention_days", fallback=None) if self.config else None
         
-        # Only check for cleanup every N records (using modulo on auto-increment ID or timestamp)
-        cur = self.db.cursor()
-        cur.execute("SELECT COUNT(*) FROM telemetry WHERE ts_created > DATE_SUB(NOW(), INTERVAL 1 HOUR)")
-        recent_count = cur.fetchone()[0]
+        # Use a simple counter to reduce cleanup frequency while still honoring retention
+        if not hasattr(self, '_telemetry_insert_count'):
+            self._telemetry_insert_count = 0
+        self._telemetry_insert_count += 1
         
-        # Only run cleanup if we have accumulated enough recent records
-        if recent_count > 200:  # Adjust threshold as needed
+        # Check for cleanup - run retention policy every 50 inserts or if retention_days is set
+        should_cleanup = (retention_days is not None) or (self._telemetry_insert_count % 50 == 0)
+        
+        if should_cleanup:
+            cur = self.db.cursor()
             if retention_days:
+                # Always honor retention_days policy
                 cur.execute("""DELETE FROM telemetry 
                     WHERE ts_created < DATE_SUB(NOW(), INTERVAL %s DAY)""", 
                     (retention_days,))
             else:
-                # More efficient count-based cleanup
-                cur.execute("""DELETE FROM telemetry WHERE ts_created <= 
-                    (SELECT ts_created FROM 
-                        (SELECT ts_created FROM telemetry ORDER BY ts_created DESC LIMIT 1 OFFSET 20000) t)""")
-        
-        cur.close()
-        self.db.commit()
+                # Fallback to count-based cleanup only if no retention_days set
+                cur.execute("SELECT COUNT(*) FROM telemetry WHERE ts_created > DATE_SUB(NOW(), INTERVAL 1 HOUR)")
+                recent_count = cur.fetchone()[0]
+                if recent_count > 200:  # Only run count-based cleanup if we have enough recent activity
+                    cur.execute("""DELETE FROM telemetry WHERE ts_created <= 
+                        (SELECT ts_created FROM 
+                            (SELECT ts_created FROM telemetry ORDER BY ts_created DESC LIMIT 1 OFFSET 20000) t)""")
+            cur.close()
+            self.db.commit()
 
         node_id = self.verify_node(data["from"])
         payload = dict(data["decoded"]["json_payload"])
@@ -2340,6 +2346,46 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             ORDER BY interval_start ASC
         """
         params = (node_id,)
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description]
+        for row in rows:
+            record = {}
+            for i in range(len(row)):
+                value = row[i]
+                if isinstance(value, datetime.datetime):
+                    record[column_names[i]] = int(value.timestamp())
+                else:
+                    record[column_names[i]] = value
+            telemetry.append(record)
+        cur.close()
+        return telemetry
+
+    def get_environmental_telemetry_for_node(self, node_id, days=1):
+        """
+        Return environmental telemetry for the given node, ordered by timestamp ascending.
+        Each record is a dict with keys: temperature, barometric_pressure, relative_humidity, gas_resistance, voltage, current, ts_created.
+        
+        Args:
+            node_id: The node ID to get telemetry for
+            days: Number of days to look back (default 1 for 24 hours)
+        """
+        telemetry = []
+        sql = """
+            SELECT
+                temperature,
+                barometric_pressure,
+                relative_humidity,
+                gas_resistance,
+                voltage,
+                current,
+                UNIX_TIMESTAMP(ts_created) as ts_created
+            FROM telemetry
+            WHERE id = %s AND ts_created >= NOW() - INTERVAL %s DAY
+            ORDER BY ts_created ASC
+        """
+        params = (node_id, days)
         cur = self.db.cursor()
         cur.execute(sql, params)
         rows = cur.fetchall()

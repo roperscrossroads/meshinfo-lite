@@ -1855,6 +1855,15 @@ def api_telemetry(node_id):
     telemetry = md.get_telemetry_for_node(node_id)
     return jsonify(telemetry)
 
+@app.route('/api/environmental-telemetry/<int:node_id>')
+def api_environmental_telemetry(node_id):
+    md = get_meshdata()
+    days = request.args.get('days', 1, type=int)
+    # Limit days to reasonable range (1-30 days)
+    days = max(1, min(30, days))
+    telemetry = md.get_environmental_telemetry_for_node(node_id, days)
+    return jsonify(telemetry)
+
 @cache.memoize(timeout=60)
 def get_cached_chat_data(page=1, per_page=50):
     """Cache the chat data with optimized query."""
