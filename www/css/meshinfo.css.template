@@ -825,4 +825,40 @@ a:hover, a:focus {
   #environmentalTelemetryContainer .btn-group + #environmentalTabs {
     margin-left: 2rem !important;
   }
+}
+
+/* Details table header styling */
+.details-label {
+  font-weight: 600;
+  text-align: left;
+  color: #222;
+  vertical-align: middle;
+}
+
+/* Ensure details-table stripes both th and td in odd rows */
+.details-table > tbody > tr:nth-of-type(odd) > th,
+.details-table > tbody > tr:nth-of-type(odd) > td {
+    background-color: {{table_alternating_row_color}} !important;
+} 
+
+/* Ensure details-table stripes both th and td in even rows */
+.details-table > tbody > tr:nth-of-type(even) > th,
+.details-table > tbody > tr:nth-of-type(even) > td {
+    background-color: {{page_background_color}} !important;
+} 
+
+/* Collapse border between section and column headers in heard tables */
+.heard-table thead tr:first-child th {
+    border-bottom: none !important;
+}
+.heard-table thead tr:nth-child(2) th {
+    border-top: none !important;
+}
+
+/* Collapse border between section and column headers in node-table */
+.node-table thead tr:first-child th {
+    border-bottom: none !important;
+}
+.node-table thead tr:nth-child(2) th {
+    border-top: none !important;
 } 

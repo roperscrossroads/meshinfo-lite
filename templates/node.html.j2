@@ -209,27 +209,27 @@
     <!-- Right Column: Details, Heard Tables -->
     <div class="col-12 col-md-6">
       <div class="container px-0">
-        <table class="table table-sm">
+        <table class="table table-striped table-sm details-table">
           <thead>
             <tr>
               <th colspan="2" scope="col">Details</th>
             </tr>
           </thead>
-          <tbody style="background: #F2F6F9;">
+          <tbody>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">ID (hex)</th>
+              <th scope="row" class="details-label">ID (hex)</th>
               <td class="text-left">
                 {{ utils.convert_node_id_from_int_to_hex(node.id) }}
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">ID (int)</th>
+              <th scope="row" class="details-label">ID (int)</th>
               <td class="text-left">
                 {{ node.id }}
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Hardware</th>
+              <th scope="row" class="details-label">Hardware</th>
               <td class="text-left">
                 {% if node.hw_model is not none and meshtastic_support.HardwareModel(node.hw_model) in meshtastic_support.HARDWARE_PHOTOS %}
                 <img
@@ -242,7 +242,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Firmware version</th>
+              <th scope="row" class="details-label">Firmware version</th>
               <td class="text-left">
                 {% if node.firmware_version %}
                 {{ node.firmware_version }}
@@ -255,7 +255,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Channel</th>
+              <th scope="row" class="details-label">Channel</th>
               <td class="text-left">
                 {% if node.channel %}
                 <span class="badge" style="background-color: {{ utils.get_channel_color(node.channel) }}; color: white; padding: 2px 6px; border-radius: 4px;" title="Channel {{ node.channel }} ({{ utils.get_channel_name(node.channel) }})">{{ utils.get_channel_name(node.channel, use_short_names=False) }}</span>
@@ -279,7 +279,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Local Nodes</th>
+              <th scope="row" class="details-label">Local Nodes</th>
               <td class="text-left">
                 {% if node.num_online_local_nodes is not none %}
                   {{ node.num_online_local_nodes }} nodes
@@ -292,7 +292,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">LoRa Region</th>
+              <th scope="row" class="details-label">LoRa Region</th>
               <td class="text-left">
                 {% if node.region is not none %}
                   {% if node.region == 1 %}
@@ -331,7 +331,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Modem Preset</th>
+              <th scope="row" class="details-label">Modem Preset</th>
               <td class="text-left">
                 {% if node.modem_preset is not none %}
                   {{ utils.get_modem_preset_name(node.modem_preset) }}
@@ -344,7 +344,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Role</th>
+              <th scope="row" class="details-label">Role</th>
               <td class="text-left">
                 {% if node.role is not none %}
                 {% if node.role == 0 %}
@@ -381,7 +381,7 @@
             </tr>
             {% if node.position %}
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Position</th>
+              <th scope="row" class="details-label">Position</th>
               <td class="text-left">
                 {% if node.position and node.position.latitude_i and node.position.longitude_i %}
                 {{ node.position.longitude_i / 1e7 }}, {{ node.position.latitude_i / 1e7 }}
@@ -391,7 +391,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Grid Square</th>
+              <th scope="row" class="details-label">Grid Square</th>
               <td class="text-left">
                 {% if node.position and node.position.latitude_i and node.position.longitude_i %}
                 {% set grid = utils.latlon_to_grid(node.position.latitude_i / 1e7, node.position.longitude_i / 1e7) %}
@@ -402,7 +402,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Location</th>
+              <th scope="row" class="details-label">Location</th>
               <td class="text-left">
                 {% if node.position and node.position.geocoded %}
                 {{ node.position.geocoded }}
@@ -412,7 +412,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Altitude</th>
+              <th scope="row" class="details-label">Altitude</th>
               <td class="text-left">
                 {% if node.position and node.position.altitude %}
                 {{ node.position.altitude }} m
@@ -423,7 +423,7 @@
             </tr>
             {% endif %}
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Status</th>
+              <th scope="row" class="details-label">Status</th>
               <td class="text-left">
                 {% if node.active %}
                 <span class="text-success">Online</span>
@@ -433,7 +433,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">First Seen</th>
+              <th scope="row" class="details-label">First Seen</th>
               <td class="text-left">
                 {% if node.ts_created %}
                 {{ format_timestamp(node.ts_created) }}
@@ -443,7 +443,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Last Seen</th>
+              <th scope="row" class="details-label">Last Seen</th>
               <td class="text-left">
                 {% if node.ts_seen %}
                 {{ format_timestamp(node.ts_seen) }} ({{ time_ago(node.ts_seen) }})
@@ -453,7 +453,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Owner</th>
+              <th scope="row" class="details-label">Owner</th>
               <td class="text-left">
                 {% if node.owner_username %}
                 <a href='user_{{ node.owner_username }}.html'>{{ node.owner_username }}</a>
@@ -463,7 +463,7 @@
               </td>
             </tr>
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Updated via</th>
+              <th scope="row" class="details-label">Updated via</th>
               <td class="text-left">
                 {% if node.updated_via %}
                 {% set vid = utils.convert_node_id_from_int_to_hex(node.updated_via) %}
@@ -481,7 +481,7 @@
             </tr>
             {% if elsewhere_links %}
             <tr>
-              <th scope="row" style="background: #F2F6F9; text-align: left;">Elsewhere</th>
+              <th scope="row" class="details-label">Elsewhere</th>
               <td class="text-left">
                 {% for label, url, icon in elsewhere_links %}
                   <a href="{{ url }}" target="_blank" class="me-2">{{ icon }} {{ label }}</a>
@@ -493,7 +493,7 @@
             
           </tbody>
         </table>
-        <table class="table table-striped table-sm">
+        <table class="table table-striped table-sm heard-table">
           <thead>
             <tr>
               <th colspan="4" scope="col">Heard (zero hop)</th>
@@ -587,7 +587,7 @@
           </tbody>
         </table>
 
-        <table class="table table-striped table-sm">
+        <table class="table table-striped table-sm heard-table">
           <thead>
             <tr>
               <th colspan="4" scope="col">Heard By (zero hop)</th>
