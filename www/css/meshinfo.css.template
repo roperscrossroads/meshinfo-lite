@@ -699,7 +699,8 @@ a:hover, a:focus {
     border: 1px solid {{table_border_color}} !important;
     color: {{header_link_color}} !important;
     box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-    border-radius: 8px;
+    border-radius: 12px !important;
+    overflow: hidden !important;
     font-family: inherit;
     font-size: 0.98em;
     z-index: 1060;
