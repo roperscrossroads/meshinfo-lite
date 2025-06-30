@@ -148,7 +148,7 @@ nav {
     border-radius: 12px;
     padding: 12px 16px;
     position: relative;
-    {% if chat_box_border_color %}
+    {% if chat_box_border_color and chat_box_border_color.strip() and chat_box_border_color != 'none' and chat_box_border_color != 'transparent' and chat_box_border_color != '' %}
     border: 1px solid {{chat_box_border_color}};
     {% endif %}
 }
@@ -650,9 +650,9 @@ a:hover, a:focus {
   border-color: {{control_color_hover}} !important;
 }
 
-/* Prevent global link color from affecting chat node links */
-.chat-messages a,
-.message-container a {
+/* Prevent global link color from affecting only reception badge links in chat */
+.reception-badge,
+.mobile-node-name a {
   color: #000 !important;
 }
 
@@ -687,4 +687,8 @@ a:hover, a:focus {
   border-color: #dee2e6 !important;
 }
 
-/* --- END MIGRATED STYLES --- */ 
+/* --- END MIGRATED STYLES --- */
+
+.newest-node-welcome, .banner {
+  background: {{banner_background_color}} !important;
+} 
