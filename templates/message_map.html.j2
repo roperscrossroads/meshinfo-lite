@@ -14,26 +14,96 @@
   <div class="card mb-3">
     <div class="card-body">
       <h5 class="card-title">Message Details</h5>
-      <p class="card-text">
-        <strong>From:</strong> 
-        {% set from_id = utils.convert_node_id_from_int_to_hex(message.from_id) %}
-        {% if from_id in nodes %}
-          <a href="node_{{ from_id }}.html">{{ nodes[from_id].long_name }} ({{ nodes[from_id].short_name }})</a>
-        {% else %}
-          Unknown
-        {% endif %}
-        <br>
-        <strong>Time:</strong> {{ format_timestamp(message.ts_created) }}<br>
-        <strong>Message:</strong> {{ message.text }}
-        {% if sender_position and sender_position.position_time %}
-        <br>
-        <strong>Sender Position Updated:</strong> {{ format_timestamp(sender_position.position_time) }}
-        {% endif %}
-        {% if convex_hull_area_km2 is not none %}
-        <br>
-        <strong>Convex Hull Area:</strong> {{ '%.2f' % convex_hull_area_km2 }} km²
-        {% endif %}
-      </p>
+      <div class="row">
+        <div class="col-md-6">
+          <p class="card-text">
+            <strong>Message ID:</strong> {{ message.id }}<br>
+            <strong>From:</strong> 
+            {% set from_id = utils.convert_node_id_from_int_to_hex(message.from_id) %}
+            {% if from_id in nodes %}
+              <a href="node_{{ from_id }}.html">{{ nodes[from_id].long_name }} ({{ nodes[from_id].short_name }})</a>
+            {% else %}
+              Unknown
+            {% endif %}
+            <br>
+            <strong>To:</strong>
+            {% set to_id = None %}
+            {% if message.to_id is defined and message.to_id is not none %}
+              {% set to_id = utils.convert_node_id_from_int_to_hex(message.to_id) %}
+            {% endif %}
+            {% if message.to_id is not defined or message.to_id is none or message.to_id == 4294967295 or (to_id is string and to_id == 'ffffffff') %}
+              Everyone (Broadcast)
+            {% elif to_id in nodes %}
+              <a href="node_{{ to_id }}.html">{{ nodes[to_id].long_name }} ({{ nodes[to_id].short_name }})</a>
+            {% else %}
+              Unknown
+            {% endif %}
+            <br>
+            <strong>Channel:</strong>
+            {% if message.channel is not none %}
+              <span class="badge align-middle" style="background-color: {{ utils.get_channel_color(message.channel) }}; color: white; font-size: 0.95em; padding: 2px 8px; border-radius: 4px;" title="Channel {{ message.channel }} ({{ utils.get_channel_name(message.channel) }})">
+                {{ utils.get_channel_name(message.channel) }} ({{ message.channel }})
+              </span>
+            {% else %}
+              <span class="badge bg-danger">Unknown ()</span>
+            {% endif %}
+            <br>
+            <strong>Time:</strong> {{ format_timestamp(message.ts_created) }}<br>
+          </p>
+        </div>
+        <div class="col-md-6">
+          <p class="card-text">
+            <strong>Reception Summary:</strong><br>
+            {% if receiver_details %}
+              <!-- Debug: receiver_details has {{ receiver_details|length }} items -->
+              {% set ns = namespace(direct_count=0, relayed_count=0) %}
+              {% for detail in receiver_details.values() %}
+                <!-- Debug: detail.hop_start = {{ detail.hop_start }}, detail.hop_limit = {{ detail.hop_limit }} -->
+                {% if detail.hop_start is not none and detail.hop_limit is not none %}
+                  {% set hop_start = detail.hop_start|int %}
+                  {% set hop_limit = detail.hop_limit|int %}
+                  <!-- Debug: hop_start = {{ hop_start }}, hop_limit = {{ hop_limit }} -->
+                  {% if hop_start == hop_limit %}
+                    {% set ns.direct_count = ns.direct_count + 1 %}
+                  {% elif hop_start > hop_limit %}
+                    {% set ns.relayed_count = ns.relayed_count + 1 %}
+                  {% endif %}
+                {% else %}
+                  <!-- Debug: No hop info - treating as direct (likely direct message) -->
+                  {% set ns.direct_count = ns.direct_count + 1 %}
+                {% endif %}
+              {% endfor %}
+              <!-- Debug: direct_count: {{ ns.direct_count }}, relayed_count: {{ ns.relayed_count }} -->
+              {% set total = ns.direct_count + ns.relayed_count %}
+              {% if total > 0 %}
+                • <strong>{{ total }}</strong> nodes reported reception
+                {% if ns.direct_count == total %}
+                  (all direct)
+                {% elif ns.relayed_count == total %}
+                  (all relayed)
+                {% elif ns.direct_count > 0 and ns.relayed_count > 0 %}
+                  ({{ ns.direct_count }} direct, {{ ns.relayed_count }} relayed)
+                {% endif %}
+                <br>
+              {% endif %}
+            {% endif %}
+            {% if sender_position and sender_position.position_time %}
+            <strong>Sender Position Updated:</strong> {{ format_timestamp(sender_position.position_time) }}<br>
+            {% endif %}
+            {% if convex_hull_area_km2 is not none %}
+            <strong>Convex Hull Area:</strong> <span title="Convex hull area: The smallest polygon that contains all sender and receiver positions for this message.">{{ '%.2f' % convex_hull_area_km2 }} km²</span><br>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-12">
+          <div class="message-map-box">
+            <span class="fw-bold" style="font-size: 1rem;">Message:</span>
+            <span style="font-size: 1.05rem; font-weight: 500; margin-left: 0.5em; word-break: break-word;">{{ message.text }}</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -221,7 +291,7 @@
 
         var lineStyle = new Style({
           stroke: new Stroke({
-            color: {% if details and details.hop_start is not none and details.hop_limit is not none and (details.hop_start - details.hop_limit) > 0 %}'#6666FF'{% else %}'#FF6666'{% endif %}, // <-- Added comma here
+            color: {% if details and details.hop_start is not none and details.hop_limit is not none and (details.hop_start - details.hop_limit) > 0 %}'#6666FF'{% else %}'#FF6666'{% endif %},
             width: 2
           })
         });

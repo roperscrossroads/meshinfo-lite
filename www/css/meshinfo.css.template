@@ -317,7 +317,7 @@ nav {
     background: rgba(0, 0, 0, 0.05);
     border-radius: 4px;
     white-space: nowrap;
-    margin-right: 0.5em;
+    margin-left: 1em;
 }
 
 .btn-group .btn {
@@ -893,4 +893,16 @@ a:hover, a:focus {
   background-color: {{control_color_hover}} !important;
   border-color: {{control_color_hover}} !important;
   text-decoration: none !important;
+} 
+
+/* Message Map prominent message box */
+.message-map-box {
+  background: {{chat_box_background_color}};
+  border-left: 3px solid {{accent_color}};
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0;
+  font-size: 1.05rem;
+  font-weight: 500;
+  word-break: break-word;
 } 

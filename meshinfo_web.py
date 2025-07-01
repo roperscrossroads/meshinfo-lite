@@ -671,6 +671,8 @@ def get_cached_message_map_data(message_id):
     message = {
         'id': message_id,
         'from_id': message_base['from_id'],
+        'to_id': message_base.get('to_id'),  # Ensure to_id is included
+        'channel': message_base.get('channel'),  # Ensure channel is included
         'text': message_base['text'],
         'ts_created': message_time,
         'receiver_ids': receiver_ids_list
