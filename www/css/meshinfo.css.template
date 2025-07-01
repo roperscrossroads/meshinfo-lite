@@ -328,6 +328,24 @@ nav {
     font-size: 1rem;
 }
 
+.btn-mini {
+    font-size: 0.80em;
+    padding: 0.05rem 0.3rem;
+    line-height: 1.1;
+    color: {{control_color}} !important;
+    border-color: {{control_color}} !important;
+    background: transparent !important;
+    text-decoration: none !important;
+    transition: background 0.15s, color 0.15s;
+}
+
+.btn-mini:hover, .btn-mini:focus {
+    color: #fff !important;
+    background-color: {{control_color_hover}} !important;
+    border-color: {{control_color_hover}} !important;
+    text-decoration: none !important;
+}
+
 /* Mobile Reception Styles */
 .mobile-receptions {
     display: none;
@@ -861,4 +879,18 @@ a:hover, a:focus {
 }
 .node-table thead tr:nth-child(2) th {
     border-top: none !important;
+} 
+
+.btn-link.btn-mini {
+  color: {{control_color}} !important;
+  background: transparent !important;
+  border-color: {{control_color}} !important;
+  text-decoration: none !important;
+  padding: 0.18rem 0.4rem;
+}
+.btn-link.btn-mini:hover, .btn-link.btn-mini:focus {
+  color: #fff !important;
+  background-color: {{control_color_hover}} !important;
+  border-color: {{control_color_hover}} !important;
+  text-decoration: none !important;
 } 

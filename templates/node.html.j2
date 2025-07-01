@@ -385,6 +385,11 @@
               <td class="text-left">
                 {% if node.position and node.position.latitude_i and node.position.longitude_i %}
                 {{ node.position.longitude_i / 1e7 }}, {{ node.position.latitude_i / 1e7 }}
+                <a href="/map.html?node={{ utils.convert_node_id_from_int_to_hex(node.id) }}" 
+                   class="btn btn-link btn-sm btn-mini ms-2" 
+                   title="View this node on the map">
+                  <i class="bi bi-map"></i> View on Map
+                </a>
                 {% else %}
                 Unknown
                 {% endif %}

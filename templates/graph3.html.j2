@@ -7,15 +7,15 @@
   <h5>{{ this_page.title() }}</h5>
 
   <div class="btn-group mb-3" role="group" aria-label="View type">
-    <a href="{{ url_for('graph3', view='neighbor_info') }}"
+    <a href="{{ url_for('graph3', view_type='neighbor_info') }}"
        class="btn btn-{{ 'primary' if view_type == 'neighbor_info' else 'outline-primary' }}">
       Neighbor Info
     </a>
-    <a href="{{ url_for('graph3', view='zero_hop') }}"
+    <a href="{{ url_for('graph3', view_type='zero_hop') }}"
        class="btn btn-{{ 'primary' if view_type == 'zero_hop' else 'outline-primary' }}">
       Zero Hop
     </a>
-    <a href="{{ url_for('graph3', view='merged') }}"
+    <a href="{{ url_for('graph3', view_type='merged') }}"
        class="btn btn-{{ 'primary' if view_type == 'merged' else 'outline-primary' }}">
       Merged
     </a>
