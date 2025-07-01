@@ -30,6 +30,7 @@ config.read(CONFIG_PATH)
 theme = dict(DEFAULTS)
 theme.update(config['theme'] if 'theme' in config else {})
 
+# Generate CSS
 with open(TEMPLATE_PATH) as f:
     css = f.read()
 
