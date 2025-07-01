@@ -5,7 +5,9 @@
 
 {% block content %}
 <div class="container pt-3">
-  <h5>{{ this_page.title() }}</h5>
+  <div class="d-flex align-items-center mb-3">
+    <h5 class="mb-0 me-2">🔗 {{ this_page.title() }}</h5>
+  </div>
   
   <div class="btn-group mb-3" role="group" aria-label="View type">
     <a href="{{ url_for('neighbors', view='neighbor_info') }}" 

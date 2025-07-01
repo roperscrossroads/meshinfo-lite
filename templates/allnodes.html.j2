@@ -22,7 +22,9 @@
 {% endif %}
 
 <div class="container pt-3">
-  <h5>All Nodes (Including Offline)</h5>
+  <div class="d-flex align-items-center mb-3">
+    <h5 class="mb-0 me-2">📡 All Nodes (Including Offline)</h5>
+  </div>
   {% include 'node_search.html.j2' %}
   {% include 'node_table.html.j2' %}
 </div>
