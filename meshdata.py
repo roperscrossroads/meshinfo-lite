@@ -1342,6 +1342,16 @@ ts_updated = VALUES(ts_updated)"""
 
         # Extract channel from the root of the telemetry data
         channel = data.get("channel")
+        # Extract packet_id from the incoming data (should be present as 'id' in the root of the message)
+        packet_id = data.get("id")
+        if packet_id is None:
+            # Fallback: try to get from payload if not present at root
+            packet_id = payload.get("id")
+        if packet_id is None:
+            # If still not found, skip storing (cannot deduplicate)
+            import logging
+            logging.warning("Telemetry packet missing unique packet_id, skipping store.")
+            return
 
         def validate_telemetry_value(value, field_name=None):
             """Validate telemetry values, converting invalid values to None."""
@@ -1431,13 +1441,27 @@ ts_updated = VALUES(ts_updated)"""
                     data[key] = validate_telemetry_value(payload[metric][key], key)
 
         sql = """INSERT INTO telemetry
-(id, air_util_tx, battery_level, channel_utilization,
+(id, packet_id, air_util_tx, battery_level, channel_utilization,
 uptime_seconds, voltage, temperature, relative_humidity,
 barometric_pressure, gas_resistance, current, telemetry_time, channel)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s), %s)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s), %s)
+ON DUPLICATE KEY UPDATE
+    air_util_tx = VALUES(air_util_tx),
+    battery_level = VALUES(battery_level),
+    channel_utilization = VALUES(channel_utilization),
+    uptime_seconds = VALUES(uptime_seconds),
+    voltage = VALUES(voltage),
+    temperature = VALUES(temperature),
+    relative_humidity = VALUES(relative_humidity),
+    barometric_pressure = VALUES(barometric_pressure),
+    gas_resistance = VALUES(gas_resistance),
+    current = VALUES(current),
+    telemetry_time = VALUES(telemetry_time),
+    channel = VALUES(channel)
 """
         params = (
             node_id,
+            packet_id,
             data["air_util_tx"],
             data["battery_level"],
             data["channel_utilization"],
@@ -1788,6 +1812,7 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
 )""",
             """CREATE TABLE IF NOT EXISTS telemetry (
     id INT UNSIGNED NOT NULL,
+    packet_id BIGINT NOT NULL,
     air_util_tx FLOAT(10, 7),
     battery_level INT,
     channel_utilization FLOAT(10, 7),
@@ -1800,6 +1825,8 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     current FLOAT(10, 7),
     telemetry_time TIMESTAMP,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    channel INT,
+    UNIQUE KEY unique_telemetry (id, packet_id),
     INDEX idx_telemetry_id (id)
 )
 """,

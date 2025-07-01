@@ -5,21 +5,6 @@
 {% block content %}
   <div class="container pt-3">
   <h5>{{ this_page.title() }}</h5>
-
-  <div class="btn-group mb-3" role="group" aria-label="View type">
-    <a href="{{ url_for('graph', view='neighbor_info') }}"
-       class="btn btn-{{ 'primary' if view_type == 'neighbor_info' else 'outline-primary' }}">
-      Neighbor Info
-    </a>
-    <a href="{{ url_for('graph', view='zero_hop') }}"
-       class="btn btn-{{ 'primary' if view_type == 'zero_hop' else 'outline-primary' }}">
-      Zero Hop
-    </a>
-    <a href="{{ url_for('graph', view='merged') }}"
-       class="btn btn-{{ 'primary' if view_type == 'merged' else 'outline-primary' }}">
-      Merged
-    </a>
-  </div>
   </div>
   <div class="w-full h-full" id="container" style="height: 100vh;">
   </div>

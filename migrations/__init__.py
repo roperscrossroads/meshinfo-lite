@@ -11,6 +11,7 @@ from .add_relay_node_to_reception import migrate as add_relay_node_to_reception
 from .add_relay_edges_table import migrate as add_relay_edges_table
 from .add_message_reception_ts_created import migrate as add_message_reception_ts_created
 from .add_mapreport_fields import migrate as add_mapreport_fields
+from .add_telemetry_packet_id import migrate as add_telemetry_packet_id
 
 # List of migrations to run in order
 MIGRATIONS = [
@@ -26,4 +27,5 @@ MIGRATIONS = [
     add_relay_edges_table,
     add_message_reception_ts_created,
     add_mapreport_fields,
+    add_telemetry_packet_id,
 ]
