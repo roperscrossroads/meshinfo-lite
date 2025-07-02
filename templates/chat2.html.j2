@@ -452,7 +452,7 @@ window.addEventListener('load', function() {
                             {{ time_ago(message.ts_created) }}
                         </span>
                         <span class="message-channel me-2" style="background-color: {{ utils.get_channel_color(message.channel) }}; color: white; padding: 2px 6px; border-radius: 4px;" title="Channel {{ message.channel }} ({{ utils.get_channel_name(message.channel) }})">{{ utils.get_channel_name(message.channel, use_short_names=True) }}</span>
-                        {% if message.from in nodes and nodes[message.from].position and message.receptions %}
+                        {% if message.from in nodes and nodes[message.from].position %}
                         <a href="/message_map.html?id={{ message.message_id }}"
                         class="map-link"
                         title="View Message Propagation">
