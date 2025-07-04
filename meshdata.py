@@ -10,6 +10,8 @@ from timezone_utils import time_ago  # Import time_ago from timezone_utils
 from meshtastic_support import get_hardware_model_name, get_modem_preset_name  # Import functions from meshtastic_support
 import types
 from collections import defaultdict, deque
+import threading
+from types import SimpleNamespace
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -26,12 +28,115 @@ class CustomJSONEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+class DatabaseCache:
+    """Database-level caching and connection management."""
+    
+    def __init__(self, config):
+        self.config = config
+        self._connection_pool = {}
+        self._pool_lock = threading.Lock()
+        self._query_cache_stats = {
+            'hits': 0,
+            'misses': 0,
+            'evictions': 0
+        }
+        self._cache_lock = threading.Lock()
+        
+    def get_connection(self):
+        """Get a database connection from the pool."""
+        thread_id = threading.get_ident()
+        
+        with self._pool_lock:
+            if thread_id in self._connection_pool:
+                conn = self._connection_pool[thread_id]
+                try:
+                    # Test if connection is still alive
+                    conn.ping(reconnect=True)
+                    return conn
+                except:
+                    # Connection is dead, remove it
+                    del self._connection_pool[thread_id]
+            
+            # Create new connection
+            conn = mysql.connector.connect(
+                host=self.config["database"]["host"],
+                user=self.config["database"]["username"],
+                password=self.config["database"]["password"],
+                database=self.config["database"]["database"],
+                charset="utf8mb4",
+                connection_timeout=10,
+                autocommit=True
+            )
+            
+            # Query cache is enabled globally in custom.cnf
+            cursor = conn.cursor()
+            cursor.close()
+            
+            self._connection_pool[thread_id] = conn
+            return conn
+    
+    def close_connection(self):
+        """Close the current thread's database connection."""
+        thread_id = threading.get_ident()
+        
+        with self._pool_lock:
+            if thread_id in self._connection_pool:
+                try:
+                    self._connection_pool[thread_id].close()
+                except:
+                    pass
+                del self._connection_pool[thread_id]
+    
+    def execute_cached_query(self, sql, params=None, cache_key=None, timeout=None):
+        """Execute a query with database-level caching."""
+        conn = self.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            # Execute query - global query cache will handle caching automatically
+            cursor.execute(sql, params or ())
+            results = cursor.fetchall()
+            
+            with self._cache_lock:
+                self._query_cache_stats['hits'] += 1
+            
+            return results
+            
+        except Exception as e:
+            with self._cache_lock:
+                self._query_cache_stats['misses'] += 1
+            logging.error(f"Database query error: {e}")
+            raise
+        finally:
+            cursor.close()
+    
+
+    
+    def get_cache_stats(self):
+        """Get query cache statistics."""
+        with self._cache_lock:
+            return self._query_cache_stats.copy()
+    
+    def clear_query_cache(self):
+        """Clear the database query cache."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("FLUSH QUERY CACHE")
+            cursor.execute("RESET QUERY CACHE")
+            logging.info("Database query cache cleared")
+        except Exception as e:
+            logging.error(f"Error clearing query cache: {e}")
+        finally:
+            cursor.close()
+    
 class MeshData:
     def __init__(self):
         config = configparser.ConfigParser()
         config.read('config.ini')
         self.config = config
         self.db = None
+        self.db_cache = DatabaseCache(self.config)
         self.debug = config.getboolean("server", "debug", fallback=False)
         self.connect_db()
 
@@ -558,10 +663,9 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         WHERE n.id IS NOT NULL
         """
         
-        cur = self.db.cursor(dictionary=True)
+        # Use database-level caching for the main query
         timeout = time.time() - active_threshold
-        cur.execute(sql, (timeout,))
-        rows = cur.fetchall()
+        rows = self.db_cache.execute_cached_query(sql, (timeout,), cache_key="nodes_main", timeout=60)
         
         # print("Fetched rows:", len(rows))
         skipped = 0
@@ -638,7 +742,6 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         
         # print("Skipped rows due to missing id:", skipped)
         # print("Final nodes count:", len(nodes))
-        cur.close()
 
         # --- Bulk fetch neighbors to avoid N+1 queries ---
         all_node_ids = [n['id'] for n in nodes.values()]
@@ -649,10 +752,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 WHERE id IN (%s)
             """ % ','.join(['%s'] * len(all_node_ids))
             
-            cur = self.db.cursor(dictionary=True)
-            cur.execute(neighbor_sql, all_node_ids)
-            all_neighbors = cur.fetchall()
-            cur.close()
+            all_neighbors = self.db_cache.execute_cached_query(neighbor_sql, all_node_ids, cache_key="nodes_neighbors", timeout=60)
             
             # Create a dictionary to map nodes to their neighbors
             neighbors_map = {node_id: [] for node_id in all_node_ids}
@@ -669,6 +769,41 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                     node_data['neighbors'] = neighbors_map[node_data['id']]
 
         return nodes
+
+    def get_nodes_cached(self, active=False):
+        """Get nodes with application-level caching to prevent duplicates."""
+        cache_key = f"nodes_cache_{active}"
+        
+        # Check if we have a cached version
+        if hasattr(self, '_nodes_cache') and cache_key in self._nodes_cache:
+            cached_data = self._nodes_cache[cache_key]
+            if time.time() - cached_data['timestamp'] < 60:  # 60 second cache
+                logging.debug(f"Returning cached nodes data for {cache_key}")
+                return cached_data['data']
+        
+        # Fetch fresh data
+        logging.info("Fetching fresh nodes data from database")
+        nodes_data = self.get_nodes(active)
+        
+        # Cache the result
+        if not hasattr(self, '_nodes_cache'):
+            self._nodes_cache = {}
+        
+        self._nodes_cache[cache_key] = {
+            'data': nodes_data,
+            'timestamp': time.time()
+        }
+        
+        return nodes_data
+
+    def clear_nodes_cache(self):
+        """Clear the application-level nodes cache."""
+        if hasattr(self, '_nodes_cache'):
+            cache_size = len(self._nodes_cache)
+            self._nodes_cache.clear()
+            logging.info(f"Cleared nodes cache with {cache_size} entries")
+        else:
+            logging.info("No nodes cache to clear")
 
     def get_chat(self, page=1, per_page=50):
         """Get paginated chat messages with reception data."""

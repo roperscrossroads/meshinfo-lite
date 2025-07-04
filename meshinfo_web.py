@@ -51,34 +51,46 @@ if not os.path.exists(cache_dir):
         logging.error(f"Could not create cache directory {cache_dir}: {e}")
         cache_dir = None # Indicate failure
 
-# Configure Flask-Caching
-cache_config = {
-    'CACHE_TYPE': 'FileSystemCache',
-    'CACHE_DIR': cache_dir,
-    'CACHE_THRESHOLD': 100,  # Reduced from 500 to 100
-    'CACHE_DEFAULT_TIMEOUT': 60,
-    'CACHE_OPTIONS': {
-        'mode': 0o600,
-        'max_size': 50 * 1024 * 1024  # 50MB max size per item
-    }
-}
-if cache_dir:
-    logging.info(f"Using FileSystemCache with directory: {cache_dir}")
-else:
-    logging.warning("Falling back to SimpleCache due to directory creation issues.")
+# Initialize cache after config is loaded
+cache = None
 
-# Initialize Cache with the chosen config
-try:
-    cache = Cache(app, config=cache_config)
-except Exception as e:
-    logging.error(f"Failed to initialize cache: {e}")
-    # Fallback to SimpleCache if FileSystemCache fails
+def initialize_cache():
+    """Initialize the Flask cache with configuration."""
+    global cache
+    
+    # Load config first
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+    
+    # Configure Flask-Caching
     cache_config = {
-        'CACHE_TYPE': 'SimpleCache',
-        'CACHE_DEFAULT_TIMEOUT': 300,
-        'CACHE_THRESHOLD': 100  # Reduced here too
+        'CACHE_TYPE': 'FileSystemCache',
+        'CACHE_DIR': cache_dir,
+        'CACHE_THRESHOLD': int(config.get('server', 'app_cache_max_entries', fallback=100)),
+        'CACHE_DEFAULT_TIMEOUT': int(config.get('server', 'app_cache_timeout_seconds', fallback=60)),
+        'CACHE_OPTIONS': {
+            'mode': 0o600,
+            'max_size': 50 * 1024 * 1024  # 50MB max size per item
+        }
     }
-    cache = Cache(app, config=cache_config)
+    
+    if cache_dir:
+        logging.info(f"Using FileSystemCache with directory: {cache_dir}")
+    else:
+        logging.warning("Falling back to SimpleCache due to directory creation issues.")
+
+    # Initialize Cache with the chosen config
+    try:
+        cache = Cache(app, config=cache_config)
+    except Exception as e:
+        logging.error(f"Failed to initialize cache: {e}")
+        # Fallback to SimpleCache if FileSystemCache fails
+        cache_config = {
+            'CACHE_TYPE': 'SimpleCache',
+            'CACHE_DEFAULT_TIMEOUT': int(config.get('server', 'app_cache_timeout_seconds', fallback=300)),
+            'CACHE_THRESHOLD': int(config.get('server', 'app_cache_max_entries', fallback=100))
+        }
+        cache = Cache(app, config=cache_config)
 
 # Cache monitoring functions
 def get_cache_size():
@@ -144,11 +156,11 @@ def cleanup_cache():
         logging.info("Cache stats before cleanup:")
         log_cache_stats()
         
-        # Clear the nodes singleton
-        clear_nodes_singleton()
-        
         # Clear nodes-related cache entries
-        clear_nodes_related_cache()
+        clear_nodes_cache()
+        
+        # Clear database query cache
+        clear_database_cache()
         
         # Clear the cache
         with app.app_context():
@@ -183,6 +195,9 @@ def safe_hw_model(value):
 
 config = configparser.ConfigParser()
 config.read("config.ini")
+
+# Initialize cache with config
+initialize_cache()
 
 # Add request context tracking
 active_requests = set()
@@ -477,10 +492,10 @@ def memory_watchdog():
                 log_cache_stats()
                 with app.app_context():
                     cache.clear()
-                # Also clear the nodes singleton to free memory
-                clear_nodes_singleton()
                 # Clear nodes-related cache entries
-                clear_nodes_related_cache()
+                clear_nodes_cache()
+                # Clear database query cache
+                clear_database_cache()
                 gc.collect()
                 logging.info("Cache stats after high memory cleanup:")
                 log_cache_stats()
@@ -491,9 +506,9 @@ def memory_watchdog():
                 log_detailed_memory_analysis()
                 logging.info("Cache stats at critical memory level:")
                 log_cache_stats()
-                # Force clear nodes singleton at critical levels
-                clear_nodes_singleton()
-                clear_nodes_related_cache()
+                # Force clear nodes cache at critical levels
+                clear_nodes_cache()
+                clear_database_cache()
                 gc.collect()
                 
         except Exception as e:
@@ -544,40 +559,23 @@ def cache_key_prefix():
     # Round to nearest minute for 60-second cache
     return datetime.datetime.now().replace(second=0, microsecond=0).timestamp()
 
-# Add a global singleton for nodes to prevent multiple copies
-_nodes_singleton = None
-_nodes_singleton_timestamp = 0
-_nodes_singleton_lock = threading.Lock()
+def get_cache_timeout():
+    """Get cache timeout from config."""
+    return int(config.get('server', 'app_cache_timeout_seconds', fallback=60))
 
+@cache.memoize(timeout=get_cache_timeout())
 def get_cached_nodes():
-    """Get nodes data with singleton pattern to prevent multiple copies."""
-    global _nodes_singleton, _nodes_singleton_timestamp
-    
-    current_time = time.time()
-    
-    # Check if we have a recent singleton
-    with _nodes_singleton_lock:
-        if (_nodes_singleton is not None and 
-            current_time - _nodes_singleton_timestamp < 60):
-            logging.debug("Returning cached nodes singleton")
-            return _nodes_singleton
-    
-    # Fetch fresh data
+    """Get nodes data with database-level caching."""
     md = get_meshdata()
     if not md:
         return None
     
-    nodes_data = md.get_nodes()
-    
-    # Update singleton
-    with _nodes_singleton_lock:
-        _nodes_singleton = nodes_data
-        _nodes_singleton_timestamp = current_time
-        logging.info(f"Updated nodes singleton with {len(nodes_data)} nodes")
-    
+    # Use the cached method to prevent duplicate dictionaries
+    nodes_data = md.get_nodes_cached()
+    logging.debug(f"Fetched {len(nodes_data)} nodes from application cache")
     return nodes_data
 
-@cache.memoize(timeout=60)
+@cache.memoize(timeout=get_cache_timeout())
 def get_cached_active_nodes():
     """Cache the active nodes calculation."""
     nodes = get_cached_nodes()
@@ -585,7 +583,7 @@ def get_cached_active_nodes():
         return {}
     return utils.active_nodes(nodes)
 
-@cache.memoize(timeout=60)
+@cache.memoize(timeout=get_cache_timeout())
 def get_cached_latest_node():
     """Cache the latest node data."""
     md = get_meshdata()
@@ -593,7 +591,7 @@ def get_cached_latest_node():
         return None
     return md.get_latest_node()
 
-@cache.memoize(timeout=60)
+@cache.memoize(timeout=get_cache_timeout())
 def get_cached_message_map_data(message_id):
     """Cache the message map data for a specific message."""
     md = get_meshdata()
@@ -697,8 +695,26 @@ def message_map():
     if not data:
         return redirect(url_for('chat'))
     
-    # Get nodes separately to avoid caching multiple copies
-    nodes = get_cached_nodes()
+    # Get nodes once and create a simplified version with only needed nodes
+    all_nodes = get_cached_nodes()
+    
+    # Create simplified nodes dict with only nodes used in this message
+    used_node_ids = set()
+    used_node_ids.add(utils.convert_node_id_from_int_to_hex(data['message']['from_id']))
+    if data['message'].get('to_id') and data['message']['to_id'] != 4294967295:
+        used_node_ids.add(utils.convert_node_id_from_int_to_hex(data['message']['to_id']))
+    for receiver_id in data['message']['receiver_ids']:
+        used_node_ids.add(utils.convert_node_id_from_int_to_hex(receiver_id))
+    
+    simplified_nodes = {}
+    for node_id in used_node_ids:
+        if node_id in all_nodes:
+            node = all_nodes[node_id]
+            simplified_nodes[node_id] = {
+                'long_name': node.get('long_name', ''),
+                'short_name': node.get('short_name', ''),
+                'position': node.get('position')
+            }
     
     # --- Provide zero_hop_links and position data for relay node inference ---
     md = get_meshdata()
@@ -717,7 +733,7 @@ def message_map():
         "message_map.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes,
+        nodes=simplified_nodes,
         message=data['message'],
         sender_position=sender_pos,
         receiver_positions=receiver_positions,
@@ -740,15 +756,15 @@ def traceroute_map():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    nodes = get_cached_nodes()
     
-    # Get traceroute attempt by unique id
+    # Get traceroute attempt by unique id first
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
         SELECT * FROM traceroute WHERE traceroute_id = %s
     """, (traceroute_id,))
     traceroute_data = cursor.fetchone()
     if not traceroute_data:
+        cursor.close()
         abort(404)
     
     # Format the forward route data
@@ -787,7 +803,27 @@ def traceroute_map():
     }
     
     cursor.close()
-
+    
+    # Get nodes and create simplified version with only needed nodes
+    all_nodes = get_cached_nodes()
+    used_node_ids = set([traceroute['from_id'], traceroute['to_id']] + traceroute['route'] + traceroute['route_back'])
+    
+    simplified_nodes = {}
+    for node_id in used_node_ids:
+        node_hex = utils.convert_node_id_from_int_to_hex(node_id)
+        if node_hex in all_nodes:
+            node = all_nodes[node_hex]
+            simplified_nodes[node_hex] = {
+                'long_name': node.get('long_name', ''),
+                'short_name': node.get('short_name', ''),
+                'position': node.get('position'),
+                'ts_seen': node.get('ts_seen'),
+                'role': node.get('role'),
+                'owner_username': node.get('owner_username'),
+                'hw_model': node.get('hw_model'),
+                'firmware_version': node.get('firmware_version')
+            }
+    
     # --- Build traceroute_positions dict for historical accuracy ---
     node_ids = set([traceroute['from_id'], traceroute['to_id']] + traceroute['route'] + traceroute['route_back'])
     traceroute_positions = {}
@@ -797,8 +833,9 @@ def traceroute_map():
         ts_created = ts_created.timestamp()
     for node_id in node_ids:
         pos = md.get_position_at_time(node_id, ts_created)
-        if not pos and node_id in nodes and nodes[node_id].position:
-            pos_obj = nodes[node_id].position
+        node_hex = utils.convert_node_id_from_int_to_hex(node_id)
+        if not pos and node_hex in simplified_nodes and simplified_nodes[node_hex].get('position'):
+            pos_obj = simplified_nodes[node_hex]['position']
             # Convert to dict if needed
             if hasattr(pos_obj, '__dict__'):
                 pos = dict(pos_obj.__dict__)
@@ -822,7 +859,7 @@ def traceroute_map():
         "traceroute_map.html.j2",
         auth=auth(),
         config=config,
-        nodes=nodes,
+        nodes=simplified_nodes,
         traceroute=traceroute,
         traceroute_positions=traceroute_positions,  # <-- pass to template
         utils=utils,
@@ -831,7 +868,7 @@ def traceroute_map():
         timestamp=datetime.datetime.now()
     )
 
-@cache.memoize(timeout=60)
+@cache.memoize(timeout=get_cache_timeout())
 def get_cached_graph_data(view_type='merged', days=1, zero_hop_timeout=43200):
     """Cache the graph data."""
     md = get_meshdata()
@@ -839,7 +876,7 @@ def get_cached_graph_data(view_type='merged', days=1, zero_hop_timeout=43200):
         return None
     return md.get_graph_data(view_type, days, zero_hop_timeout)
 
-@cache.memoize(timeout=60)
+@cache.memoize(timeout=get_cache_timeout())
 def get_cached_neighbors_data(view_type='neighbor_info', days=1, zero_hop_timeout=43200):
     """Cache the neighbors data."""
     md = get_meshdata()
@@ -1283,15 +1320,20 @@ def serve_static(filename):
         match = re.match(nodep, filename)
         node_hex = match.group(1)
 
+        # Get nodes once and reuse them
+        nodes = get_cached_nodes()
+        if not nodes:
+            abort(503, description="Database connection unavailable")
+        
+        # Check if node exists first
+        if node_hex not in nodes:
+            abort(404)
+
         # Get all node page data directly, bypassing the leaky application cache
-        node_page_data = get_node_page_data(node_hex)
+        node_page_data = get_node_page_data(node_hex, nodes)
 
         # If data fetching fails, handle gracefully
         if not node_page_data:
-            # We need to check if the node exists first to avoid caching a "not found" result.
-            nodes = get_cached_nodes()
-            if not nodes or node_hex not in nodes:
-                abort(404)
             abort(503, description="Failed to retrieve node data. Please try again shortly.")
 
         # Render the template
@@ -1317,6 +1359,12 @@ def serve_static(filename):
             elsewhere_links=node_page_data['elsewhere_links']
         ))
         
+        # Clean up node_page_data to help with memory management
+        del node_page_data
+        
+        # Force garbage collection to release memory immediately
+        gc.collect()
+        
         # Set Cache-Control header for client-side caching
         response.headers['Cache-Control'] = 'public, max-age=60'
         
@@ -1331,8 +1379,8 @@ def serve_static(filename):
         owner = md.get_user(username)
         if not owner:
             abort(404)
-        nodes = get_cached_nodes()
-        owner_nodes = utils.get_owner_nodes(nodes, owner["email"])
+        all_nodes = get_cached_nodes()
+        owner_nodes = utils.get_owner_nodes(all_nodes, owner["email"])
         return render_template(
             "user.html.j2",
             auth=auth(),
@@ -1869,7 +1917,7 @@ def api_environmental_telemetry(node_id):
     telemetry = md.get_environmental_telemetry_for_node(node_id, days)
     return jsonify(telemetry)
 
-@cache.memoize(timeout=60)
+@cache.memoize(timeout=get_cache_timeout())
 def get_cached_chat_data(page=1, per_page=50):
     """Cache the chat data with optimized query."""
     md = get_meshdata()
@@ -1959,30 +2007,71 @@ def get_cached_chat_data(page=1, per_page=50):
         "next_num": page + 1
     }
 
-def get_node_page_data(node_hex):
+def get_node_page_data(node_hex, all_nodes=None):
     """Fetch and process all data for the node page to prevent memory leaks."""
     md = get_meshdata()
     if not md: return None
 
-    # We still need all nodes for lookups, but we won't pass the full dict to the template
-    all_nodes = get_cached_nodes()
+    # Use provided nodes or fetch them if not provided
+    if all_nodes is None:
+        all_nodes = get_cached_nodes()
     if not all_nodes or node_hex not in all_nodes:
         return None
 
     current_node = all_nodes[node_hex]
     node_id = current_node['id']
 
-    # --- Fetch all raw data ---
-    node_telemetry = md.get_node_telemetry(node_id)
-    node_route = md.get_route_coordinates(node_id)
-    telemetry_graph = draw_graph(node_telemetry)
-    lp = LOSProfile(all_nodes, node_id, config, cache)
-    neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
-    
+    # Get LOS configuration early
     los_enabled = config.getboolean("los", "enabled", fallback=False)
     zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))
     max_distance_km = int(config.get("los", "max_distance", fallback=5000)) / 1000
     cutoff_time = int(time.time()) - zero_hop_timeout
+
+    # --- Fetch all raw data ---
+    node_telemetry = md.get_node_telemetry(node_id)
+    node_route = md.get_route_coordinates(node_id)
+    telemetry_graph = draw_graph(node_telemetry)
+    neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
+    
+    # Only process LOS if enabled
+    los_profiles = {}
+    if los_enabled:
+        # Create a minimal nodes dict for LOSProfile with only the current node and its neighbors
+        los_nodes = {}
+        los_nodes[node_hex] = current_node
+        
+        # Add only the nodes that are within LOS distance and have positions
+        max_distance = int(config.get("los", "max_distance", fallback=5000))
+        for other_hex, other_node in all_nodes.items():
+            if other_hex == node_hex:
+                continue
+            if not other_node.get('position'):
+                continue
+            # Calculate distance and only include if within range
+            try:
+                my_pos = current_node.get('position', {})
+                other_pos = other_node.get('position', {})
+                if my_pos.get('latitude') and my_pos.get('longitude') and other_pos.get('latitude') and other_pos.get('longitude'):
+                    dist = utils.distance_between_two_points(
+                        my_pos['latitude'], my_pos['longitude'],
+                        other_pos['latitude'], other_pos['longitude']
+                    ) * 1000  # Convert to meters
+                    if dist < max_distance:
+                        los_nodes[other_hex] = other_node
+            except:
+                continue
+        
+        lp = LOSProfile(los_nodes, node_id, config, cache)
+        
+        # Get LOS profiles and clean up the LOSProfile instance
+        try:
+            los_profiles = lp.get_profiles()
+        finally:
+            # Explicitly clean up the LOSProfile instance to release memory
+            if hasattr(lp, 'close_datasets'):
+                lp.close_datasets()
+            del lp
+            del los_nodes
 
     cursor = md.db.cursor(dictionary=True)
     # Query for zero-hop messages heard by this node
@@ -2045,7 +2134,7 @@ def get_node_page_data(node_hex):
         'linked_nodes_details': linked_nodes_details,
         'telemetry_graph': telemetry_graph,
         'node_route': node_route,
-        'los_profiles': lp.get_profiles() if los_enabled else {},
+        'los_profiles': los_profiles,
         'neighbor_heard_by': neighbor_heard_by,
         'zero_hop_heard': zero_hop_heard,
         'zero_hop_heard_by': zero_hop_heard_by,
@@ -2081,7 +2170,7 @@ def chat():
         debug=False,
     )
 
-@cache.memoize(timeout=300)  # Cache for 5 minutes
+@cache.memoize(timeout=get_cache_timeout())  # Cache for 5 minutes
 def calculate_node_distance(node1_hex, node2_hex):
     """Calculate distance between two nodes, cached to avoid repeated calculations."""
     nodes = get_cached_nodes()
@@ -2271,9 +2360,9 @@ def debug_cleanup():
     
     cleanup_cache()
     
-    # Also clear nodes singleton and force garbage collection
-    clear_nodes_singleton()
-    clear_nodes_related_cache()
+    # Also clear nodes cache and force garbage collection
+    clear_nodes_cache()
+    clear_database_cache()
     gc.collect()
     
     return jsonify({
@@ -2283,18 +2372,54 @@ def debug_cleanup():
 
 @app.route('/api/debug/clear-nodes')
 def debug_clear_nodes():
-    """Manual trigger to clear nodes singleton."""
+    """Manual trigger to clear nodes cache."""
     if not auth():
         abort(401)
     
-    clear_nodes_singleton()
-    clear_nodes_related_cache()
+    clear_nodes_cache()
+    clear_database_cache()
     gc.collect()
     
     return jsonify({
         'status': 'success',
-        'message': 'Nodes singleton cleared. Check logs for details.'
+        'message': 'Nodes cache cleared. Check logs for details.'
     })
+
+@app.route('/api/debug/database-cache')
+def debug_database_cache():
+    """Manual trigger for database cache analysis."""
+    if not auth():
+        abort(401)
+    
+    try:
+        md = get_meshdata()
+        if md and hasattr(md, 'db_cache'):
+            stats = md.db_cache.get_cache_stats()
+            
+            # Get application cache info
+            app_cache_info = {}
+            if hasattr(md, '_nodes_cache'):
+                app_cache_info = {
+                    'cache_entries': len(md._nodes_cache),
+                    'cache_keys': list(md._nodes_cache.keys()),
+                    'cache_timestamps': {k: v['timestamp'] for k, v in md._nodes_cache.items()}
+                }
+            
+            return jsonify({
+                'status': 'success',
+                'database_cache_stats': stats,
+                'application_cache_info': app_cache_info
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Database cache not available'
+            })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error getting database cache stats: {e}'
+        })
 
 @app.route('/api/geocode')
 def api_geocode():
@@ -2322,7 +2447,7 @@ def api_geocode():
         logging.error(f"Geocoding error: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@cache.memoize(timeout=300)  # Cache for 5 minutes
+@cache.memoize(timeout=get_cache_timeout())  # Cache for 5 minutes
 def get_node_positions_batch(node_ids):
     """Get position data for multiple nodes efficiently."""
     nodes = get_cached_nodes()
@@ -2379,21 +2504,10 @@ def run():
         port=port
     )
 
-def clear_nodes_singleton():
-    """Clear the nodes singleton to free memory."""
-    global _nodes_singleton, _nodes_singleton_timestamp
-    with _nodes_singleton_lock:
-        if _nodes_singleton is not None:
-            logging.info(f"Clearing nodes singleton with {len(_nodes_singleton)} nodes")
-            _nodes_singleton = None
-            _nodes_singleton_timestamp = 0
-        else:
-            logging.info("Nodes singleton was already None")
-
-def clear_nodes_related_cache():
-    """Clear cache entries that might be holding onto nodes dictionaries."""
+def clear_nodes_cache():
+    """Clear nodes-related cache entries."""
     try:
-        # Clear specific cached functions that might hold nodes data
+        cache.delete_memoized(get_cached_nodes)
         cache.delete_memoized(get_cached_active_nodes)
         cache.delete_memoized(get_cached_message_map_data)
         cache.delete_memoized(get_cached_graph_data)
@@ -2401,6 +2515,19 @@ def clear_nodes_related_cache():
         logging.info("Cleared nodes-related cache entries")
     except Exception as e:
         logging.error(f"Error clearing nodes-related cache: {e}")
+
+def clear_database_cache():
+    """Clear database query cache."""
+    try:
+        md = get_meshdata()
+        if md and hasattr(md, 'db_cache'):
+            md.db_cache.clear_query_cache()
+            logging.info("Cleared database query cache")
+        if md:
+            md.clear_nodes_cache()
+            logging.info("Cleared application nodes cache")
+    except Exception as e:
+        logging.error(f"Error clearing database cache: {e}")
 
 def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=None, zero_hop_links=None, sender_pos=None, receiver_pos=None, debug=False):
     """
@@ -2591,7 +2718,7 @@ def message_paths():
         timestamp=datetime.datetime.now()
     )
 
-@cache.memoize(timeout=300)  # Cache for 5 minutes
+@cache.memoize(timeout=get_cache_timeout())  # Cache for 5 minutes
 def get_cached_hardware_models():
     """Get hardware model statistics for the most and least common models."""
     try:
