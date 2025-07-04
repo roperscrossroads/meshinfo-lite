@@ -184,9 +184,9 @@ Mesh Metrics
         </select>
         <select id="channelFilter" onchange="updateMetrics()">
             <option value="all" selected>All Channels</option>
-            <option value="8">Long Fast (8)</option>
-            <option value="31">Medium Fast (31)</option>
-            <option value="112">Short Fast (112)</option>
+            {% for channel in Channel %}
+                <option value="{{ channel.value }}">{{ utils.get_channel_name(channel.value) }} ({{ channel.value }})</option>
+            {% endfor %}
         </select>
         <button class="refresh-button" onclick="refreshData()">Refresh Data</button>
     </div>
