@@ -30,6 +30,7 @@ from shapely.geometry import MultiPoint
 import utils
 import meshtastic_support
 from meshdata import MeshData
+from database_cache import DatabaseCache
 from meshinfo_register import Register
 from meshtastic_monday import MeshtasticMonday
 from meshinfo_telemetry_graph import draw_graph
@@ -2358,17 +2359,39 @@ def debug_cleanup():
     if not auth():
         abort(401)
     
-    cleanup_cache()
-    
-    # Also clear nodes cache and force garbage collection
-    clear_nodes_cache()
-    clear_database_cache()
-    gc.collect()
-    
-    return jsonify({
-        'status': 'success',
-        'message': 'Cache cleanup completed. Check logs for details.'
-    })
+    try:
+        # Check database privileges first
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        db_cache = DatabaseCache(config)
+        privileges = db_cache.check_privileges()
+        
+        # Perform cleanup operations
+        cleanup_cache()
+        
+        # Also clear nodes cache and force garbage collection
+        clear_nodes_cache()
+        clear_database_cache()
+        gc.collect()
+        
+        # Prepare response message
+        if privileges['reload']:
+            message = 'Cache cleanup completed successfully. Database query cache cleared.'
+        else:
+            message = 'Cache cleanup completed. Note: Database query cache could not be cleared due to insufficient privileges (RELOAD required).'
+        
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'database_privileges': privileges
+        })
+        
+    except Exception as e:
+        logging.error(f"Error during debug cleanup: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error during cache cleanup: {str(e)}'
+        }), 500
 
 @app.route('/api/debug/clear-nodes')
 def debug_clear_nodes():
@@ -2392,6 +2415,12 @@ def debug_database_cache():
         abort(401)
     
     try:
+        # Check database privileges
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        db_cache = DatabaseCache(config)
+        privileges = db_cache.check_privileges()
+        
         md = get_meshdata()
         if md and hasattr(md, 'db_cache'):
             stats = md.db_cache.get_cache_stats()
@@ -2408,12 +2437,14 @@ def debug_database_cache():
             return jsonify({
                 'status': 'success',
                 'database_cache_stats': stats,
-                'application_cache_info': app_cache_info
+                'application_cache_info': app_cache_info,
+                'database_privileges': privileges
             })
         else:
             return jsonify({
                 'status': 'error',
-                'message': 'Database cache not available'
+                'message': 'Database cache not available',
+                'database_privileges': privileges
             })
     except Exception as e:
         return jsonify({
@@ -2519,13 +2550,27 @@ def clear_nodes_cache():
 def clear_database_cache():
     """Clear database query cache."""
     try:
-        md = get_meshdata()
-        if md and hasattr(md, 'db_cache'):
-            md.db_cache.clear_query_cache()
-            logging.info("Cleared database query cache")
-        if md:
-            md.clear_nodes_cache()
-            logging.info("Cleared application nodes cache")
+        # Try to get meshdata with app context first
+        try:
+            md = get_meshdata()
+            if md and hasattr(md, 'db_cache'):
+                md.db_cache.clear_query_cache()
+                logging.info("Cleared database query cache")
+            if md:
+                md.clear_nodes_cache()
+                logging.info("Cleared application nodes cache")
+        except RuntimeError as e:
+            # If we're outside app context, clear cache directly
+            if "application context" in str(e):
+                logging.info("Outside app context, clearing cache directly")
+                # Clear database cache directly without app context
+                config = configparser.ConfigParser()
+                config.read('config.ini')
+                db_cache = DatabaseCache(config)
+                db_cache.clear_query_cache()
+                logging.info("Cleared database query cache (direct)")
+            else:
+                raise
     except Exception as e:
         logging.error(f"Error clearing database cache: {e}")
 

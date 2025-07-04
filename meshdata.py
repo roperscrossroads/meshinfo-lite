@@ -8,6 +8,7 @@ import logging
 import re
 from timezone_utils import time_ago  # Import time_ago from timezone_utils
 from meshtastic_support import get_hardware_model_name, get_modem_preset_name  # Import functions from meshtastic_support
+from database_cache import DatabaseCache  # Import DatabaseCache from its own file
 import types
 from collections import defaultdict, deque
 import threading
@@ -26,109 +27,6 @@ class CustomJSONEncoder(json.JSONEncoder):
             return list(obj)  # Convert set to list
         # Use default serialization for other types
         return super().default(obj)
-
-
-class DatabaseCache:
-    """Database-level caching and connection management."""
-    
-    def __init__(self, config):
-        self.config = config
-        self._connection_pool = {}
-        self._pool_lock = threading.Lock()
-        self._query_cache_stats = {
-            'hits': 0,
-            'misses': 0,
-            'evictions': 0
-        }
-        self._cache_lock = threading.Lock()
-        
-    def get_connection(self):
-        """Get a database connection from the pool."""
-        thread_id = threading.get_ident()
-        
-        with self._pool_lock:
-            if thread_id in self._connection_pool:
-                conn = self._connection_pool[thread_id]
-                try:
-                    # Test if connection is still alive
-                    conn.ping(reconnect=True)
-                    return conn
-                except:
-                    # Connection is dead, remove it
-                    del self._connection_pool[thread_id]
-            
-            # Create new connection
-            conn = mysql.connector.connect(
-                host=self.config["database"]["host"],
-                user=self.config["database"]["username"],
-                password=self.config["database"]["password"],
-                database=self.config["database"]["database"],
-                charset="utf8mb4",
-                connection_timeout=10,
-                autocommit=True
-            )
-            
-            # Query cache is enabled globally in custom.cnf
-            cursor = conn.cursor()
-            cursor.close()
-            
-            self._connection_pool[thread_id] = conn
-            return conn
-    
-    def close_connection(self):
-        """Close the current thread's database connection."""
-        thread_id = threading.get_ident()
-        
-        with self._pool_lock:
-            if thread_id in self._connection_pool:
-                try:
-                    self._connection_pool[thread_id].close()
-                except:
-                    pass
-                del self._connection_pool[thread_id]
-    
-    def execute_cached_query(self, sql, params=None, cache_key=None, timeout=None):
-        """Execute a query with database-level caching."""
-        conn = self.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        try:
-            # Execute query - global query cache will handle caching automatically
-            cursor.execute(sql, params or ())
-            results = cursor.fetchall()
-            
-            with self._cache_lock:
-                self._query_cache_stats['hits'] += 1
-            
-            return results
-            
-        except Exception as e:
-            with self._cache_lock:
-                self._query_cache_stats['misses'] += 1
-            logging.error(f"Database query error: {e}")
-            raise
-        finally:
-            cursor.close()
-    
-
-    
-    def get_cache_stats(self):
-        """Get query cache statistics."""
-        with self._cache_lock:
-            return self._query_cache_stats.copy()
-    
-    def clear_query_cache(self):
-        """Clear the database query cache."""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("FLUSH QUERY CACHE")
-            cursor.execute("RESET QUERY CACHE")
-            logging.info("Database query cache cleared")
-        except Exception as e:
-            logging.error(f"Error clearing query cache: {e}")
-        finally:
-            cursor.close()
     
 class MeshData:
     def __init__(self):
@@ -2987,28 +2885,59 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
 
 
 def create_database():
+    """Create database and user with proper privileges for new installations."""
     config = configparser.ConfigParser()
     config.read('config.ini')
 
+    # Connect as root to create database and user
     db = mysql.connector.connect(
-        host="db",
+        host=config["database"]["host"],
         user="root",
-        password="passw0rd",
+        password=config.get("database", "root_password", fallback="passw0rd"),
     )
-    sqls = [
-        f"""CREATE DATABASE IF NOT EXISTS {config["database"]["database"]}""",
-        f"""CREATE USER IF NOT EXISTS '{config["database"]["username"]}'@'%'
-IDENTIFIED BY '{config["database"]["password"]}'""",
-        f"""GRANT ALL ON {config["database"]["username"]}.*
-TO '$DB_USER'@'%'""",
-        f"""ALTER DATABASE {config["database"]["database"]}
-CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"""
-    ]
-    for sql in sqls:
+    
+    try:
+        # Create database
         cur = db.cursor()
-        cur.execute(sql)
+        cur.execute(f"""CREATE DATABASE IF NOT EXISTS {config["database"]["database"]}
+CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci""")
         cur.close()
-    db.commit()
+        
+        # Create user if it doesn't exist
+        cur = db.cursor()
+        cur.execute(f"""CREATE USER IF NOT EXISTS '{config["database"]["username"]}'@'%'
+IDENTIFIED BY '{config["database"]["password"]}'""")
+        cur.close()
+        
+        # Grant all privileges on the specific database
+        cur = db.cursor()
+        cur.execute(f"""GRANT ALL PRIVILEGES ON {config["database"]["database"]}.*
+TO '{config["database"]["username"]}'@'%'""")
+        cur.close()
+        
+        # Grant RELOAD privilege for query cache operations
+        cur = db.cursor()
+        cur.execute(f"""GRANT RELOAD ON *.* TO '{config["database"]["username"]}'@'%'""")
+        cur.close()
+        
+        # Grant additional useful privileges
+        cur = db.cursor()
+        cur.execute(f"""GRANT PROCESS ON *.* TO '{config["database"]["username"]}'@'%'""")
+        cur.close()
+        
+        # Flush privileges to apply changes
+        cur = db.cursor()
+        cur.execute("FLUSH PRIVILEGES")
+        cur.close()
+        
+        db.commit()
+        logging.info(f"Database '{config['database']['database']}' and user '{config['database']['username']}' created with proper privileges")
+        
+    except mysql.connector.Error as e:
+        logging.error(f"Error creating database: {e}")
+        raise
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

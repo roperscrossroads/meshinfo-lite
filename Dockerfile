@@ -35,6 +35,7 @@ RUN apt-get update && \
     libgeos-dev \
     libproj-dev \
     proj-bin \
+    default-mysql-client \
     $([ "$TARGETPLATFORM" = "linux/arm64" ] && echo "curl") \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -71,6 +72,7 @@ RUN su app -c "pip install --no-cache-dir --user -r requirements_filtered.txt"
 
 COPY --chown=app:app banner run.sh ./
 COPY --chown=app:app *.py ./
+COPY --chown=app:app *.sh ./
 COPY --chown=app:app www  ./www
 COPY --chown=app:app templates ./templates
 COPY --chown=app:app migrations ./migrations
@@ -78,6 +80,7 @@ COPY --chown=app:app migrations ./migrations
 HEALTHCHECK NONE
 
 RUN chmod +x run.sh
+RUN chmod +x *.sh
 
 USER app
 

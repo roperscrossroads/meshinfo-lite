@@ -94,6 +94,58 @@ zero_hop_timeout = 43200
 - Check connection pool settings
 - Verify query cache is working
 
+### Database Privileges
+- **RELOAD Privilege Required**: The database user needs the `RELOAD` privilege to clear the query cache
+- **Check Privileges**: Use `/api/debug/database-cache` to check current privileges
+- **Grant Privileges**: If needed, grant RELOAD privilege to the database user:
+  ```sql
+  GRANT RELOAD ON *.* TO 'username'@'host';
+  FLUSH PRIVILEGES;
+  ```
+- **Graceful Degradation**: The system will continue to work without RELOAD privilege, but query cache clearing will be limited
+
+## Installation and Setup
+
+### New Installations
+
+For new installations, use the database setup script to create the database and user with proper privileges:
+
+```bash
+python setup_database.py
+```
+
+This script will:
+- Create the database with proper character encoding
+- Create the application user
+- Grant all necessary privileges including RELOAD for query cache operations
+- Test the connection and privileges
+- Provide detailed feedback on the setup process
+
+### Configuration Requirements
+
+Add the following to your `config.ini`:
+
+```ini
+[database]
+host = localhost
+username = meshdata
+password = your_password
+database = meshdata
+root_password = your_root_password  # For setup script only
+```
+
+### Manual Database Setup
+
+If you prefer to set up the database manually, ensure the user has these privileges:
+
+```sql
+-- Connect as root
+GRANT ALL PRIVILEGES ON meshdata.* TO 'meshdata'@'%';
+GRANT RELOAD ON *.* TO 'meshdata'@'%';
+GRANT PROCESS ON *.* TO 'meshdata'@'%';
+FLUSH PRIVILEGES;
+```
+
 ## Maintenance
 
 - Cache cleanup runs automatically every 15 minutes
