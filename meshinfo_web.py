@@ -2525,14 +2525,24 @@ def run():
 
     waitress_logger = logging.getLogger("waitress")
     waitress_logger.setLevel(logging.DEBUG)  # Enable all logs from Waitress
-    #  serve(app, host="0.0.0.0", port=port)
+    
+    # Configure Waitress to trust proxy headers for real IP addresses
+    # This is needed when running behind Docker, nginx, or other reverse proxies
     serve(
         TransLogger(
             app,
             setup_console_handler=False,
             logger=waitress_logger
         ),
-        port=port
+        port=port,
+        trusted_proxy='127.0.0.1,::1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8',  # Trust Docker and local networks
+        trusted_proxy_count=1,  # Trust one level of proxy (Docker)
+        trusted_proxy_headers={
+            'x-forwarded-for': 'X-Forwarded-For',
+            'x-forwarded-proto': 'X-Forwarded-Proto',
+            'x-forwarded-host': 'X-Forwarded-Host',
+            'x-forwarded-port': 'X-Forwarded-Port'
+        }
     )
 
 def clear_nodes_cache():
