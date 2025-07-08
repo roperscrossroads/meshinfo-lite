@@ -119,9 +119,45 @@ def get_data(msg):
             )
         elif portnum == portnums_pb2.ROUTING_APP:
             j["type"] = "routing"
-            j["decoded"]["json_payload"] = to_json(
-                mesh_pb2.Routing().FromString(msg.decoded.payload)
-            )
+            
+            # Parse the routing message
+            routing_msg = mesh_pb2.Routing().FromString(msg.decoded.payload)
+            routing_data = to_json(routing_msg)
+            
+            # Extract routing information based on actual packet structure
+            routing_info = {
+                "routing_data": routing_data,
+                "error_reason": routing_data.get("error_reason", None),
+                "request_id": j.get("request_id", None),
+                "relay_node": j.get("relay_node", None),
+                "hop_limit": j.get("hop_limit", None),
+                "hop_start": j.get("hop_start", None),
+                "hops_taken": (j.get("hop_start", 0) - j.get("hop_limit", 0)) if j.get("hop_start") is not None and j.get("hop_limit") is not None else None,
+                "is_error": routing_data.get("error_reason") is not None and routing_data.get("error_reason") > 0,
+                "success": routing_data.get("error_reason") is None or routing_data.get("error_reason") == 0
+            }
+            
+            # Add error reason descriptions
+            error_reason = routing_data.get("error_reason")
+            if error_reason is not None:
+                error_descriptions = {
+                    0: "None",
+                    1: "No Interface",
+                    2: "No Route",
+                    3: "Got Nak",
+                    4: "Timeout",
+                    5: "No Interface",
+                    6: "No Route",
+                    7: "Got Nak",
+                    8: "Timeout",
+                    9: "No Interface",
+                    10: "No Route",
+                    11: "Got Nak",
+                    12: "Timeout"
+                }
+                routing_info["error_description"] = error_descriptions.get(error_reason, f"Unknown Error {error_reason}")
+            
+            j["decoded"]["json_payload"] = routing_info
         elif portnum == portnums_pb2.TRACEROUTE_APP:
             j["type"] = "traceroute"
                         
@@ -211,6 +247,14 @@ def get_data(msg):
                 forward_hops = len(route_info.get("route", []))
                 return_hops = len(route_info.get("route_back", []))
                 logging.info(f"Received traceroute from {msg_from} with {forward_hops} forward hops and {return_hops} return hops")
+            elif msg_type == "routing":
+                routing_info = j["decoded"]["json_payload"]
+                error_reason = routing_info.get("error_reason", 0)
+                error_desc = routing_info.get("error_description", "Unknown")
+                hops_taken = routing_info.get("hops_taken", 0)
+                relay_node = routing_info.get("relay_node", "None")
+                success = routing_info.get("success", False)
+                logging.info(f"Received routing from {msg_from} via relay {relay_node} with {hops_taken} hops (error: {error_desc}, success: {success})")
             elif msg_type == "text" and j.get("hop_limit") is not None and j.get("hop_start") is not None:
                 hop_count = j["hop_start"] - j["hop_limit"]
                 logging.info(f"Received {msg_type} from {msg_from} with {hop_count} hops ({j['hop_limit']}/{j['hop_start']})")

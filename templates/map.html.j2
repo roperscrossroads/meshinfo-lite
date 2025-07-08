@@ -308,8 +308,8 @@
     {% for id, node in nodes.items() %}
       nodes['{{ id }}'] = {
         id: '{{ id }}',
-        short_name: '{{ node.short_name }}',
-        long_name: '{{ node.long_name | e }}',
+        short_name: {{ node.short_name | tojson }},
+        long_name: {{ node.long_name | tojson }},
         last_seen: '{{ time_ago(node.ts_seen) }}',
         ts_seen: {{ node.ts_seen }},
         ts_uplink: {% if node.ts_uplink is defined and node.ts_uplink is not none %}{{ node.ts_uplink }}{% else %}null{% endif %},

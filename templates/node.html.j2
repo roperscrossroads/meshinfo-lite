@@ -1009,8 +1009,8 @@ var onlineStyle = new Style({
 
 var node = {
   id: '{{ node.id }}',
-  short_name: '{{ node.short_name }}',
-  long_name: '{{ node.long_name | e }}',
+  short_name: {{ node.short_name | tojson }},
+  long_name: {{ node.long_name | tojson }},
   last_seen: '{{ node.last_seen }}',
   position: {
     latitude: 38.575764,
