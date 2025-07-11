@@ -57,6 +57,19 @@
             {% endfor %}
           </div>
         </li>
+        {% if config['server'].get('experimental_features_menu', 'true')|lower in ['true', '1', 'yes'] %}
+        <!-- Experimental Features Dropdown -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" id="experimentalDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Experimental Features
+          </a>
+          <div class="dropdown-menu" aria-labelledby="experimentalDropdown">
+            <a class="dropdown-item" href="graph4.html">New Network Graph</a>
+            <a class="dropdown-item" href="message-paths.html">Message Paths</a>
+            <a class="dropdown-item" href="utilization_map.html">Channel Utilization Map</a>
+          </div>
+        </li>
+        {% endif %}
         {% set current_local_time = convert_to_local(datetime.now().timestamp()) %}
         {% if current_local_time.weekday() == 0 %}
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">

@@ -52,13 +52,13 @@
 
     <div class="mb-3">
       <label class="form-label">Heatmap Blur</label>
-      <input type="range" id="heatmapBlur" class="form-range" min="5" max="30" value="10">
+      <input type="range" id="heatmapBlur" class="form-range" min="5" max="30" value="26">
       <small class="text-muted d-block">Blur effect for heatmap.</small>
     </div>
 
     <div class="mb-3">
       <label class="form-label">Heatmap Opacity</label>
-      <input type="range" id="heatmapOpacity" class="form-range" min="0.2" max="1" step="0.01" value="0.7">
+      <input type="range" id="heatmapOpacity" class="form-range" min="0.2" max="1" step="0.01" value="0.4">
       <small class="text-muted d-block">Adjust heatmap transparency.</small>
     </div>
 
@@ -162,8 +162,8 @@
       timeRange: localStorage.getItem('utilizationTimeRange') || '24',
       channelFilter: localStorage.getItem('utilizationChannelFilter') || 'all',
       heatmapRadius: parseInt(localStorage.getItem('utilizationHeatmapRadius')) || 30,
-      heatmapBlur: parseInt(localStorage.getItem('utilizationHeatmapBlur')) || 10,
-      heatmapOpacity: parseFloat(localStorage.getItem('utilizationHeatmapOpacity')) || 0.7,
+      heatmapBlur: parseInt(localStorage.getItem('utilizationHeatmapBlur')) || 26,
+      heatmapOpacity: parseFloat(localStorage.getItem('utilizationHeatmapOpacity')) || 0.4,
       autoScaleRadius: localStorage.getItem('utilizationAutoScaleRadius') !== 'false',
       useContactDistance: localStorage.getItem('utilizationUseContactDistance') !== 'false'
     };
