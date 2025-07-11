@@ -973,6 +973,22 @@ def graph4():
         timestamp=datetime.datetime.now()
     )
 
+@app.route('/utilization_map.html')
+def utilization_map():
+    md = get_meshdata()
+    if not md: # Check if MeshData failed to initialize
+        abort(503, description="Database connection unavailable")
+    
+    return render_template(
+        "utilization_map.html.j2",
+        auth=auth(),
+        config=config,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        Channel=meshtastic_support.Channel  # Add Channel enum to template context
+    )
+
 @app.route('/map.html')
 def map():
     md = get_meshdata()
@@ -2845,6 +2861,175 @@ def get_cached_hardware_models():
     except Exception as e:
         logging.error(f"Error fetching hardware models: {e}")
         return {'error': 'Failed to fetch hardware model data'}
+
+@app.route('/api/utilization-data')
+def get_utilization_data():
+    md = get_meshdata()
+    if not md:
+        abort(503, description="Database connection unavailable")
+    
+    try:
+        # Get parameters from request
+        time_range = request.args.get('time_range', '24')  # hours
+        channel = request.args.get('channel', 'all')
+        
+        # Calculate time window
+        hours = int(time_range)
+        cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=hours)
+        
+        cursor = md.db.cursor(dictionary=True)
+        
+        # Build channel condition
+        channel_condition = ""
+        if channel != 'all':
+            channel_condition = f" AND channel = {channel}"
+        
+        # Get active nodes from cache (much faster than complex DB queries)
+        nodes = get_cached_nodes()
+        if not nodes:
+            return jsonify({'error': 'No node data available'}), 503
+        
+        # Get most recent telemetry for active nodes only
+        sql = f"""
+            SELECT 
+                t.id,
+                t.channel_utilization,
+                t.ts_created
+            FROM telemetry t
+            WHERE t.ts_created >= NOW() - INTERVAL 24 HOUR
+                AND t.channel_utilization IS NOT NULL
+                AND t.channel_utilization > 0
+                {channel_condition}
+            ORDER BY t.id, t.ts_created DESC
+        """
+        
+        cursor.execute(sql)
+        telemetry_rows = cursor.fetchall()
+        
+        # Get only the most recent utilization per node
+        node_utilization = {}
+        for row in telemetry_rows:
+            node_id = row['id']
+            if node_id not in node_utilization:
+                node_utilization[node_id] = {
+                    'utilization': row['channel_utilization'],
+                    'ts_created': row['ts_created']
+                }
+        
+        # Get contact data for active nodes in one efficient query
+        active_node_ids = list(node_utilization.keys())
+        contact_data = {}
+        
+        if active_node_ids:
+            # Use placeholders for the IN clause
+            placeholders = ','.join(['%s'] * len(active_node_ids))
+            contact_sql = f"""
+                SELECT 
+                    from_id,
+                    received_by_id,
+                    p1.latitude_i as from_lat_i,
+                    p1.longitude_i as from_lon_i,
+                    p2.latitude_i as to_lat_i,
+                    p2.longitude_i as to_lon_i
+                FROM message_reception r
+                LEFT JOIN position p1 ON p1.id = r.from_id
+                LEFT JOIN position p2 ON p2.id = r.received_by_id
+                WHERE (r.hop_limit IS NULL AND r.hop_start IS NULL)
+                    OR (r.hop_start - r.hop_limit = 0)
+                AND r.rx_time >= NOW() - INTERVAL 24 HOUR
+                AND r.from_id IN ({placeholders})
+                AND p1.latitude_i IS NOT NULL 
+                AND p1.longitude_i IS NOT NULL
+                AND p2.latitude_i IS NOT NULL 
+                AND p2.longitude_i IS NOT NULL
+            """
+            
+            cursor.execute(contact_sql, active_node_ids)
+            contact_rows = cursor.fetchall()
+            
+            # Build contact distance lookup
+            for row in contact_rows:
+                from_id = row['from_id']
+                to_id = row['received_by_id']
+                
+                # Check for null coordinates before calculating distance
+                if (row['from_lat_i'] is None or row['from_lon_i'] is None or 
+                    row['to_lat_i'] is None or row['to_lon_i'] is None):
+                    continue
+                
+                # Calculate distance using Haversine formula
+                lat1 = row['from_lat_i'] / 10000000.0
+                lon1 = row['from_lon_i'] / 10000000.0
+                lat2 = row['to_lat_i'] / 10000000.0
+                lon2 = row['to_lon_i'] / 10000000.0
+                
+                # Haversine distance calculation
+                import math
+                R = 6371  # Earth's radius in km
+                dlat = math.radians(lat2 - lat1)
+                dlon = math.radians(lon2 - lon1)
+                a = (math.sin(dlat/2) * math.sin(dlat/2) + 
+                     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * 
+                     math.sin(dlon/2) * math.sin(dlon/2))
+                c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+                distance = R * c
+                
+                # Sanity check: skip distances over 150km
+                if distance > 150:
+                    continue
+                
+                # Store contact data
+                if from_id not in contact_data:
+                    contact_data[from_id] = {'distances': [], 'contacts': set()}
+                contact_data[from_id]['distances'].append(distance)
+                contact_data[from_id]['contacts'].add(to_id)
+        
+        # Build result using cached node data
+        result = []
+        for node_id, telemetry_data in node_utilization.items():
+            node_hex = utils.convert_node_id_from_int_to_hex(node_id)
+            node_data = nodes.get(node_hex)
+            
+            if node_data and node_data.get('position'):
+                position = node_data['position']
+                if position and position.get('latitude_i') and position.get('longitude_i'):
+                    # Calculate contact distance
+                    node_contacts = contact_data.get(node_id, {'distances': [], 'contacts': set()})
+                    mean_distance = 2.0  # Default
+                    contact_count = len(node_contacts['contacts'])
+                    
+                    if node_contacts['distances']:
+                        mean_distance = sum(node_contacts['distances']) / len(node_contacts['distances'])
+                        mean_distance = max(2.0, mean_distance)  # Minimum 2km
+                    
+                    # Use cached node data for position and names
+                    result.append({
+                        'id': node_id,
+                        'utilization': round(telemetry_data['utilization'], 2),
+                        'position': {
+                            'latitude_i': position['latitude_i'],
+                            'longitude_i': position['longitude_i'],
+                            'altitude': position.get('altitude')
+                        },
+                        'short_name': node_data.get('short_name', ''),
+                        'long_name': node_data.get('long_name', ''),
+                        'mean_contact_distance': round(mean_distance, 2),
+                        'contact_count': contact_count
+                    })
+        
+        cursor.close()
+        
+        return jsonify({
+            'nodes': result,
+            'time_range': time_range,
+            'channel': channel
+        })
+        
+    except Exception as e:
+        logging.error(f"Error fetching utilization data: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error fetching utilization data: {str(e)}'
+        }), 500
 
 @app.route('/api/hardware-models')
 def get_hardware_models():
