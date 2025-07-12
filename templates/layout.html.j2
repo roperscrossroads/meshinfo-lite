@@ -57,7 +57,7 @@
             {% endfor %}
           </div>
         </li>
-        {% if config['server'].get('experimental_features_menu', 'true')|lower in ['true', '1', 'yes'] %}
+        {% if config['server'].get('experimental_features_menu', 'false')|lower == 'true' %}
         <!-- Experimental Features Dropdown -->
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="experimentalDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
