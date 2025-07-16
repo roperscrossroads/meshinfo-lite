@@ -2201,6 +2201,157 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         cursor.close()
         return zero_hop_links, zero_hop_last_heard
 
+    def get_zero_hop_links_from_traceroute(self, cutoff_time):
+        """
+        Fetch zero-hop links from traceroute data, which is more accurate than message_reception.
+        
+        Args:
+            cutoff_time: Unix timestamp for the cutoff time
+            
+        Returns:
+            Dictionary with node_id_int as keys and zero-hop data as values
+        """
+        zero_hop_links = {}  # {node_id_int: {'heard': {neighbor_id_int: {data}}, 'heard_by': {neighbor_id_int: {data}}}}
+        zero_hop_last_heard = {}  # Keep track of last heard time for sorting
+        
+        cursor = self.db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                t.from_id,
+                t.to_id,
+                t.snr_towards,
+                t.snr_back,
+                t.route,
+                t.route_back,
+                t.ts_created,
+                t.success,
+                p1.latitude_i as lat_from_i,
+                p1.longitude_i as lon_from_i,
+                p2.latitude_i as lat_to_i,
+                p2.longitude_i as lon_to_i
+            FROM traceroute t
+            LEFT OUTER JOIN position p1 ON p1.id = t.from_id
+            LEFT OUTER JOIN position p2 ON p2.id = t.to_id
+            WHERE t.ts_created > FROM_UNIXTIME(%s)
+            AND t.success = TRUE
+            AND (t.snr_towards IS NOT NULL OR t.snr_back IS NOT NULL)
+        """, (cutoff_time,))
+
+        for row in cursor.fetchall():
+            from_id = row['from_id']
+            to_id = row['to_id']
+            ts_created = row['ts_created']
+            
+            # Parse route data to determine if this is a zero-hop connection
+            route = row['route']
+            route_back = row['route_back']
+            
+            # Check if this is a zero-hop connection (empty routes or no intermediate nodes)
+            is_zero_hop = False
+            if route is None or route == '' or route == 'null':
+                forward_hops = 0
+            else:
+                try:
+                    forward_hops = len([x for x in route.split(';') if x.strip()])
+                except (ValueError, AttributeError):
+                    forward_hops = 0
+                    
+            if route_back is None or route_back == '' or route_back == 'null':
+                return_hops = 0
+            else:
+                try:
+                    return_hops = len([x for x in route_back.split(';') if x.strip()])
+                except (ValueError, AttributeError):
+                    return_hops = 0
+            
+            # This is a zero-hop connection if both routes are empty (direct connection)
+            is_zero_hop = (forward_hops == 0 and return_hops == 0)
+            
+            # Skip if this is not a zero-hop connection
+            if not is_zero_hop:
+                continue
+                
+            # Log zero-hop detection for debugging
+            if self.debug:
+                logging.debug(f"Found zero-hop traceroute: {from_id} -> {to_id} (forward_hops={forward_hops}, return_hops={return_hops})")
+            
+            # Convert timestamp to datetime if needed
+            if isinstance(ts_created, datetime.datetime):
+                last_heard_dt = ts_created
+            else:
+                last_heard_dt = datetime.datetime.fromtimestamp(ts_created)
+
+            # Update last heard time for involved nodes
+            zero_hop_last_heard[from_id] = max(zero_hop_last_heard.get(from_id, datetime.datetime.min), last_heard_dt)
+            zero_hop_last_heard[to_id] = max(zero_hop_last_heard.get(to_id, datetime.datetime.min), last_heard_dt)
+
+            # Calculate distance if positions available
+            distance = None
+            if (row['lat_from_i'] and row['lon_from_i'] and
+                row['lat_to_i'] and row['lon_to_i']):
+                distance = round(utils.distance_between_two_points(
+                    row['lat_from_i'] / 10000000, row['lon_from_i'] / 10000000,
+                    row['lat_to_i'] / 10000000, row['lon_to_i'] / 10000000
+                ), 2)
+
+            # Parse SNR values
+            snr_towards = None
+            snr_back = None
+            if row['snr_towards']:
+                try:
+                    snr_values = [float(s) for s in row['snr_towards'].split(";")]
+                    snr_towards = max(snr_values) if snr_values else None
+                except (ValueError, TypeError):
+                    pass
+            if row['snr_back']:
+                try:
+                    snr_values = [float(s) for s in row['snr_back'].split(";")]
+                    snr_back = max(snr_values) if snr_values else None
+                except (ValueError, TypeError):
+                    pass
+
+            # Use the best SNR value
+            best_snr = max(filter(None, [snr_towards, snr_back])) if any([snr_towards, snr_back]) else None
+
+            link_data = {
+                'snr': best_snr,
+                'message_count': 1,  # Each traceroute is one "message"
+                'distance': distance,
+                'last_heard': last_heard_dt,
+                'neighbor_id': from_id,  # For receiver, neighbor is sender
+                'source_type': 'traceroute_zero_hop',
+                'snr_towards': snr_towards,
+                'snr_back': snr_back,
+                'forward_hops': forward_hops,
+                'return_hops': return_hops
+            }
+            
+            heard_by_data = {
+                'snr': best_snr,
+                'message_count': 1,  # Each traceroute is one "message"
+                'distance': distance,
+                'last_heard': last_heard_dt,
+                'neighbor_id': to_id,  # For sender, neighbor is receiver
+                'source_type': 'traceroute_zero_hop',
+                'snr_towards': snr_towards,
+                'snr_back': snr_back,
+                'forward_hops': forward_hops,
+                'return_hops': return_hops
+            }
+
+            # Add to receiver's 'heard' list
+            if to_id not in zero_hop_links:
+                zero_hop_links[to_id] = {'heard': {}, 'heard_by': {}}
+            zero_hop_links[to_id]['heard'][from_id] = link_data
+
+            # Add to sender's 'heard_by' list
+            if from_id not in zero_hop_links:
+                zero_hop_links[from_id] = {'heard': {}, 'heard_by': {}}
+            zero_hop_links[from_id]['heard_by'][to_id] = heard_by_data
+
+        cursor.close()
+        return zero_hop_links, zero_hop_last_heard
+
     def get_graph_data(self, view_type='merged', days=1, zero_hop_timeout=43200):
         """
         Get graph data for visualization.
@@ -2646,8 +2797,32 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             node_ids_set = set(nodes_dict.keys())
             node_id_ints = {int(k, 16): k for k in node_ids_set}
 
-            # 1. Build zero-hop (direct) network
+            # 1. Build zero-hop (direct) network - prefer traceroute data when available
             zero_hop_edges = []
+            zero_hop_source = {}  # Track source of zero-hop detection
+            
+            # First, try to get zero-hop data from traceroute (more accurate)
+            cutoff_time = int(time.time()) - (days * 86400 if days > 0 else 86400)
+            traceroute_zero_hop_links, _ = self.get_zero_hop_links_from_traceroute(cutoff_time)
+            
+            if self.debug:
+                logging.debug(f"Found {len(traceroute_zero_hop_links)} nodes with traceroute-based zero-hop connections")
+            
+            # Add traceroute-based zero-hop edges
+            for node_id_int, links in traceroute_zero_hop_links.items():
+                for neighbor_id_int, data in links.get('heard', {}).items():
+                    sender_hex = format(neighbor_id_int, '08x')
+                    receiver_hex = format(node_id_int, '08x')
+                    zero_hop_edges.append((sender_hex, receiver_hex))
+                    zero_hop_source[(sender_hex, receiver_hex)] = 'traceroute_zero_hop'
+                    zero_hop_source[(receiver_hex, sender_hex)] = 'traceroute_zero_hop'
+                    
+                    # Store hop information for later use in edge creation
+                    if 'forward_hops' in data and 'return_hops' in data:
+                        zero_hop_source[(sender_hex, receiver_hex) + ('_hops',)] = (data['forward_hops'], data['return_hops'])
+                        zero_hop_source[(receiver_hex, sender_hex) + ('_hops',)] = (data['forward_hops'], data['return_hops'])
+            
+            # Fallback to message_reception data for nodes not covered by traceroute
             for rec in receptions:
                 hop_limit = rec['hop_limit']
                 hop_start = rec['hop_start']
@@ -2655,8 +2830,15 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 receiver = rec['received_by_id']
                 sender_hex = format(sender, '08x')
                 receiver_hex = format(receiver, '08x')
+                edge_key = (sender_hex, receiver_hex)
+                reverse_edge_key = (receiver_hex, sender_hex)
+                
                 if (hop_limit is None and hop_start is None) or (hop_start is not None and hop_limit is not None and hop_start - hop_limit == 0):
-                    zero_hop_edges.append((sender_hex, receiver_hex))
+                    # Only add if not already covered by traceroute data
+                    if edge_key not in zero_hop_source and reverse_edge_key not in zero_hop_source:
+                        zero_hop_edges.append(edge_key)
+                        zero_hop_source[edge_key] = 'zero_hop'
+                        zero_hop_source[reverse_edge_key] = 'zero_hop'
 
             # Build zero-hop adjacency for real nodes
             zero_hop_graph = defaultdict(set)
@@ -2734,12 +2916,19 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                             edge_to = to_hex if to_hex != from_hex else unique_real_node
                             edge_key = (edge_from, edge_to)
                             if edge_key not in edge_map:
+                                # Get hop information if available from traceroute data
+                                hop_info = zero_hop_source.get(edge_key + ('_hops',), (0, 0))
+                                forward_hops, return_hops = hop_info if isinstance(hop_info, tuple) else (0, 0)
+                                
                                 edge_map[edge_key] = {
                                     'count': 0,
                                     'relay_suffix': suffix,
                                     'first_seen': rx_time,
                                     'last_seen': rx_time,
-                                    'virtual_id': None
+                                    'virtual_id': None,
+                                    'source_type': zero_hop_source.get(edge_key, 'relay'),
+                                    'forward_hops': forward_hops,
+                                    'return_hops': return_hops
                                 }
                             edge_map[edge_key]['count'] += 1
                             if rx_time:
@@ -2768,13 +2957,14 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                             edge_to = to_hex
                             edge_key = (edge_from, edge_to)
                             if edge_key not in edge_map:
-                                edge_map[edge_key] = {
-                                    'count': 0,
-                                    'relay_suffix': suffix,
-                                    'first_seen': rx_time,
-                                    'last_seen': rx_time,
-                                    'virtual_id': virtual_id if suffix is not None else None
-                                }
+                                                            edge_map[edge_key] = {
+                                'count': 0,
+                                'relay_suffix': suffix,
+                                'first_seen': rx_time,
+                                'last_seen': rx_time,
+                                'virtual_id': virtual_id if suffix is not None else None,
+                                'source_type': zero_hop_source.get(edge_key, 'relay')
+                            }
                             edge_map[edge_key]['count'] += 1
                             if rx_time:
                                 if edge_map[edge_key]['first_seen'] is None or rx_time < edge_map[edge_key]['first_seen']:
@@ -2839,15 +3029,18 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     })
             edges = []
             for (from_node, to_node), edge in edge_map.items():
-                edges.append({
-                    'id': f"{from_node}-{to_node}",
-                    'from_node': from_node,
-                    'to_node': to_node,
-                    'relay_suffix': edge['relay_suffix'],
-                    'message_count': edge['count'],
-                    'first_seen': edge['first_seen'],
-                    'last_seen': edge['last_seen']
-                })
+                            edges.append({
+                'id': f"{from_node}-{to_node}",
+                'from_node': from_node,
+                'to_node': to_node,
+                'relay_suffix': edge['relay_suffix'],
+                'message_count': edge['count'],
+                'first_seen': edge['first_seen'],
+                'last_seen': edge['last_seen'],
+                'source_type': edge.get('source_type', 'relay'),
+                'forward_hops': edge.get('forward_hops', 0),
+                'return_hops': edge.get('return_hops', 0)
+            })
             total_nodes = len(nodes)
             total_edges = len(edges)
             total_messages = sum(e['message_count'] for e in edges)

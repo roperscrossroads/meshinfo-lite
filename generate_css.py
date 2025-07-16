@@ -1,6 +1,7 @@
 import configparser
 import os
 import logging
+from jinja2 import Template
 
 CONFIG_PATH = 'config.ini'
 TEMPLATE_PATH = 'www/css/meshinfo.css.template'
@@ -30,12 +31,12 @@ config.read(CONFIG_PATH)
 theme = dict(DEFAULTS)
 theme.update(config['theme'] if 'theme' in config else {})
 
-# Generate CSS
+# Generate CSS using Jinja2 template engine
 with open(TEMPLATE_PATH) as f:
-    css = f.read()
+    template_content = f.read()
 
-for key, value in theme.items():
-    css = css.replace('{{' + key + '}}', value)
+template = Template(template_content)
+css = template.render(**theme)
 
 with open(OUTPUT_PATH, 'w') as f:
     f.write(css)

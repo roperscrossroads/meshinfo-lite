@@ -34,6 +34,13 @@
             Show message counts
           </label>
         </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="showZeroHopSource" checked>
+          <label class="form-check-label" for="showZeroHopSource" title="Show whether zero-hop connections are detected via traceroute (more accurate) or message reception data">
+            Show zero-hop source
+            <i class="fas fa-info-circle text-muted" style="font-size: 0.8em;"></i>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -192,7 +199,10 @@
               message_count: edge.message_count,
               first_seen: edge.first_seen,
               last_seen: edge.last_seen,
-              weight: edge.message_count
+              weight: edge.message_count,
+              source_type: edge.source_type,
+              forward_hops: edge.forward_hops,
+              return_hops: edge.return_hops
             }
           }))
         };
@@ -302,26 +312,39 @@
                 'label': function(ele) {
                   var relay = ele.data('relay_suffix');
                   var count = ele.data('weight');
+                  var sourceType = ele.data('source_type');
                   var showRelay = document.getElementById('showRelayLabels').checked;
                   var showCount = document.getElementById('showEdgeWeights').checked;
+                  var showZeroHopSource = document.getElementById('showZeroHopSource').checked;
 
+                  var label = '';
+                  
                   if (showRelay && showCount) {
                     if (relay && relay !== 'null' && relay !== null && relay !== undefined && relay !== '') {
-                      return `Via ${relay} (${count})`;
+                      label = `Via ${relay} (${count})`;
                     } else {
-                      return `Direct (${count})`;
+                      label = `Direct (${count})`;
                     }
                   } else if (showRelay) {
                     if (relay && relay !== 'null' && relay !== null && relay !== undefined && relay !== '') {
-                      return `Via ${relay}`;
+                      label = `Via ${relay}`;
                     } else {
-                      return 'Direct';
+                      label = 'Direct';
                     }
                   } else if (showCount) {
-                    return `${count}`;
-                  } else {
-                    return '';
+                    label = `${count}`;
                   }
+                  
+                  // Add zero-hop source indicator if enabled and this is a direct connection
+                  if (showZeroHopSource && (!relay || relay === 'null' || relay === null || relay === undefined || relay === '')) {
+                    if (sourceType === 'traceroute_zero_hop') {
+                      label += ' [T]';  // T for Traceroute
+                    } else if (sourceType === 'zero_hop') {
+                      label += ' [M]';  // M for Message reception
+                    }
+                  }
+                  
+                  return label;
                 }
               }
             },
@@ -415,6 +438,10 @@
       });
 
       document.getElementById('showEdgeWeights').addEventListener('change', function() {
+        cy.style().update();
+      });
+
+      document.getElementById('showZeroHopSource').addEventListener('change', function() {
         cy.style().update();
       });
 
@@ -519,7 +546,7 @@
               <small class="text-muted">${edgeData.id}</small><br><br>
               <strong>Messages:</strong> ${edgeData.message_count || 0}${relayInfo}<br>
               <strong>First Seen:</strong> ${timeAgo(edgeData.first_seen)}<br>
-              <strong>Last Seen:</strong> ${timeAgo(edgeData.last_seen)}
+              <strong>Last Seen:</strong> ${timeAgo(edgeData.last_seen)}${edgeData.source_type === 'traceroute_zero_hop' ? '<br><strong>Source:</strong> Traceroute (more accurate)<br><strong>Forward Hops:</strong> ' + (edgeData.forward_hops || 0) + '<br><strong>Return Hops:</strong> ' + (edgeData.return_hops || 0) : edgeData.source_type === 'zero_hop' ? '<br><strong>Source:</strong> Message reception' : ''}
             </div>
           `;
           // Create dummy element for tippy

@@ -973,14 +973,30 @@ def graph4():
         timestamp=datetime.datetime.now()
     )
 
-@app.route('/utilization_map.html')
-def utilization_map():
+@app.route('/utilization-heatmap.html')
+def utilization_heatmap():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
     
     return render_template(
-        "utilization_map.html.j2",
+        "utilization-heatmap.html.j2",
+        auth=auth(),
+        config=config,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        Channel=meshtastic_support.Channel  # Add Channel enum to template context
+    )
+
+@app.route('/utilization-hexmap.html')
+def utilization_hexmap():
+    md = get_meshdata()
+    if not md: # Check if MeshData failed to initialize
+        abort(503, description="Database connection unavailable")
+    
+    return render_template(
+        "utilization-hexmap.html.j2",
         auth=auth(),
         config=config,
         utils=utils,
@@ -2896,7 +2912,7 @@ def get_utilization_data():
                 t.channel_utilization,
                 t.ts_created
             FROM telemetry t
-            WHERE t.ts_created >= NOW() - INTERVAL 24 HOUR
+            WHERE t.ts_created >= NOW() - INTERVAL {hours} HOUR
                 AND t.channel_utilization IS NOT NULL
                 AND t.channel_utilization > 0
                 {channel_condition}
@@ -2936,7 +2952,7 @@ def get_utilization_data():
                 LEFT JOIN position p2 ON p2.id = r.received_by_id
                 WHERE (r.hop_limit IS NULL AND r.hop_start IS NULL)
                     OR (r.hop_start - r.hop_limit = 0)
-                AND r.rx_time >= NOW() - INTERVAL 24 HOUR
+                AND r.rx_time >= NOW() - INTERVAL {hours} HOUR
                 AND r.from_id IN ({placeholders})
                 AND p1.latitude_i IS NOT NULL 
                 AND p1.longitude_i IS NOT NULL

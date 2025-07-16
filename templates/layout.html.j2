@@ -15,6 +15,23 @@
   {% endif %}
 {% endmacro %}
 
+{% macro page_icon(page_name) %}
+  {% set icon_map = {
+    'chat': 'bi-chat-dots',
+    'graph': 'bi-diagram-3',
+    'map': 'bi-geo-alt',
+    'nodes': 'bi-hdd-network',
+    'neighbors': 'bi-people',
+    'telemetry': 'bi-graph-up',
+    'traceroutes': 'bi-arrow-repeat',
+    'logs': 'bi-journal-text',
+    'metrics': 'bi-speedometer2',
+    'my nodes': 'bi-person-check'
+  } %}
+  {% set icon = icon_map.get(page_name.lower(), 'bi-circle') %}
+  <i class="bi {{ icon }} me-1"></i>
+{% endmacro %}
+
 <head>
   <title>{% block title %}{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,7 +39,25 @@
   <link rel="icon" type="image/x-icon" href="/images/icons/favicon.ico">
   <link href="/css/bootstrap.min.css" rel="stylesheet">
   <link href="/css/meshinfo.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    /* Fallback for Bootstrap Icons */
+    .bi::before {
+      font-family: "bootstrap-icons" !important;
+    }
+    
+    /* Ensure experimental features flask icon is visible in mobile */
+    #experimentalDropdown .bi-flask {
+      display: inline-block !important;
+      margin-right: 0.175rem !important;
+    }
+    
+    /* Additional debugging for flask icon */
+    .d-lg-none .bi-flask {
+      display: inline-block !important;
+      visibility: visible !important;
+    }
+  </style>  
 
   {% block head %}{% endblock %}
 </head>
@@ -38,17 +73,18 @@
       <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
         {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs","metrics"] %}
         <li class="nav-item{% if page == this_page %} active{% endif %}">
-          <a class="nav-link" href="{{ page }}.html">{{ page.title() }}</a>
+          <a class="nav-link" href="{{ page }}.html"><span class="d-lg-none d-xl-inline">{{ page_icon(page) }}</span>{{ page.title() }}</a>
         </li>
         {% endfor %}
         {% if auth %}
         <li class="nav-item{% if this_page == "my nodes" %} active{% endif %}">
-          <a class="nav-link" href="{{ url_for("mynodes") }}">My Nodes</a>
+          <a class="nav-link" href="{{ url_for("mynodes") }}"><span class="d-lg-none d-xl-inline">{{ page_icon("my nodes") }}</span>My Nodes</a>
         </li>
         {% endif %}
          <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Tools
+            <span class="d-lg-none"><i class="bi bi-tools me-1"></i>&nbsp;<span>Tools</span></span>
+            <span class="d-none d-lg-inline"><i class="bi bi-tools"></i></span>
           </a>
           <div class="dropdown-menu" aria-labelledby="toolsDropdown">
             {% for key, value in config['tools'].items() if not key.endswith('_label') and not key.endswith('_node_link') %}
@@ -61,19 +97,21 @@
         <!-- Experimental Features Dropdown -->
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="experimentalDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Experimental Features
+            <span class="d-none d-lg-inline">🧪</span>
+            <span class="d-lg-none">🧪 Experimental Features</span>
           </a>
           <div class="dropdown-menu" aria-labelledby="experimentalDropdown">
             <a class="dropdown-item" href="graph4.html">New Network Graph</a>
             <a class="dropdown-item" href="message-paths.html">Message Paths</a>
-            <a class="dropdown-item" href="utilization_map.html">Channel Utilization Map</a>
+            <a class="dropdown-item" href="utilization-heatmap.html">Channel Utilization Heatmap</a>
+            <a class="dropdown-item" href="utilization-hexmap.html">Channel Utilization Hex Map</a>
           </div>
         </li>
         {% endif %}
         {% set current_local_time = convert_to_local(datetime.now().timestamp()) %}
         {% if current_local_time.weekday() == 0 %}
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
-          <a class="nav-link" href="monday.html">#MeshtasticMonday</a>
+          <a class="nav-link" href="monday.html"><span class="d-lg-none d-xl-inline"><i class="bi bi-calendar-event me-1"></i></span>#MeshtasticMonday</a>
         </li>
         {% endif %}
       </ul>

@@ -148,9 +148,7 @@ nav {
     border-radius: 12px;
     padding: 12px 16px;
     position: relative;
-    {% if chat_box_border_color and chat_box_border_color.strip() and chat_box_border_color != 'none' and chat_box_border_color != 'transparent' and chat_box_border_color != '' %}
-    border: 1px solid none;
-    {% endif %}
+    
 }
 
 .message-header {
@@ -317,7 +315,7 @@ nav {
     background: rgba(0, 0, 0, 0.05);
     border-radius: 4px;
     white-space: nowrap;
-    margin-right: 0.5em;
+    margin-left: 1em;
 }
 
 .btn-group .btn {
@@ -838,6 +836,50 @@ a:hover, a:focus {
     opacity: 1;
 }
 
+/* Utilization Map Settings Panel Controls Theming */
+#settings #timeRange,
+#settings #channelFilter {
+    background-color: #fff !important;
+    color: #333 !important;
+    border: 1px solid #17a2b8 !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace, monospace;
+    transition: border-color 0.2s ease;
+}
+
+#settings #timeRange:focus,
+#settings #channelFilter:focus {
+    border-color: #1396a5 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.15);
+    background-color: #fff !important;
+    color: #333 !important;
+}
+
+/* Checkbox styling for utilization map settings */
+#settings #useContactRange,
+#settings #showHexBorders,
+#settings #autoScaleRadius,
+#settings #useContactDistance {
+    accent-color: #17a2b8 !important;
+}
+
+#settings #useContactRange:checked,
+#settings #showHexBorders:checked,
+#settings #autoScaleRadius:checked,
+#settings #useContactDistance:checked {
+    background-color: #17a2b8 !important;
+    border-color: #17a2b8 !important;
+}
+
+/* Range slider styling for utilization map settings - use browser defaults */
+#settings #hexSize,
+#settings #heatmapRadius,
+#settings #heatmapBlur,
+#settings #heatmapOpacity {
+    accent-color: #17a2b8 !important;
+}
+
 /* Ensure gap between time range and telemetry selector at desktop widths */
 @media (min-width: 768px) {
   #environmentalTelemetryContainer .btn-group + #environmentalTabs {
@@ -893,4 +935,16 @@ a:hover, a:focus {
   background-color: #1396a5 !important;
   border-color: #1396a5 !important;
   text-decoration: none !important;
+} 
+
+/* Message Map prominent message box */
+.message-map-box {
+  background: #f8f9fa;
+  border-left: 3px solid #17a2b8;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0;
+  font-size: 1.05rem;
+  font-weight: 500;
+  word-break: break-word;
 } 

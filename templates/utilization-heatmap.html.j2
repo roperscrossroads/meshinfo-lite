@@ -1,4 +1,4 @@
-{% set this_page = "utilization_map" %}
+{% set this_page = "utilization-heatmap" %}
 {% extends "layout.html.j2" %}
 
 {% block title %}Channel Utilization Map | MeshInfo{% endblock %}
@@ -85,22 +85,29 @@
 
   {# Legend #}
   <div id="legend" class="p-3" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-    <canvas id="utilization-colorbar" width="180" height="28" style="display:block;margin-bottom:6px;"></canvas>
-    <div class="fw-bold mb-2">Channel Utilization Heatmap</div>
-    <div class="d-flex align-items-center mb-2">
-      <div style="width: 20px; height: 20px; background: linear-gradient(to right, #00ff00, #ffff00, #ff8000, #ff0000); border-radius: 4px; margin-right: 8px;"></div>
-      <small class="text-muted">Low → High Utilization</small>
+    <div class="d-flex justify-content-between align-items-start mb-2">
+      <div class="fw-bold">Channel Utilization Heatmap</div>
+      <button id="legendToggle" class="btn btn-sm btn-outline-secondary" style="padding: 2px 6px; font-size: 0.8em;">
+        <i class="bi bi-info-circle"></i>
+      </button>
     </div>
-    <div class="small">
-      <div class="mb-1"><span style="color: #00ff00;">●</span> ≤ 10% (Green)</div>
-      <div class="mb-1"><span style="color: #ffff00;">●</span> 10–20% (Yellow)</div>
-      <div class="mb-1"><span style="color: #ff8000;">●</span> 20–30% (Orange)</div>
-      <div class="mb-1"><span style="color: #ff0000;">●</span> ≥ 40% (Red)</div>
-    </div>
-    <hr class="my-2">
-    <div class="small text-muted">
-      <div class="mb-1">Circle size: Based on mean contact distance</div>
-      <div class="mb-1">Default: 2km if no contacts</div>
+    <div id="legendContent">
+      <canvas id="utilization-colorbar" width="180" height="28" style="display:block;margin-bottom:6px;"></canvas>
+      <div class="d-flex align-items-center mb-2">
+        <div style="width: 20px; height: 20px; background: linear-gradient(to right, #00ff00, #ffff00, #ff8000, #ff0000); border-radius: 4px; margin-right: 8px;"></div>
+        <small class="text-muted">Low → High Utilization</small>
+      </div>
+      <div class="small">
+        <div class="mb-1"><span style="color: #00ff00;">●</span> ≤ 10% (Green)</div>
+        <div class="mb-1"><span style="color: #ffff00;">●</span> 10–20% (Yellow)</div>
+        <div class="mb-1"><span style="color: #ff8000;">●</span> 20–30% (Orange)</div>
+        <div class="mb-1"><span style="color: #ff0000;">●</span> ≥ 40% (Red)</div>
+      </div>
+      <hr class="my-2">
+      <div class="small text-muted">
+        <div class="mb-1">Circle size: Based on mean contact distance</div>
+        <div class="mb-1">Default: 2km if no contacts</div>
+      </div>
     </div>
   </div>
 
@@ -398,6 +405,32 @@
         // Update the radius of the existing heatmap layer
         heatmapLayer.setRadius(newRadius);
       }
+    });
+
+    // Legend toggle functionality
+    const legendToggle = document.getElementById('legendToggle');
+    const legendContent = document.getElementById('legendContent');
+    let legendMinimized = localStorage.getItem('utilizationLegendMinimized') === 'true';
+    
+    function updateLegendState() {
+      if (legendMinimized) {
+        legendContent.style.display = 'none';
+        legendToggle.innerHTML = '<i class="bi bi-info-circle"></i>';
+        legendToggle.title = 'Show legend';
+      } else {
+        legendContent.style.display = 'block';
+        legendToggle.innerHTML = '<i class="bi bi-x-circle"></i>';
+        legendToggle.title = 'Hide legend';
+      }
+    }
+    
+    // Initialize legend state
+    updateLegendState();
+    
+    legendToggle.addEventListener('click', () => {
+      legendMinimized = !legendMinimized;
+      localStorage.setItem('utilizationLegendMinimized', legendMinimized);
+      updateLegendState();
     });
 
     // Initial heatmap update
