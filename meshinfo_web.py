@@ -38,6 +38,12 @@ from meshinfo_los_profile import LOSProfile
 from timezone_utils import convert_to_local, format_timestamp, time_ago
 import json
 import datetime
+from meshinfo_api import api
+from meshinfo_utils import (
+    get_meshdata, get_cache_timeout, auth, config, log_memory_usage, cleanup_cache, 
+    clear_nodes_cache, clear_database_cache, get_cached_chat_data, get_node_page_data,
+    calculate_node_distance, find_relay_node_by_suffix, get_elsewhere_links
+)
 
 app = Flask(__name__)
 
@@ -200,6 +206,9 @@ config.read("config.ini")
 # Initialize cache with config
 initialize_cache()
 
+# Register API blueprint
+app.register_blueprint(api)
+
 # Add request context tracking
 active_requests = set()
 request_lock = threading.Lock()
@@ -229,20 +238,7 @@ def after_request(response):
         log_memory_usage(force=True)
     return response
 
-# Modify get_meshdata to use connection pooling
-def get_meshdata():
-    """Opens a new MeshData connection if there is none yet for the
-    current application context.
-    """
-    if 'meshdata' not in g:
-        try:
-            # Create new MeshData instance without connection pooling
-            g.meshdata = MeshData()
-            logging.debug("MeshData instance created for request context.")
-        except Exception as e:
-            logging.error(f"Failed to create MeshData for request context: {e}")
-            g.meshdata = None
-    return g.meshdata
+
 
 @app.teardown_appcontext
 def teardown_meshdata(exception):
@@ -268,107 +264,7 @@ def teardown_meshdata(exception):
                 pass
         logging.debug("MeshData instance removed from request context.")
 
-def log_memory_usage(force=False):
-    """Log current memory usage with detailed information."""
-    global last_memory_log, last_memory_usage
-    current_time = time.time()
-    current_usage = psutil.Process().memory_info().rss
-    
-    # Only log if:
-    # 1. It's been more than MEMORY_LOG_INTERVAL seconds since last log
-    # 2. Memory usage has changed by more than threshold
-    # 3. Force flag is set
-    if not force and (current_time - last_memory_log < MEMORY_LOG_INTERVAL and 
-                     abs(current_usage - last_memory_usage) < MEMORY_CHANGE_THRESHOLD):
-        return
-        
-    try:
-        import gc
-        gc.collect()  # Force garbage collection before measuring
-        
-        process = psutil.Process()
-        mem_info = process.memory_info()
-        
-        # Get memory usage by object type with more detail
-        objects_by_type = {}
-        large_objects = []  # Track objects larger than 1MB
-        object_counts = {}
-        
-        for obj in gc.get_objects():
-            obj_type = type(obj).__name__
-            try:
-                obj_size = sys.getsizeof(obj)
-                
-                # Track object counts
-                if obj_type not in object_counts:
-                    object_counts[obj_type] = 0
-                object_counts[obj_type] += 1
-                
-                # Track memory by type
-                if obj_type not in objects_by_type:
-                    objects_by_type[obj_type] = 0
-                objects_by_type[obj_type] += obj_size
-                
-                # Track large objects (> 1MB)
-                if obj_size > 1024 * 1024:  # 1MB
-                    large_objects.append({
-                        'type': obj_type,
-                        'size': obj_size,
-                        'repr': str(obj)[:100] + '...' if len(str(obj)) > 100 else str(obj)
-                    })
-                    
-            except (TypeError, ValueError, RecursionError):
-                pass
-        
-        # Sort object types by memory usage
-        sorted_objects = sorted(objects_by_type.items(), key=lambda x: x[1], reverse=True)
-        
-        # Sort large objects by size
-        large_objects.sort(key=lambda x: x['size'], reverse=True)
-        
-        # Sort object counts
-        sorted_counts = sorted(object_counts.items(), key=lambda x: x[1], reverse=True)
-        
-        logging.info(f"=== MEMORY USAGE REPORT ===")
-        logging.info(f"Memory Usage: {mem_info.rss / 1024 / 1024:.1f} MB")
-        logging.info(f"Active Requests: {len(active_requests)}")
-        logging.info(f"Memory Change: {(current_usage - last_memory_usage) / 1024 / 1024:+.1f} MB")
-        
-        logging.info("Top 10 memory-consuming object types:")
-        for obj_type, size in sorted_objects[:10]:
-            count = object_counts.get(obj_type, 0)
-            logging.info(f"  {obj_type}: {size / 1024 / 1024:.1f} MB ({count:,} objects)")
-            
-        logging.info("Top 10 object counts:")
-        for obj_type, count in sorted_counts[:10]:
-            size = objects_by_type.get(obj_type, 0)
-            logging.info(f"  {obj_type}: {count:,} objects ({size / 1024 / 1024:.1f} MB)")
-            
-        if large_objects:
-            logging.info("Large objects (>1MB):")
-            for obj in large_objects[:10]:  # Show top 10 largest objects
-                logging.info(f"  {obj['type']}: {obj['size'] / 1024 / 1024:.1f} MB - {obj['repr']}")
-        
-        # Check for potential memory leaks
-        if current_usage > last_memory_usage + 50 * 1024 * 1024:  # 50MB increase
-            logging.warning(f"POTENTIAL MEMORY LEAK: Memory increased by {(current_usage - last_memory_usage) / 1024 / 1024:.1f} MB")
-            
-        # Check for specific problematic object types
-        problematic_types = ['dict', 'list', 'SimpleNamespace', 'function', 'type']
-        for obj_type in problematic_types:
-            if obj_type in objects_by_type:
-                size = objects_by_type[obj_type]
-                count = object_counts.get(obj_type, 0)
-                if size > 100 * 1024 * 1024:  # 100MB
-                    logging.warning(f"LARGE {obj_type.upper()} OBJECTS: {size / 1024 / 1024:.1f} MB ({count:,} objects)")
-        
-        logging.info("=== END MEMORY REPORT ===")
-            
-        last_memory_log = current_time
-        last_memory_usage = current_usage
-        
-    except Exception as e:
-        logging.error(f"Error in detailed memory logging: {e}")
+
 
 # Add connection monitoring
 def monitor_connections():
@@ -544,7 +440,6 @@ def auth():
     decoded_jwt = reg.auth(jwt)
     return decoded_jwt
 
-
 @app.errorhandler(404)
 def not_found(e):
     return render_template(
@@ -553,16 +448,13 @@ def not_found(e):
         config=config
     ), 404
 
-
 # Data caching functions
 def cache_key_prefix():
     """Generate a cache key prefix based on current time bucket."""
     # Round to nearest minute for 60-second cache
     return datetime.datetime.now().replace(second=0, microsecond=0).timestamp()
 
-def get_cache_timeout():
-    """Get cache timeout from config."""
-    return int(config.get('server', 'app_cache_timeout_seconds', fallback=60))
+
 
 @cache.memoize(timeout=get_cache_timeout())
 def get_cached_nodes():
@@ -1144,7 +1036,6 @@ def telemetry():
         timestamp=datetime.datetime.now()
     )
 
-
 @app.route('/traceroutes.html')
 def traceroutes():
     md = get_meshdata()
@@ -1190,7 +1081,6 @@ def traceroutes():
         meshdata=md  # Add meshdata to template context
     )
 
-
 @app.route('/logs.html')
 def logs():
     md = get_meshdata()
@@ -1213,7 +1103,6 @@ def logs():
         json=json
     )
 
-
 @app.route('/monday.html')
 def monday():
     md = get_meshdata()
@@ -1232,7 +1121,6 @@ def monday():
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
     )
-
 
 @app.route('/mynodes.html')
 def mynodes():
@@ -1257,7 +1145,6 @@ def mynodes():
         timestamp=datetime.datetime.now(),
     )
 
-
 @app.route('/linknode.html')
 def link_node():
     owner = auth()
@@ -1273,7 +1160,6 @@ def link_node():
         otp=otp,
         config=config
     )
-
 
 @app.route('/register.html', methods=['GET', 'POST'])
 def register():
@@ -1299,7 +1185,6 @@ def register():
         error_message=error_message
     )
 
-
 @app.route('/login.html', methods=['GET', 'POST'])
 def login(success_message=None, error_message=None):
     if request.method == 'POST':
@@ -1324,13 +1209,11 @@ def login(success_message=None, error_message=None):
             error_message=error_message
         )
 
-
 @app.route('/logout.html')
 def logout():
     resp = make_response(redirect(url_for('serve_index')))
     resp.set_cookie('jwt', '', expires=0)
     return resp
-
 
 @app.route('/verify')
 def verify():
@@ -1342,7 +1225,6 @@ def verify():
     elif "success" in res:
         return login(success_message=res["success"])
     return serve_index()
-
 
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -1430,7 +1312,6 @@ def serve_static(filename):
 
     return send_from_directory("www", filename)
 
-
 @app.route('/metrics.html')
 @cache.cached(timeout=60)  # Cache for 60 seconds
 def metrics():
@@ -1441,740 +1322,6 @@ def metrics():
         Channel=meshtastic_support.Channel,
         utils=utils
     )
-
-@app.route('/api/metrics')
-def get_metrics():
-    md = get_meshdata()
-    if not md: # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    
-    try:
-        # Get time range from request parameters
-        time_range = request.args.get('time_range', 'day')  # day, week, month, year, all
-        channel = request.args.get('channel', 'all')  # Get channel parameter
-        
-        # Set time range based on parameter
-        end_time = datetime.datetime.now()
-        if time_range == 'week':
-            start_time = end_time - datetime.timedelta(days=7)
-            bucket_size = 180  # 3 hours in minutes
-        elif time_range == 'month':
-            start_time = end_time - datetime.timedelta(days=30)
-            bucket_size = 720  # 12 hours in minutes
-        elif time_range == 'year':
-            start_time = end_time - datetime.timedelta(days=365)
-            bucket_size = 2880  # 2 days in minutes
-        elif time_range == 'all':
-            # For 'all', we'll first check the data range in the database
-            cursor = md.db.cursor(dictionary=True)
-            cursor.execute("SELECT MIN(ts_created) as min_time FROM telemetry")
-            min_time = cursor.fetchone()['min_time']
-            cursor.close()
-            
-            if min_time:
-                start_time = min_time
-            else:
-                # Default to 1 year if no data
-                start_time = end_time - datetime.timedelta(days=365)
-            
-            bucket_size = 10080  # 7 days in minutes
-        else:  # Default to 'day'
-            start_time = end_time - datetime.timedelta(hours=24)
-            bucket_size = 30  # 30 minutes
-        
-        # Convert timestamps to the correct format for MySQL
-        start_timestamp = start_time.strftime('%Y-%m-%d %H:%M:%S')
-        end_timestamp = end_time.strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Format string for time buckets based on bucket size
-        if bucket_size >= 10080:  # 7 days or more
-            time_format = '%Y-%m-%d'  # Daily format
-        elif bucket_size >= 1440:  # 1 day or more
-            time_format = '%Y-%m-%d %H:00'  # Hourly format
-        else:
-            time_format = '%Y-%m-%d %H:%i'  # Minute format
-        
-        cursor = md.db.cursor(dictionary=True)
-        
-        # First, generate a series of time slots
-        time_slots_query = f"""
-            WITH RECURSIVE time_slots AS (
-                SELECT DATE_FORMAT(
-                    DATE_ADD(%s, INTERVAL -MOD(MINUTE(%s), {bucket_size}) MINUTE),
-                    '{time_format}'
-                ) as time_slot
-                UNION ALL
-                SELECT DATE_FORMAT(
-                    DATE_ADD(
-                        STR_TO_DATE(time_slot, '{time_format}'),
-                        INTERVAL {bucket_size} MINUTE
-                    ),
-                    '{time_format}'
-                )
-                FROM time_slots
-                WHERE DATE_ADD(
-                    STR_TO_DATE(time_slot, '{time_format}'),
-                    INTERVAL {bucket_size} MINUTE
-                ) <= %s
-            )
-            SELECT time_slot FROM time_slots
-        """
-        cursor.execute(time_slots_query, (start_timestamp, start_timestamp, end_timestamp))
-        time_slots = [row['time_slot'] for row in cursor.fetchall()]
-        
-        # Add channel condition if specified
-        channel_condition = ""
-        if channel != 'all':
-            # Only apply channel condition to tables that have a channel column
-            channel_condition_text = f" AND channel = {channel}"
-            channel_condition_telemetry = f" AND channel = {channel}"
-            channel_condition_reception = f" AND EXISTS (SELECT 1 FROM text t WHERE t.message_id = message_reception.message_id AND t.channel = {channel})"
-        else:
-            channel_condition_text = ""
-            channel_condition_telemetry = ""
-            channel_condition_reception = ""
-        
-        # Nodes Online Query
-        nodes_online_query = f"""
-            SELECT 
-                DATE_FORMAT(
-                    DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
-                    ),
-                    '{time_format}'
-                ) as time_slot,
-                COUNT(DISTINCT id) as node_count
-            FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
-            GROUP BY time_slot
-            ORDER BY time_slot
-        """
-        cursor.execute(nodes_online_query, (start_timestamp, end_timestamp))
-        nodes_online_data = {row['time_slot']: row['node_count'] for row in cursor.fetchall()}
-        
-        # Message Traffic Query
-        message_traffic_query = f"""
-            SELECT 
-                DATE_FORMAT(
-                    DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
-                    ),
-                    '{time_format}'
-                ) as time_slot,
-                COUNT(*) as message_count
-            FROM text
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_text}
-            GROUP BY time_slot
-            ORDER BY time_slot
-        """
-        cursor.execute(message_traffic_query, (start_timestamp, end_timestamp))
-        message_traffic_data = {row['time_slot']: row['message_count'] for row in cursor.fetchall()}
-        
-        # Channel Utilization Query
-        channel_util_query = f"""
-            SELECT 
-                DATE_FORMAT(
-                    DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
-                    ),
-                    '{time_format}'
-                ) as time_slot,
-                AVG(channel_utilization) as avg_util
-            FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
-            GROUP BY time_slot
-            ORDER BY time_slot
-        """
-        cursor.execute(channel_util_query, (start_timestamp, end_timestamp))
-        channel_util_data = {row['time_slot']: float(row['avg_util']) if row['avg_util'] is not None else 0.0 for row in cursor.fetchall()}
-        
-        # Battery Levels Query
-        battery_query = f"""
-            SELECT 
-                DATE_FORMAT(
-                    DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
-                    ),
-                    '{time_format}'
-                ) as time_slot,
-                AVG(battery_level) as avg_battery
-            FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
-            GROUP BY time_slot
-            ORDER BY time_slot
-        """
-        cursor.execute(battery_query, (start_timestamp, end_timestamp))
-        battery_data = {row['time_slot']: float(row['avg_battery']) if row['avg_battery'] is not None else 0.0 for row in cursor.fetchall()}
-        
-        # Temperature Query
-        temperature_query = f"""
-            SELECT 
-                DATE_FORMAT(
-                    DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
-                    ),
-                    '{time_format}'
-                ) as time_slot,
-                AVG(temperature) as avg_temp
-            FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
-            GROUP BY time_slot
-            ORDER BY time_slot
-        """
-        cursor.execute(temperature_query, (start_timestamp, end_timestamp))
-        temperature_data = {row['time_slot']: float(row['avg_temp']) if row['avg_temp'] is not None else 0.0 for row in cursor.fetchall()}
-        
-        # SNR Query
-        snr_query = f"""
-            SELECT 
-                DATE_FORMAT(
-                    DATE_ADD(
-                        ts_created,
-                        INTERVAL -MOD(MINUTE(ts_created), {bucket_size}) MINUTE
-                    ),
-                    '{time_format}'
-                ) as time_slot,
-                AVG(rx_snr) as avg_snr
-            FROM message_reception
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_reception}
-            GROUP BY time_slot
-            ORDER BY time_slot
-        """
-        cursor.execute(snr_query, (start_timestamp, end_timestamp))
-        snr_data = {row['time_slot']: float(row['avg_snr']) if row['avg_snr'] is not None else 0.0 for row in cursor.fetchall()}
-        
-        cursor.close()
-        
-        # --- Moving Average Helper ---
-        def moving_average_centered(data_list, window_minutes, bucket_size_minutes):
-            # data_list: list of floats (same order as time_slots)
-            # window_minutes: total window size (e.g., 120 for 2 hours)
-            # bucket_size_minutes: size of each bucket (e.g., 30 for 30 min)
-            n = len(data_list)
-            result = []
-            half_window = window_minutes // 2
-            buckets_per_window = max(1, window_minutes // bucket_size_minutes)
-            for i in range(n):
-                # Centered window: find all indices within window centered at i
-                center_time = i
-                window_indices = []
-                for j in range(n):
-                    if abs(j - center_time) * bucket_size_minutes <= half_window:
-                        window_indices.append(j)
-                if window_indices:
-                    avg = sum(data_list[j] for j in window_indices) / len(window_indices)
-                else:
-                    avg = data_list[i]
-                result.append(avg)
-            return result
-
-        # --- Get metrics_average_interval from config ---
-        metrics_avg_interval = int(config.get('server', 'metrics_average_interval', fallback=7200))  # seconds
-        metrics_avg_minutes = metrics_avg_interval // 60
-
-        # --- Calculate moving averages for relevant metrics ---
-        # Determine bucket_size_minutes from bucket_size
-        bucket_size_minutes = bucket_size
-
-        # Prepare raw data lists
-        nodes_online_raw = [nodes_online_data.get(slot, 0) for slot in time_slots]
-        battery_levels_raw = [battery_data.get(slot, 0) for slot in time_slots]
-        temperature_raw = [temperature_data.get(slot, 0) for slot in time_slots]
-        snr_raw = [snr_data.get(slot, 0) for slot in time_slots]
-
-        # --- Get node_activity_prune_threshold from config ---
-        node_activity_prune_threshold = int(config.get('server', 'node_activity_prune_threshold', fallback=7200))  # seconds
-
-        # --- For each time slot, count unique nodes heard in the preceding activity window ---
-        # Fetch all telemetry records in the full time range
-        cursor = md.db.cursor(dictionary=True)
-        cursor.execute(f"""
-            SELECT id, ts_created
-            FROM telemetry
-            WHERE ts_created >= %s AND ts_created <= %s {channel_condition_telemetry}
-            ORDER BY ts_created
-        """, (start_timestamp, end_timestamp))
-        all_telemetry = list(cursor.fetchall())
-        # Convert ts_created to datetime for easier comparison
-        for row in all_telemetry:
-            if isinstance(row['ts_created'], str):
-                row['ts_created'] = datetime.datetime.strptime(row['ts_created'], '%Y-%m-%d %H:%M:%S')
-        # Precompute for each time slot
-        nodes_heard_per_slot = []
-        for slot in time_slots:
-            # slot is a string, convert to datetime
-            if '%H:%M' in time_format or '%H:%i' in time_format:
-                slot_time = datetime.datetime.strptime(slot, '%Y-%m-%d %H:%M')
-            elif '%H:00' in time_format:
-                slot_time = datetime.datetime.strptime(slot, '%Y-%m-%d %H:%M')
-            else:
-                slot_time = datetime.datetime.strptime(slot, '%Y-%m-%d')
-            window_start = slot_time - datetime.timedelta(seconds=node_activity_prune_threshold)
-            # Find all node ids with telemetry in [window_start, slot_time]
-            active_nodes = set()
-            for row in all_telemetry:
-                if window_start < row['ts_created'] <= slot_time:
-                    active_nodes.add(row['id'])
-            nodes_heard_per_slot.append(len(active_nodes))
-        # Now apply moving average and round to nearest integer
-        nodes_online_smoothed = [round(x) for x in moving_average_centered(nodes_heard_per_slot, metrics_avg_minutes, bucket_size_minutes)]
-
-        # Fill in missing time slots with zeros (for non-averaged metrics)
-        result = {
-            'nodes_online': {
-                'labels': time_slots,
-                'data': nodes_online_smoothed
-            },
-            'message_traffic': {
-                'labels': time_slots,
-                'data': [message_traffic_data.get(slot, 0) for slot in time_slots]
-            },
-            'channel_util': {
-                'labels': time_slots,
-                'data': [channel_util_data.get(slot, 0) for slot in time_slots]
-            },
-            'battery_levels': {
-                'labels': time_slots,
-                'data': moving_average_centered(battery_levels_raw, metrics_avg_minutes, bucket_size_minutes)
-            },
-            'temperature': {
-                'labels': time_slots,
-                'data': moving_average_centered(temperature_raw, metrics_avg_minutes, bucket_size_minutes)
-            },
-            'snr': {
-                'labels': time_slots,
-                'data': moving_average_centered(snr_raw, metrics_avg_minutes, bucket_size_minutes)
-            }
-        }
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        logging.error(f"Error fetching metrics data: {str(e)}", exc_info=True)
-        return jsonify({
-            'error': f'Error fetching metrics data: {str(e)}'
-        }), 500
-
-@app.route('/api/chattiest-nodes')
-def get_chattiest_nodes():
-    md = get_meshdata()
-    if not md:  # Check if MeshData failed to initialize
-        abort(503, description="Database connection unavailable")
-    
-    # Get filter parameters from request
-    time_frame = request.args.get('time_frame', 'day')  # day, week, month, year, all
-    message_type = request.args.get('message_type', 'all')  # all, text, position, telemetry
-    channel = request.args.get('channel', 'all')  # all or specific channel number
-    
-    try:
-        cursor = md.db.cursor(dictionary=True)
-        
-        # Build the time frame condition
-        time_condition = ""
-        if time_frame == 'year':
-            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 1 YEAR)"
-        elif time_frame == 'month':
-            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 1 MONTH)"
-        elif time_frame == 'week':
-            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
-        elif time_frame == 'day':
-            time_condition = "WHERE ts_created >= DATE_SUB(NOW(), INTERVAL 24 HOUR)"
-        
-        # Add channel filter if specified - only for text and telemetry tables which have channel column
-        channel_condition_text = ""
-        channel_condition_telemetry = ""
-        if channel != 'all':
-            channel_condition_text = f" AND channel = {channel}"
-            channel_condition_telemetry = f" AND channel = {channel}"
-            if not time_condition:
-                channel_condition_text = f"WHERE channel = {channel}"
-                channel_condition_telemetry = f"WHERE channel = {channel}"
-        
-        # Build the message type query based on the selected type
-        if message_type == 'all':
-            # For text messages, we need to qualify the columns with table aliases
-            time_condition_with_prefix = time_condition.replace("WHERE", "WHERE t.").replace(" AND", " AND t.")
-            channel_condition_text_with_prefix = channel_condition_text.replace("WHERE", "WHERE t.").replace(" AND", " AND t.")
-            
-            message_query = (
-                "SELECT t.from_id as node_id, t.ts_created, t.channel as channel "
-                "FROM text t "
-                + time_condition_with_prefix 
-                + channel_condition_text_with_prefix + " "
-                "UNION ALL "
-                "SELECT id as node_id, ts_created, NULL as channel "
-                "FROM positionlog "
-                + time_condition + " "
-                "UNION ALL "
-                "SELECT id as node_id, ts_created, channel "
-                "FROM telemetry "
-                + time_condition 
-                + channel_condition_telemetry
-            )
-        elif message_type == 'text':
-            message_query = (
-                "SELECT from_id as node_id, ts_created, channel "
-                "FROM text "
-                + time_condition
-                + channel_condition_text
-            )
-        elif message_type == 'position':
-            message_query = (
-                "SELECT id as node_id, ts_created, NULL as channel "
-                "FROM positionlog "
-                + time_condition
-            )
-        elif message_type == 'telemetry':
-            message_query = (
-                "SELECT id as node_id, ts_created, channel "
-                "FROM telemetry "
-                + time_condition
-                + channel_condition_telemetry
-            )
-        else:
-            return jsonify({
-                'error': f'Invalid message type: {message_type}'
-            }), 400
-        
-        # Query to get the top 20 nodes by message count, including node names and role
-        query = """
-            WITH messages AS ({message_query})
-            SELECT 
-                m.node_id as from_id,
-                n.long_name,
-                n.short_name,
-                n.role,
-                COUNT(*) as message_count,
-                COUNT(DISTINCT DATE_FORMAT(m.ts_created, '%Y-%m-%d')) as active_days,
-                MIN(m.ts_created) as first_message,
-                MAX(m.ts_created) as last_message,
-                CASE 
-                    WHEN '{channel}' != 'all' THEN '{channel}'
-                    ELSE GROUP_CONCAT(DISTINCT NULLIF(CAST(m.channel AS CHAR), 'NULL'))
-                END as channels,
-                CASE 
-                    WHEN '{channel}' != 'all' THEN 1
-                    ELSE COUNT(DISTINCT NULLIF(m.channel, 'NULL'))
-                END as channel_count
-            FROM 
-                messages m
-            LEFT JOIN
-                nodeinfo n ON m.node_id = n.id
-            GROUP BY 
-                m.node_id, n.long_name, n.short_name, n.role
-            ORDER BY 
-                message_count DESC
-            LIMIT 20
-        """.format(message_query=message_query, channel=channel)
-        
-        cursor.execute(query)
-        results = cursor.fetchall()
-        
-        # Process the results to format them for the frontend
-        chattiest_nodes = []
-        for row in results:
-            # Convert node ID to hex format
-            node_id_hex = utils.convert_node_id_from_int_to_hex(row['from_id'])
-            
-            # Parse channels string into a list of channel objects
-            channels_str = row['channels']
-            channels = []
-            if channels_str:
-                # If we're filtering by channel, just use that channel
-                if channel != 'all':
-                    channels.append({
-                        'id': int(channel),
-                        'name': utils.get_channel_name(int(channel)),
-                        'color': utils.get_channel_color(int(channel))
-                    })
-                else:
-                    # Otherwise process the concatenated list of channels
-                    channel_ids = [ch_id for ch_id in channels_str.split(',') if ch_id and ch_id != 'NULL']
-                    for ch_id in channel_ids:
-                        try:
-                            ch_id_int = int(ch_id)
-                            channels.append({
-                                'id': ch_id_int,
-                                'name': utils.get_channel_name(ch_id_int),
-                                'color': utils.get_channel_color(ch_id_int)
-                            })
-                        except (ValueError, TypeError):
-                            continue
-            
-            # Create node object
-            node = {
-                'node_id': row['from_id'],
-                'node_id_hex': node_id_hex,
-                'long_name': row['long_name'] or f"Node {row['from_id']}",  # Fallback if no long name
-                'short_name': row['short_name'] or f"Node {row['from_id']}",  # Fallback if no short name
-                'role': utils.get_role_name(row['role']),  # Convert role number to name
-                'message_count': row['message_count'],
-                'active_days': row['active_days'],
-                'first_message': row['first_message'].isoformat() if row['first_message'] else None,
-                'last_message': row['last_message'].isoformat() if row['last_message'] else None,
-                'channels': channels,
-                'channel_count': row['channel_count']
-            }
-            chattiest_nodes.append(node)
-        
-        return jsonify({
-            'chattiest_nodes': chattiest_nodes
-        })
-        
-    except Exception as e:
-        logging.error(f"Error fetching chattiest nodes: {str(e)}")
-        return jsonify({
-            'error': f'Error fetching chattiest nodes: {str(e)}'
-        }), 500
-    finally:
-        if cursor:
-            cursor.close()
-
-@app.route('/api/telemetry/<int:node_id>')
-def api_telemetry(node_id):
-    md = get_meshdata()
-    telemetry = md.get_telemetry_for_node(node_id)
-    return jsonify(telemetry)
-
-@app.route('/api/environmental-telemetry/<int:node_id>')
-def api_environmental_telemetry(node_id):
-    md = get_meshdata()
-    days = request.args.get('days', 1, type=int)
-    # Limit days to reasonable range (1-30 days)
-    days = max(1, min(30, days))
-    telemetry = md.get_environmental_telemetry_for_node(node_id, days)
-    return jsonify(telemetry)
-
-@cache.memoize(timeout=get_cache_timeout())
-def get_cached_chat_data(page=1, per_page=50):
-    """Cache the chat data with optimized query."""
-    md = get_meshdata()
-    if not md:
-        return None
-    
-    # Get total count first (this is fast)
-    cur = md.db.cursor()
-    cur.execute("SELECT COUNT(DISTINCT t.message_id) FROM text t")
-    total = cur.fetchone()[0]
-    cur.close()
-    
-    # Get paginated chat messages (without reception data)
-    offset = (page - 1) * per_page
-    cur = md.db.cursor(dictionary=True)
-    cur.execute("""
-        SELECT t.* FROM text t
-        ORDER BY t.ts_created DESC
-        LIMIT %s OFFSET %s
-    """, (per_page, offset))
-    messages = cur.fetchall()
-    cur.close()
-    
-    # Get reception data for these messages in a separate query
-    if messages:
-        message_ids = [msg['message_id'] for msg in messages]
-        placeholders = ','.join(['%s'] * len(message_ids))
-        cur = md.db.cursor(dictionary=True)
-        cur.execute(f"""
-            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start, rx_time
-            FROM message_reception
-            WHERE message_id IN ({placeholders})
-        """, message_ids)
-        receptions = cur.fetchall()
-        cur.close()
-        
-        # Group receptions by message_id
-        receptions_by_message = {}
-        for reception in receptions:
-            msg_id = reception['message_id']
-            if msg_id not in receptions_by_message:
-                receptions_by_message[msg_id] = []
-            receptions_by_message[msg_id].append({
-                "node_id": reception['received_by_id'],
-                "rx_snr": float(reception['rx_snr']) if reception['rx_snr'] is not None else 0,
-                "rx_rssi": int(reception['rx_rssi']) if reception['rx_rssi'] is not None else 0,
-                "hop_limit": int(reception['hop_limit']) if reception['hop_limit'] is not None else None,
-                "hop_start": int(reception['hop_start']) if reception['hop_start'] is not None else None,
-                "rx_time": reception['rx_time'].timestamp() if isinstance(reception['rx_time'], datetime.datetime) else reception['rx_time']
-            })
-    else:
-        receptions_by_message = {}
-    
-    # Process messages
-    chats = []
-    prev_key = ""
-    for row in messages:
-        record = {}
-        for key, value in row.items():
-            if isinstance(value, datetime.datetime):
-                record[key] = value.timestamp()
-            else:
-                record[key] = value
-        
-        # Add reception data
-        record["receptions"] = receptions_by_message.get(record['message_id'], [])
-        
-        # Convert IDs to hex
-        record["from"] = utils.convert_node_id_from_int_to_hex(record["from_id"])
-        record["to"] = utils.convert_node_id_from_int_to_hex(record["to_id"])
-        
-        # Deduplicate messages
-        msg_key = f"{record['from']}{record['to']}{record['text']}{record['message_id']}"
-        if msg_key != prev_key:
-            chats.append(record)
-            prev_key = msg_key
-    
-    return {
-        "items": chats,
-        "total": total,
-        "page": page,
-        "per_page": per_page,
-        "pages": (total + per_page - 1) // per_page,
-        "has_prev": page > 1,
-        "has_next": page * per_page < total,
-        "prev_num": page - 1,
-        "next_num": page + 1
-    }
-
-def get_node_page_data(node_hex, all_nodes=None):
-    """Fetch and process all data for the node page to prevent memory leaks."""
-    md = get_meshdata()
-    if not md: return None
-
-    # Use provided nodes or fetch them if not provided
-    if all_nodes is None:
-        all_nodes = get_cached_nodes()
-    if not all_nodes or node_hex not in all_nodes:
-        return None
-
-    current_node = all_nodes[node_hex]
-    node_id = current_node['id']
-
-    # Get LOS configuration early
-    los_enabled = config.getboolean("los", "enabled", fallback=False)
-    zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))
-    max_distance_km = int(config.get("los", "max_distance", fallback=5000)) / 1000
-    cutoff_time = int(time.time()) - zero_hop_timeout
-
-    # --- Fetch all raw data ---
-    node_telemetry = md.get_node_telemetry(node_id)
-    node_route = md.get_route_coordinates(node_id)
-    telemetry_graph = draw_graph(node_telemetry)
-    neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
-    
-    # Only process LOS if enabled
-    los_profiles = {}
-    if los_enabled:
-        # Create a minimal nodes dict for LOSProfile with only the current node and its neighbors
-        los_nodes = {}
-        los_nodes[node_hex] = current_node
-        
-        # Add only the nodes that are within LOS distance and have positions
-        max_distance = int(config.get("los", "max_distance", fallback=5000))
-        for other_hex, other_node in all_nodes.items():
-            if other_hex == node_hex:
-                continue
-            if not other_node.get('position'):
-                continue
-            # Calculate distance and only include if within range
-            try:
-                my_pos = current_node.get('position', {})
-                other_pos = other_node.get('position', {})
-                if my_pos.get('latitude') and my_pos.get('longitude') and other_pos.get('latitude') and other_pos.get('longitude'):
-                    dist = utils.distance_between_two_points(
-                        my_pos['latitude'], my_pos['longitude'],
-                        other_pos['latitude'], other_pos['longitude']
-                    ) * 1000  # Convert to meters
-                    if dist < max_distance:
-                        los_nodes[other_hex] = other_node
-            except:
-                continue
-        
-        lp = LOSProfile(los_nodes, node_id, config, cache)
-        
-        # Get LOS profiles and clean up the LOSProfile instance
-        try:
-            los_profiles = lp.get_profiles()
-        finally:
-            # Explicitly clean up the LOSProfile instance to release memory
-            if hasattr(lp, 'close_datasets'):
-                lp.close_datasets()
-            del lp
-            del los_nodes
-
-    cursor = md.db.cursor(dictionary=True)
-    # Query for zero-hop messages heard by this node
-    cursor.execute("""
-        SELECT r.from_id, COUNT(*) AS count, MAX(r.rx_snr) AS best_snr,
-               AVG(r.rx_snr) AS avg_snr, MAX(r.rx_time) AS last_rx_time
-        FROM message_reception r
-        WHERE r.received_by_id = %s AND ((r.hop_limit IS NULL AND r.hop_start IS NULL) OR (r.hop_start - r.hop_limit = 0))
-          AND r.rx_time > %s
-        GROUP BY r.from_id ORDER BY last_rx_time DESC
-    """, (node_id, cutoff_time))
-    zero_hop_heard = cursor.fetchall()
-
-    # Query for zero-hop messages sent by this node
-    cursor.execute("""
-        SELECT r.received_by_id, COUNT(*) AS count, MAX(r.rx_snr) AS best_snr,
-               AVG(r.rx_snr) AS avg_snr, MAX(r.rx_time) AS last_rx_time
-        FROM message_reception r
-        WHERE r.from_id = %s AND ((r.hop_limit IS NULL AND r.hop_start IS NULL) OR (r.hop_start - r.hop_limit = 0))
-          AND r.rx_time > %s
-        GROUP BY r.received_by_id ORDER BY last_rx_time DESC
-    """, (node_id, cutoff_time))
-    zero_hop_heard_by = cursor.fetchall()
-    cursor.close()
-
-    # --- Create a lean dictionary of only the linked nodes needed by the template ---
-    linked_node_ids = set()
-    if 'neighbors' in current_node:
-        for neighbor in current_node.get('neighbors', []):
-            linked_node_ids.add(neighbor['neighbor_id'])
-    for heard in zero_hop_heard:
-        linked_node_ids.add(heard['from_id'])
-    for neighbor in neighbor_heard_by:
-        linked_node_ids.add(neighbor['id'])
-    for heard in zero_hop_heard_by:
-        linked_node_ids.add(heard['received_by_id'])
-    if current_node.get('updated_via'):
-        linked_node_ids.add(current_node.get('updated_via'))
-        
-    linked_nodes_details = {}
-    for linked_id_int in linked_node_ids:
-        if not linked_id_int: continue
-        nid_hex = utils.convert_node_id_from_int_to_hex(linked_id_int)
-        node_data = all_nodes.get(nid_hex)
-        if node_data:
-            # Copy only the fields required by the template
-            linked_nodes_details[nid_hex] = {
-                'short_name': node_data.get('short_name'),
-                'long_name': node_data.get('long_name'),
-                'position': node_data.get('position')
-            }
-
-    # Build elsewhere links
-    node_hex_id = utils.convert_node_id_from_int_to_hex(node_id)
-    elsewhere_links = get_elsewhere_links(node_id, node_hex_id)
-    
-    # Return a dictionary that does NOT include the full `all_nodes` object
-    return {
-        'node': current_node,
-        'linked_nodes_details': linked_nodes_details,
-        'telemetry_graph': telemetry_graph,
-        'node_route': node_route,
-        'los_profiles': los_profiles,
-        'neighbor_heard_by': neighbor_heard_by,
-        'zero_hop_heard': zero_hop_heard,
-        'zero_hop_heard_by': zero_hop_heard_by,
-        'zero_hop_timeout': zero_hop_timeout,
-        'max_distance_km': max_distance_km,
-        'elsewhere_links': elsewhere_links,
-    }
 
 @app.route('/chat-classic.html')
 def chat():
@@ -2203,23 +1350,7 @@ def chat():
         debug=False,
     )
 
-@cache.memoize(timeout=get_cache_timeout())  # Cache for 5 minutes
-def calculate_node_distance(node1_hex, node2_hex):
-    """Calculate distance between two nodes, cached to avoid repeated calculations."""
-    nodes = get_cached_nodes()
-    if not nodes:
-        return None
-    
-    node1 = nodes.get(node1_hex)
-    node2 = nodes.get(node2_hex)
-    
-    if not node1 or not node2:
-        return None
-    
-    if not node1.get("position") or not node2.get("position"):
-        return None
-    
-    return utils.calculate_distance_between_nodes(node1, node2)
+
 
 @app.route('/chat.html')
 def chat2():
@@ -2358,431 +1489,6 @@ def allnodes():
         timestamp=datetime.datetime.now()
     )
 
-@app.route('/api/debug/memory')
-def debug_memory():
-    """Manual trigger for detailed memory analysis."""
-    if not auth():
-        abort(401)
-    
-    log_memory_usage(force=True)
-    log_detailed_memory_analysis()
-    
-    return jsonify({
-        'status': 'success',
-        'message': 'Memory analysis completed. Check logs for details.'
-    })
-
-@app.route('/api/debug/cache')
-def debug_cache():
-    """Manual trigger for cache analysis."""
-    if not auth():
-        abort(401)
-    
-    log_cache_stats()
-    
-    return jsonify({
-        'status': 'success',
-        'message': 'Cache analysis completed. Check logs for details.'
-    })
-
-@app.route('/api/debug/cleanup')
-def debug_cleanup():
-    """Manual trigger for cache cleanup."""
-    if not auth():
-        abort(401)
-    
-    try:
-        # Check database privileges first
-        config = configparser.ConfigParser()
-        config.read('config.ini')
-        db_cache = DatabaseCache(config)
-        privileges = db_cache.check_privileges()
-        
-        # Perform cleanup operations
-        cleanup_cache()
-        
-        # Also clear nodes cache and force garbage collection
-        clear_nodes_cache()
-        clear_database_cache()
-        gc.collect()
-        
-        # Prepare response message
-        if privileges['reload']:
-            message = 'Cache cleanup completed successfully. Database query cache cleared.'
-        else:
-            message = 'Cache cleanup completed. Note: Database query cache could not be cleared due to insufficient privileges (RELOAD required).'
-        
-        return jsonify({
-            'status': 'success',
-            'message': message,
-            'database_privileges': privileges
-        })
-        
-    except Exception as e:
-        logging.error(f"Error during debug cleanup: {e}")
-        return jsonify({
-            'status': 'error',
-            'message': f'Error during cache cleanup: {str(e)}'
-        }), 500
-
-@app.route('/api/debug/clear-nodes')
-def debug_clear_nodes():
-    """Manual trigger to clear nodes cache."""
-    if not auth():
-        abort(401)
-    
-    clear_nodes_cache()
-    clear_database_cache()
-    gc.collect()
-    
-    return jsonify({
-        'status': 'success',
-        'message': 'Nodes cache cleared. Check logs for details.'
-    })
-
-@app.route('/api/debug/database-cache')
-def debug_database_cache():
-    """Manual trigger for database cache analysis."""
-    if not auth():
-        abort(401)
-    
-    try:
-        # Check database privileges
-        config = configparser.ConfigParser()
-        config.read('config.ini')
-        db_cache = DatabaseCache(config)
-        privileges = db_cache.check_privileges()
-        
-        md = get_meshdata()
-        if md and hasattr(md, 'db_cache'):
-            stats = md.db_cache.get_cache_stats()
-            
-            # Get application cache info
-            app_cache_info = {}
-            if hasattr(md, '_nodes_cache'):
-                app_cache_info = {
-                    'cache_entries': len(md._nodes_cache),
-                    'cache_keys': list(md._nodes_cache.keys()),
-                    'cache_timestamps': {k: v['timestamp'] for k, v in md._nodes_cache.items()}
-                }
-            
-            return jsonify({
-                'status': 'success',
-                'database_cache_stats': stats,
-                'application_cache_info': app_cache_info,
-                'database_privileges': privileges
-            })
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': 'Database cache not available',
-                'database_privileges': privileges
-            })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Error getting database cache stats: {e}'
-        })
-
-@app.route('/api/geocode')
-def api_geocode():
-    """API endpoint for reverse geocoding to avoid CORS issues."""
-    try:
-        lat = request.args.get('lat', type=float)
-        lon = request.args.get('lon', type=float)
-        
-        if lat is None or lon is None:
-            return jsonify({'error': 'Missing lat or lon parameters'}), 400
-        
-        # Use the existing geocoding function from utils
-        geocoded = utils.geocode_position(
-            config.get('geocoding', 'apikey', fallback=''),
-            lat,
-            lon
-        )
-        
-        if geocoded:
-            return jsonify(geocoded)
-        else:
-            return jsonify({'error': 'Geocoding failed'}), 500
-            
-    except Exception as e:
-        logging.error(f"Geocoding error: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-@cache.memoize(timeout=get_cache_timeout())  # Cache for 5 minutes
-def get_node_positions_batch(node_ids):
-    """Get position data for multiple nodes efficiently."""
-    nodes = get_cached_nodes()
-    if not nodes:
-        return {}
-    
-    positions = {}
-    for node_id in node_ids:
-        if node_id in nodes:
-            node = nodes[node_id]
-            if node.get('position') and node['position'].get('latitude') and node['position'].get('longitude'):
-                positions[node_id] = {
-                    'latitude': node['position']['latitude'],
-                    'longitude': node['position']['longitude']
-                }
-    
-    return positions
-
-@app.route('/api/node-positions')
-def api_node_positions():
-    """API endpoint to get position data for specific nodes for client-side distance calculations."""
-    try:
-        # Get list of node IDs from query parameter
-        node_ids = request.args.get('nodes', '').split(',')
-        node_ids = [nid.strip() for nid in node_ids if nid.strip()]
-        
-        if not node_ids:
-            return jsonify({'positions': {}})
-        
-        # Use the cached batch function
-        positions = get_node_positions_batch(tuple(node_ids))  # Convert to tuple for caching
-        
-        return jsonify({'positions': positions})
-        
-    except Exception as e:
-        logging.error(f"Error fetching node positions: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-def run():
-    # Enable Waitress logging
-    config = configparser.ConfigParser()
-    config.read('config.ini')
-    port = int(config["webserver"]["port"])
-
-    waitress_logger = logging.getLogger("waitress")
-    waitress_logger.setLevel(logging.DEBUG)  # Enable all logs from Waitress
-    
-    # Configure Waitress to trust proxy headers for real IP addresses
-    # This is needed when running behind Docker, nginx, or other reverse proxies
-    serve(
-        TransLogger(
-            app,
-            setup_console_handler=False,
-            logger=waitress_logger
-        ),
-        port=port,
-        trusted_proxy='127.0.0.1,::1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8',  # Trust Docker and local networks
-        trusted_proxy_count=1,  # Trust one level of proxy (Docker)
-        trusted_proxy_headers={
-            'x-forwarded-for': 'X-Forwarded-For',
-            'x-forwarded-proto': 'X-Forwarded-Proto',
-            'x-forwarded-host': 'X-Forwarded-Host',
-            'x-forwarded-port': 'X-Forwarded-Port'
-        }
-    )
-
-def clear_nodes_cache():
-    """Clear nodes-related cache entries."""
-    try:
-        cache.delete_memoized(get_cached_nodes)
-        cache.delete_memoized(get_cached_active_nodes)
-        cache.delete_memoized(get_cached_message_map_data)
-        cache.delete_memoized(get_cached_graph_data)
-        cache.delete_memoized(get_cached_neighbors_data)
-        logging.info("Cleared nodes-related cache entries")
-    except Exception as e:
-        logging.error(f"Error clearing nodes-related cache: {e}")
-
-def clear_database_cache():
-    """Clear database query cache."""
-    try:
-        # Try to get meshdata with app context first
-        try:
-            md = get_meshdata()
-            if md and hasattr(md, 'db_cache'):
-                md.db_cache.clear_query_cache()
-                logging.info("Cleared database query cache")
-            if md:
-                md.clear_nodes_cache()
-                logging.info("Cleared application nodes cache")
-        except RuntimeError as e:
-            # If we're outside app context, clear cache directly
-            if "application context" in str(e):
-                logging.info("Outside app context, clearing cache directly")
-                # Clear database cache directly without app context
-                config = configparser.ConfigParser()
-                config.read('config.ini')
-                db_cache = DatabaseCache(config)
-                db_cache.clear_query_cache()
-                logging.info("Cleared database query cache (direct)")
-            else:
-                raise
-    except Exception as e:
-        logging.error(f"Error clearing database cache: {e}")
-
-def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=None, zero_hop_links=None, sender_pos=None, receiver_pos=None, debug=False):
-    """
-    Improved relay node matcher: prefer zero-hop/extended neighbors, then select the physically closest candidate to the sender (or receiver), using scoring only as a tiebreaker.
-    """
-    import time
-    relay_suffix = relay_suffix.lower()[-2:]
-    candidates = []
-    for node_id_hex, node_data in nodes.items():
-        if len(node_id_hex) == 8 and node_id_hex.lower()[-2:] == relay_suffix:
-            candidates.append((node_id_hex, node_data))
-
-    if not candidates:
-        if debug:
-            print(f"[RelayMatch] No candidates for suffix {relay_suffix}")
-        return None
-    if len(candidates) == 1:
-        if debug:
-            print(f"[RelayMatch] Only one candidate for suffix {relay_suffix}: {candidates[0][0]}")
-        return candidates[0][0]
-
-    # --- Zero-hop filter: only consider zero-hop neighbors if any exist ---
-    zero_hop_candidates = []
-    if zero_hop_links:
-        for node_id_hex, node_data in candidates:
-            is_zero_hop = False
-            if sender_id and node_id_hex in zero_hop_links.get(sender_id, {}).get('heard', {}):
-                is_zero_hop = True
-            if receiver_ids:
-                for rid in receiver_ids:
-                    if node_id_hex in zero_hop_links.get(rid, {}).get('heard', {}):
-                        is_zero_hop = True
-            if is_zero_hop:
-                zero_hop_candidates.append((node_id_hex, node_data))
-    if zero_hop_candidates:
-        if debug:
-            print(f"[RelayMatch] Restricting to zero-hop candidates: {[c[0] for c in zero_hop_candidates]}")
-        candidates = zero_hop_candidates
-    else:
-        # --- Extended neighbor filter: only consider candidates that have ever been heard by or heard from sender/receivers ---
-        extended_candidates = []
-        if zero_hop_links:
-            local_set = set()
-            if sender_id and sender_id in zero_hop_links:
-                local_set.update(zero_hop_links[sender_id].get('heard', {}).keys())
-                local_set.update(zero_hop_links[sender_id].get('heard_by', {}).keys())
-            if receiver_ids:
-                for rid in receiver_ids:
-                    if rid in zero_hop_links:
-                        local_set.update(zero_hop_links[rid].get('heard', {}).keys())
-                        local_set.update(zero_hop_links[rid].get('heard_by', {}).keys())
-            local_set_hex = set()
-            for n in local_set:
-                try:
-                    if isinstance(n, int):
-                        local_set_hex.add(utils.convert_node_id_from_int_to_hex(n))
-                    elif isinstance(n, str) and len(n) == 8:
-                        local_set_hex.add(n)
-                except Exception:
-                    continue
-            for node_id_hex, node_data in candidates:
-                if node_id_hex in local_set_hex:
-                    extended_candidates.append((node_id_hex, node_data))
-        if extended_candidates:
-            if debug:
-                print(f"[RelayMatch] Restricting to extended neighbor candidates: {[c[0] for c in extended_candidates]}")
-            candidates = extended_candidates
-        else:
-            if debug:
-                print(f"[RelayMatch] No local/extended candidates, using all: {[c[0] for c in candidates]}")
-
-    # --- Distance-first selection among remaining candidates ---
-    def get_distance(node_data, ref_pos):
-        npos = node_data.get('position')
-        if not npos or not ref_pos:
-            return float('inf')
-        nlat = npos.get('latitude') if isinstance(npos, dict) else getattr(npos, 'latitude', None)
-        nlon = npos.get('longitude') if isinstance(npos, dict) else getattr(npos, 'longitude', None)
-        if nlat is None or nlon is None:
-            return float('inf')
-        # Fix: Use 'latitude' and 'longitude' keys, not 'lat' and 'lon'
-        ref_lat = ref_pos.get('latitude') if isinstance(ref_pos, dict) else getattr(ref_pos, 'latitude', None)
-        ref_lon = ref_pos.get('longitude') if isinstance(ref_pos, dict) else getattr(ref_pos, 'longitude', None)
-        if ref_lat is None or ref_lon is None:
-            return float('inf')
-        return utils.distance_between_two_points(ref_lat, ref_lon, nlat, nlon)
-
-    ref_pos = sender_pos if sender_pos else receiver_pos
-    if ref_pos:
-        # Compute distances
-        distances = [(node_id_hex, node_data, get_distance(node_data, ref_pos)) for node_id_hex, node_data in candidates]
-        min_dist = min(d[2] for d in distances)
-        closest = [d for d in distances if abs(d[2] - min_dist) < 1e-3]  # Allow for float rounding
-        if debug:
-            print(f"[RelayMatch] Closest candidates by distance: {[(c[0], c[2]) for c in closest]}")
-        if len(closest) == 1:
-            return closest[0][0]
-        # If tie, fall back to scoring among closest
-        candidates = [(c[0], c[1]) for c in closest]
-
-    # --- Scoring system as tiebreaker ---
-    scores = {}
-    now = time.time()
-    for node_id_hex, node_data in candidates:
-        score = 0
-        reasons = []
-        if zero_hop_links:
-            if sender_id and node_id_hex in zero_hop_links.get(sender_id, {}).get('heard', {}):
-                score += 100
-                reasons.append('zero-hop-sender')
-            if receiver_ids:
-                for rid in receiver_ids:
-                    if node_id_hex in zero_hop_links.get(rid, {}).get('heard', {}):
-                        score += 100
-                        reasons.append(f'zero-hop-receiver-{rid}')
-        proximity_score = 0
-        pos_fresh = False
-        if sender_pos and node_data.get('position'):
-            npos = node_data['position']
-            nlat = npos.get('latitude') if isinstance(npos, dict) else getattr(npos, 'latitude', None)
-            nlon = npos.get('longitude') if isinstance(npos, dict) else getattr(npos, 'longitude', None)
-            ntime = npos.get('position_time') if isinstance(npos, dict) else getattr(npos, 'position_time', None)
-            if nlat is not None and nlon is not None and ntime is not None:
-                # Convert datetime to timestamp if needed
-                if isinstance(ntime, datetime.datetime):
-                    ntime = ntime.timestamp()
-                if now - ntime > 21600:
-                    score -= 50
-                    reasons.append('stale-position')
-                else:
-                    pos_fresh = True
-                    # Fix: Use 'latitude' and 'longitude' keys, not 'lat' and 'lon'
-                    sender_lat = sender_pos.get('latitude') if isinstance(sender_pos, dict) else getattr(sender_pos, 'latitude', None)
-                    sender_lon = sender_pos.get('longitude') if isinstance(sender_pos, dict) else getattr(sender_pos, 'longitude', None)
-                    if sender_lat is not None and sender_lon is not None:
-                        dist = utils.distance_between_two_points(sender_lat, sender_lon, nlat, nlon)
-                        proximity_score = max(0, 100 - dist * 2)
-                        score += proximity_score
-                        reasons.append(f'proximity:{dist:.1f}km(+{proximity_score:.1f})')
-                    else:
-                        score -= 50
-                        reasons.append('missing-sender-position')
-            else:
-                score -= 100
-                reasons.append('missing-position')
-        ts_seen = node_data.get('ts_seen')
-        if ts_seen:
-            # Convert datetime to timestamp if needed
-            if isinstance(ts_seen, datetime.datetime):
-                ts_seen = ts_seen.timestamp()
-            if now - ts_seen < 3600:
-                score += 10
-                reasons.append('recently-seen')
-        if node_data.get('role') not in [1, 8]:
-            score += 5
-            reasons.append('relay-capable')
-        scores[node_id_hex] = (score, reasons)
-    if debug:
-        print(f"[RelayMatch] Candidates for suffix {relay_suffix}:")
-        for nid, (score, reasons) in scores.items():
-            print(f"  {nid}: score={score}, reasons={reasons}")
-    if not scores:
-        return None
-    best = max(scores.items(), key=lambda x: x[1][0])
-    if debug:
-        print(f"[RelayMatch] Selected {best[0]} for suffix {relay_suffix} (score={best[1][0]})")
-    return best[0]
-
 @app.route('/message-paths.html')
 def message_paths():
     days = float(request.args.get('days', 0.167))  # Default to 4 hours if not provided
@@ -2804,6 +1510,10 @@ def message_paths():
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now()
     )
+
+
+
+
 
 @cache.memoize(timeout=get_cache_timeout())  # Cache for 5 minutes
 def get_cached_hardware_models():
@@ -2878,252 +1588,33 @@ def get_cached_hardware_models():
         logging.error(f"Error fetching hardware models: {e}")
         return {'error': 'Failed to fetch hardware model data'}
 
-@app.route('/api/utilization-data')
-def get_utilization_data():
-    md = get_meshdata()
-    if not md:
-        abort(503, description="Database connection unavailable")
-    
-    try:
-        # Get parameters from request
-        time_range = request.args.get('time_range', '24')  # hours
-        channel = request.args.get('channel', 'all')
-        
-        # Calculate time window
-        hours = int(time_range)
-        cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=hours)
-        
-        cursor = md.db.cursor(dictionary=True)
-        
-        # Build channel condition
-        channel_condition = ""
-        if channel != 'all':
-            channel_condition = f" AND channel = {channel}"
-        
-        # Get active nodes from cache (much faster than complex DB queries)
-        nodes = get_cached_nodes()
-        if not nodes:
-            return jsonify({'error': 'No node data available'}), 503
-        
-        # Get most recent telemetry for active nodes only
-        sql = f"""
-            SELECT 
-                t.id,
-                t.channel_utilization,
-                t.ts_created
-            FROM telemetry t
-            WHERE t.ts_created >= NOW() - INTERVAL {hours} HOUR
-                AND t.channel_utilization IS NOT NULL
-                AND t.channel_utilization > 0
-                {channel_condition}
-            ORDER BY t.id, t.ts_created DESC
-        """
-        
-        cursor.execute(sql)
-        telemetry_rows = cursor.fetchall()
-        
-        # Get only the most recent utilization per node
-        node_utilization = {}
-        for row in telemetry_rows:
-            node_id = row['id']
-            if node_id not in node_utilization:
-                node_utilization[node_id] = {
-                    'utilization': row['channel_utilization'],
-                    'ts_created': row['ts_created']
-                }
-        
-        # Get contact data for active nodes in one efficient query
-        active_node_ids = list(node_utilization.keys())
-        contact_data = {}
-        
-        if active_node_ids:
-            # Use placeholders for the IN clause
-            placeholders = ','.join(['%s'] * len(active_node_ids))
-            contact_sql = f"""
-                SELECT 
-                    from_id,
-                    received_by_id,
-                    p1.latitude_i as from_lat_i,
-                    p1.longitude_i as from_lon_i,
-                    p2.latitude_i as to_lat_i,
-                    p2.longitude_i as to_lon_i
-                FROM message_reception r
-                LEFT JOIN position p1 ON p1.id = r.from_id
-                LEFT JOIN position p2 ON p2.id = r.received_by_id
-                WHERE (r.hop_limit IS NULL AND r.hop_start IS NULL)
-                    OR (r.hop_start - r.hop_limit = 0)
-                AND r.rx_time >= NOW() - INTERVAL {hours} HOUR
-                AND r.from_id IN ({placeholders})
-                AND p1.latitude_i IS NOT NULL 
-                AND p1.longitude_i IS NOT NULL
-                AND p2.latitude_i IS NOT NULL 
-                AND p2.longitude_i IS NOT NULL
-            """
-            
-            cursor.execute(contact_sql, active_node_ids)
-            contact_rows = cursor.fetchall()
-            
-            # Build contact distance lookup
-            for row in contact_rows:
-                from_id = row['from_id']
-                to_id = row['received_by_id']
-                
-                # Check for null coordinates before calculating distance
-                if (row['from_lat_i'] is None or row['from_lon_i'] is None or 
-                    row['to_lat_i'] is None or row['to_lon_i'] is None):
-                    continue
-                
-                # Calculate distance using Haversine formula
-                lat1 = row['from_lat_i'] / 10000000.0
-                lon1 = row['from_lon_i'] / 10000000.0
-                lat2 = row['to_lat_i'] / 10000000.0
-                lon2 = row['to_lon_i'] / 10000000.0
-                
-                # Haversine distance calculation
-                import math
-                R = 6371  # Earth's radius in km
-                dlat = math.radians(lat2 - lat1)
-                dlon = math.radians(lon2 - lon1)
-                a = (math.sin(dlat/2) * math.sin(dlat/2) + 
-                     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * 
-                     math.sin(dlon/2) * math.sin(dlon/2))
-                c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-                distance = R * c
-                
-                # Sanity check: skip distances over 150km
-                if distance > 150:
-                    continue
-                
-                # Store contact data
-                if from_id not in contact_data:
-                    contact_data[from_id] = {'distances': [], 'contacts': set()}
-                contact_data[from_id]['distances'].append(distance)
-                contact_data[from_id]['contacts'].add(to_id)
-        
-        # Build result using cached node data
-        result = []
-        for node_id, telemetry_data in node_utilization.items():
-            node_hex = utils.convert_node_id_from_int_to_hex(node_id)
-            node_data = nodes.get(node_hex)
-            
-            if node_data and node_data.get('position'):
-                position = node_data['position']
-                if position and position.get('latitude_i') and position.get('longitude_i'):
-                    # Calculate contact distance
-                    node_contacts = contact_data.get(node_id, {'distances': [], 'contacts': set()})
-                    mean_distance = 2.0  # Default
-                    contact_count = len(node_contacts['contacts'])
-                    
-                    if node_contacts['distances']:
-                        mean_distance = sum(node_contacts['distances']) / len(node_contacts['distances'])
-                        mean_distance = max(2.0, mean_distance)  # Minimum 2km
-                    
-                    # Use cached node data for position and names
-                    result.append({
-                        'id': node_id,
-                        'utilization': round(telemetry_data['utilization'], 2),
-                        'position': {
-                            'latitude_i': position['latitude_i'],
-                            'longitude_i': position['longitude_i'],
-                            'altitude': position.get('altitude')
-                        },
-                        'short_name': node_data.get('short_name', ''),
-                        'long_name': node_data.get('long_name', ''),
-                        'mean_contact_distance': round(mean_distance, 2),
-                        'contact_count': contact_count
-                    })
-        
-        cursor.close()
-        
-        return jsonify({
-            'nodes': result,
-            'time_range': time_range,
-            'channel': channel
-        })
-        
-    except Exception as e:
-        logging.error(f"Error fetching utilization data: {str(e)}", exc_info=True)
-        return jsonify({
-            'error': f'Error fetching utilization data: {str(e)}'
-        }), 500
+def run():
+    # Enable Waitress logging
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    port = int(config["webserver"]["port"])
 
-@app.route('/api/hardware-models')
-def get_hardware_models():
-    """Get hardware model statistics for the most and least common models."""
-    result = get_cached_hardware_models()
+    waitress_logger = logging.getLogger("waitress")
+    waitress_logger.setLevel(logging.DEBUG)  # Enable all logs from Waitress
     
-    if 'error' in result:
-        return jsonify(result), 503 if result['error'] == 'Database connection unavailable' else 500
-    
-    return jsonify(result)
-
-def get_elsewhere_links(node_id, node_hex_id):
-    """
-    Build Elsewhere links for a node based on config.ini [tools] section.
-    
-    Args:
-        node_id: The node ID as integer
-        node_hex_id: The node ID as hex string
-        
-    Returns:
-        List of (label, url, icon) tuples for the Elsewhere section
-    """
-    elsewhere_links = []
-    
-    def get_icon_for_tool(label, url):
-        """Determine appropriate icon based on tool name and URL."""
-        label_lower = label.lower()
-        url_lower = url.lower()
-        
-        # Map-related tools
-        if 'map' in label_lower or 'map' in url_lower:
-            return '🗺️'
-        
-        # Logs/Logging tools
-        if 'log' in label_lower or 'log' in url_lower:
-            return '📋'
-        
-        # Dashboard/Monitoring tools
-        if 'dashboard' in label_lower or 'monitor' in label_lower:
-            return '📊'
-        
-        # Network/Graph tools
-        if 'graph' in label_lower or 'network' in label_lower:
-            return '🕸️'
-        
-        # Chat/Message tools
-        if 'chat' in label_lower or 'message' in label_lower:
-            return '💬'
-        
-        # Settings/Config tools
-        if 'config' in label_lower or 'setting' in label_lower:
-            return '⚙️'
-        
-        # Default icon for external links
-        return '🔗'
-    
-    # Process keys ending with _node_link
-    for key, value in config.items('tools'):
-        if key.endswith('_node_link'):
-            # Extract the base key (remove _node_link suffix)
-            base_key = key[:-10]  # Remove '_node_link'
-            
-            # Get the label from the corresponding _label key
-            label_key = base_key + '_label'
-            label = config.get('tools', label_key, fallback=None)
-            if not label:
-                # Fallback to a generated label if no _label is found
-                label = base_key.replace('_', ' ').title()
-            
-            # Replace placeholders in URL and strip any extra quotes
-            url = value.replace('{{ node.id }}', str(node_id)).replace('{{ node.hex_id }}', node_hex_id).strip('"')
-            
-            # Get appropriate icon
-            icon = get_icon_for_tool(label, url)
-            
-            elsewhere_links.append((label, url, icon))
-    
-    return elsewhere_links
+    # Configure Waitress to trust proxy headers for real IP addresses
+    # This is needed when running behind Docker, nginx, or other reverse proxies
+    serve(
+        TransLogger(
+            app,
+            setup_console_handler=False,
+            logger=waitress_logger
+        ),
+        port=port,
+        trusted_proxy='127.0.0.1,::1,172.16.0.0/12,192.168.0.0/16,10.0.0.0/8',  # Trust Docker and local networks
+        trusted_proxy_count=1,  # Trust one level of proxy (Docker)
+        trusted_proxy_headers={
+            'x-forwarded-for': 'X-Forwarded-For',
+            'x-forwarded-proto': 'X-Forwarded-Proto',
+            'x-forwarded-host': 'X-Forwarded-Host',
+            'x-forwarded-port': 'X-Forwarded-Port'
+        }
+    )
 
 if __name__ == '__main__':
     config = configparser.ConfigParser()
