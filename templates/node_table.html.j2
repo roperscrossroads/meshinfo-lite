@@ -94,33 +94,8 @@
         </td>
         <td scope="col">
           {% if node.role is not none %}
-          {% if node.role == 0 %}
-          <span title="Client">C</span>
-          {% elif node.role == 1 %}
-          <span title="Client Mute">CM</span>
-          {% elif node.role == 2 %}
-          <span title="Router">R</span>
-          {% elif node.role == 3 %}
-          <span title="Router Client">RC</span>
-          {% elif node.role == 4 %}
-          <span title="Repeater">RE</span>
-          {% elif node.role == 5 %}
-          <span title="Tracker">T</span>
-          {% elif node.role == 6 %}
-          <span title="Sensor">S</span>
-          {% elif node.role == 7 %}
-          <span title="ATAK">A</span>
-          {% elif node.role == 8 %}
-          <span title="Client Hidden">CH</span>
-          {% elif node.role == 9 %}
-          <span title="Lost and Found">LF</span>
-          {% elif node.role == 10 %}
-          <span title="ATAK Tracker">AT</span>
-          {% elif node.role == 11 %}
-          <span title="Router Late">RL</span>
-          {% else %}
-          <span title="Unknown ({{ node.role }})">?</span>
-          {% endif %}
+            {% set badge_text, badge_style = get_role_badge(node.role) %}
+            <span class="role-badge" style="{{ badge_style }}" title="{{ utils.get_role_name(node.role) }}">{{ badge_text }}</span>
           {% endif %}
         </td>
         {% if node.position %}

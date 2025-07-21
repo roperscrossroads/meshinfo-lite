@@ -42,7 +42,7 @@ from meshinfo_api import api
 from meshinfo_utils import (
     get_meshdata, get_cache_timeout, auth, config, log_memory_usage, cleanup_cache, 
     clear_nodes_cache, clear_database_cache, get_cached_chat_data, get_node_page_data,
-    calculate_node_distance, find_relay_node_by_suffix, get_elsewhere_links
+    calculate_node_distance, find_relay_node_by_suffix, get_elsewhere_links, get_role_badge
 )
 
 app = Flask(__name__)
@@ -191,6 +191,7 @@ app.jinja_env.globals.update(time_ago=time_ago)
 app.jinja_env.globals.update(min=min)
 app.jinja_env.globals.update(max=max)
 app.jinja_env.globals.update(datetime=datetime.datetime)
+app.jinja_env.globals.update(get_role_badge=get_role_badge)
 
 # Add template filters
 @app.template_filter('safe_hw_model')
@@ -899,6 +900,22 @@ def utilization_hexmap():
 
 @app.route('/map.html')
 def map():
+    md = get_meshdata()
+    if not md: # Check if MeshData failed to initialize
+        abort(503, description="Database connection unavailable")
+    
+    return render_template(
+        "map_api.html.j2",
+        auth=auth(),
+        config=config,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        Channel=meshtastic_support.Channel  # Add Channel enum to template context
+    )
+
+@app.route('/map-classic.html')
+def map_classic():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")

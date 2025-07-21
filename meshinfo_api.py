@@ -4,6 +4,7 @@ import logging
 from meshinfo_utils import get_meshdata, get_cache_timeout, auth, config
 from meshdata import MeshData
 import utils
+import time
 
 # Create API blueprint
 api = Blueprint('api', __name__, url_prefix='/api')
@@ -879,3 +880,215 @@ def get_hardware_models():
         'least_common': least_common,
         'total_models': len(hardware_stats)
     }) 
+
+@api.route('/map-data')
+def get_map_data():
+    """Get map data with filtering options for better performance."""
+    md = get_meshdata()
+    if not md:
+        return jsonify({'error': 'Database connection unavailable'}), 503
+    
+    try:
+        # Get filter parameters from request
+        nodes_max_age = request.args.get('nodes_max_age', '0', type=int)  # seconds, 0 = show all
+        nodes_disconnected_age = request.args.get('nodes_disconnected_age', '10800', type=int)  # seconds
+        nodes_offline_age = request.args.get('nodes_offline_age', '10800', type=int)  # seconds
+        channel_filter = request.args.get('channel_filter', 'all')  # all or specific channel
+        neighbours_max_distance = request.args.get('neighbours_max_distance', '5000', type=int)  # meters
+        
+        cursor = md.db.cursor(dictionary=True)
+        now = int(time.time())
+        
+        # Build WHERE conditions for filtering nodes at database level
+        where_conditions = []
+        params = []
+        
+        # Apply max age filter at database level
+        if nodes_max_age > 0:
+            cutoff_time = now - nodes_max_age
+            where_conditions.append("n.ts_seen >= FROM_UNIXTIME(%s)")
+            params.append(cutoff_time)
+        
+        # Channel filter will be applied after the query since it comes from CTE
+        
+        # Build the main query with filters
+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+        
+        # Debug logging
+        logging.info(f"Map API filters: nodes_max_age={nodes_max_age}, channel_filter={channel_filter}")
+        logging.info(f"WHERE clause: {where_clause}")
+        logging.info(f"Parameters: {params}")
+        
+        # Use the existing cached nodes function for better performance
+        all_nodes = md.get_nodes_cached()
+        if not all_nodes:
+            return jsonify({'error': 'Failed to load nodes data'}), 503
+        
+        # Filter nodes based on criteria
+        filtered_nodes = {}
+        node_ids = []
+        
+        for node_id_hex, node_data in all_nodes.items():
+            # Apply max age filter
+            if nodes_max_age > 0:
+                ts_seen = node_data.get('ts_seen')
+                if ts_seen:
+                    if hasattr(ts_seen, 'timestamp'):
+                        ts_seen = ts_seen.timestamp()
+                    if now - ts_seen > nodes_max_age:
+                        continue
+            
+            # Apply channel filter
+            if channel_filter != 'all':
+                node_channel = node_data.get('channel')
+                if node_channel != int(channel_filter):
+                    continue
+            
+            # Convert hex ID to int for zero-hop data
+            try:
+                node_id_int = utils.convert_node_id_from_hex_to_int(node_id_hex)
+                node_ids.append(node_id_int)
+            except:
+                continue
+            
+            # Create filtered node data
+            ts_seen = node_data.get('ts_seen')
+            if hasattr(ts_seen, 'timestamp'):
+                ts_seen = ts_seen.timestamp()
+            
+            ts_uplink = node_data.get('ts_uplink')
+            if hasattr(ts_uplink, 'timestamp'):
+                ts_uplink = ts_uplink.timestamp()
+            
+            # Check if node should be shown as offline
+            show_as_offline = False
+            if nodes_offline_age != 'never' and ts_seen:
+                if now - ts_seen > nodes_offline_age:
+                    show_as_offline = True
+            
+            # Calculate active status
+            active_threshold = int(config.get('server', 'node_activity_prune_threshold', fallback=7200))
+            is_active = ts_seen and (now - ts_seen) <= active_threshold
+            
+            filtered_node_data = {
+                'id': node_id_hex,
+                'short_name': node_data.get('short_name', ''),
+                'long_name': node_data.get('long_name', ''),
+                'last_seen': ts_seen,
+                'ts_uplink': ts_uplink,
+                'online': is_active,
+                'channel': node_data.get('channel'),
+                'channel_name': utils.get_channel_name(node_data.get('channel')) if node_data.get('channel') else 'Unknown',
+                'has_default_channel': node_data.get('has_default_channel'),
+                'num_online_local_nodes': node_data.get('num_online_local_nodes'),
+                'region': node_data.get('region'),
+                'modem_preset': node_data.get('modem_preset'),
+                'show_as_offline': show_as_offline,
+                'zero_hop_data': {'heard': [], 'heard_by': []},
+                'neighbors': []
+            }
+            
+            # Add position if available
+            position = node_data.get('position')
+            if position and isinstance(position, dict):
+                latitude = position.get('latitude')
+                longitude = position.get('longitude')
+                if latitude is not None and longitude is not None:
+                    filtered_node_data['position'] = [longitude, latitude]
+                else:
+                    filtered_node_data['position'] = None
+            else:
+                filtered_node_data['position'] = None
+            
+            filtered_nodes[node_id_hex] = filtered_node_data
+        
+        logging.info(f"Map API filtered to {len(filtered_nodes)} nodes")
+        
+        # Node processing is now done above in the filtering loop
+        
+        # Use existing functions to get zero-hop and neighbor data
+        zero_hop_timeout = int(config.get('server', 'zero_hop_timeout', fallback=43200))
+        cutoff_time = now - zero_hop_timeout
+        
+        # Get zero-hop data using existing function
+        zero_hop_links, zero_hop_last_heard = md.get_zero_hop_links(cutoff_time)
+        
+        # Get neighbor info data using existing function
+        neighbor_info_links = md.get_neighbor_info_links(days=1)
+        
+        # Add zero-hop data to filtered nodes
+        for node_id_int in node_ids:
+            node_id_hex = utils.convert_node_id_from_int_to_hex(node_id_int)
+            if node_id_hex in filtered_nodes:
+                # Add zero-hop heard data
+                if node_id_int in zero_hop_links:
+                    for neighbor_id_int, link_data in zero_hop_links[node_id_int]['heard'].items():
+                        neighbor_id_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
+                        
+                        # Convert last_heard to timestamp if it's a datetime object
+                        last_heard_timestamp = link_data.get('last_heard', now)
+                        if hasattr(last_heard_timestamp, 'timestamp'):
+                            last_heard_timestamp = last_heard_timestamp.timestamp()
+                        
+                        zero_hop_data = {
+                            'node_id': neighbor_id_hex,
+                            'count': link_data.get('message_count', 1),
+                            'best_snr': link_data.get('snr'),
+                            'avg_snr': link_data.get('snr'),  # Use same value for avg
+                            'last_rx_time': last_heard_timestamp
+                        }
+                        filtered_nodes[node_id_hex]['zero_hop_data']['heard'].append(zero_hop_data)
+                    
+                    # Add zero-hop heard_by data
+                    for neighbor_id_int, link_data in zero_hop_links[node_id_int]['heard_by'].items():
+                        neighbor_id_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
+                        
+                        # Convert last_heard to timestamp if it's a datetime object
+                        last_heard_timestamp = link_data.get('last_heard', now)
+                        if hasattr(last_heard_timestamp, 'timestamp'):
+                            last_heard_timestamp = last_heard_timestamp.timestamp()
+                        
+                        zero_hop_data = {
+                            'node_id': neighbor_id_hex,
+                            'count': link_data.get('message_count', 1),
+                            'best_snr': link_data.get('snr'),
+                            'avg_snr': link_data.get('snr'),  # Use same value for avg
+                            'last_rx_time': last_heard_timestamp
+                        }
+                        filtered_nodes[node_id_hex]['zero_hop_data']['heard_by'].append(zero_hop_data)
+                
+                # Add neighbor info data
+                if node_id_int in neighbor_info_links:
+                    for neighbor_id_int, link_data in neighbor_info_links[node_id_int]['heard'].items():
+                        neighbor_id_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
+                        neighbor_data = {
+                            'id': neighbor_id_hex,
+                            'snr': link_data.get('snr'),
+                            'distance': link_data.get('distance')
+                        }
+                        filtered_nodes[node_id_hex]['neighbors'].append(neighbor_data)
+        
+        cursor.close()
+        
+        response = jsonify({
+            'nodes': filtered_nodes,
+            'filters': {
+                'nodes_max_age': nodes_max_age,
+                'nodes_disconnected_age': nodes_disconnected_age,
+                'nodes_offline_age': nodes_offline_age,
+                'channel_filter': channel_filter,
+                'neighbours_max_distance': neighbours_max_distance
+            },
+            'timestamp': now,
+            'node_count': len(filtered_nodes)
+        })
+        
+        # Add cache headers for better performance
+        response.headers['Cache-Control'] = 'public, max-age=60'
+        return response
+        
+    except Exception as e:
+        logging.error(f"Error fetching map data: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error fetching map data: {str(e)}'
+        }), 500 

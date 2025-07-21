@@ -684,4 +684,34 @@ def get_cached_hardware_models():
     """Get hardware model statistics."""
     # This would be implemented based on your cache setup
     # For now, return None to indicate it needs to be implemented
-    return None 
+    return None
+
+def get_role_badge(role_value):
+    """
+    Convert a role value to a colored badge with improved readability.
+    
+    Args:
+        role_value: The numeric role value
+        
+    Returns:
+        A tuple of (badge_text, badge_style) for styling
+    """
+    if role_value is None:
+        return ("?", "background-color: #6c757d; color: white;")
+    
+    role_mapping = {
+        0: ("C", "background-color: #0d6efd; color: white;"),      # Client - Dark Blue
+        1: ("CM", "background-color: #0dcaf0; color: #000;"),      # Client Mute - Light Blue with dark text
+        2: ("R", "background-color: #dc3545; color: white;"),      # Router - Red
+        3: ("RC", "background-color: #ffc107; color: #000;"),      # Router Client - Orange with dark text
+        4: ("RE", "background-color: #198754; color: white;"),     # Repeater - Green
+        5: ("T", "background-color: #6c757d; color: white;"),      # Tracker - Gray
+        6: ("S", "background-color: #6c757d; color: white;"),      # Sensor - Gray
+        7: ("A", "background-color: #6c757d; color: white;"),      # ATAK - Gray
+        8: ("CH", "background-color: #0dcaf0; color: #000;"),      # Client Hidden - Light Blue with dark text
+        9: ("LF", "background-color: #6c757d; color: white;"),     # Lost and Found - Gray
+        10: ("AT", "background-color: #6c757d; color: white;"),    # ATAK Tracker - Gray
+        11: ("RL", "background-color: #dc3545; color: white;"),    # Router Late - Red
+    }
+    
+    return role_mapping.get(role_value, ("?", "background-color: #212529; color: white;")) 
