@@ -1062,3 +1062,76 @@ a:hover, a:focus {
   font-weight: 500;
   word-break: break-word;
 } 
+
+/* --- Monday Page Styles --- */
+body.monday-page {
+  background: {{page_background_color}};
+}
+.monday-banner {
+  background: {{banner_background_color}};
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(23,162,184,0.08);
+  border: 1px solid {{table_border_color}};
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  margin-bottom: 2rem;
+}
+.monday-banner strong {
+  color: {{accent_color}};
+}
+.monday-table {
+  background: {{page_background_color}};
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(23,162,184,0.06);
+  border: 1px solid {{table_border_color}};
+  overflow: hidden;
+}
+.monday-table th {
+  background: {{table_header_color}} !important;
+  color: #222;
+  border-bottom: 2px solid {{accent_color}} !important;
+  font-weight: 600;
+  font-size: 1rem;
+}
+.monday-table td, .monday-table th {
+  border-color: {{table_border_color}} !important;
+}
+.monday-table tr:nth-child(even) td {
+  background: {{table_alternating_row_color}};
+}
+.monday-date-row th {
+  background: {{table_subheader_color}} !important;
+  color: {{control_color}} !important;
+  font-size: 1.15em;
+  font-weight: 700;
+  text-align: center;
+  border: none;
+}
+
+.monday-table a {
+  color: {{link_color}};
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.monday-table a:hover {
+  color: {{link_color_hover}};
+  text-decoration: underline;
+}
+.monday-streak {
+  color: {{accent_color}};
+  font-weight: 600;
+  font-size: 0.95em;
+}
+.monday-checkins {
+  color: #888;
+  font-size: 0.92em;
+}
+.monday-example {
+  padding: 7px 12px;
+  background: {{chat_box_background_color}};
+  border-radius: 6px;
+  font-style: italic;
+  margin-top: 0.5em;
+  border: 1px solid {{table_border_color}};
+  color: #333;
+}
+/* --- End Monday Page Styles --- */ 

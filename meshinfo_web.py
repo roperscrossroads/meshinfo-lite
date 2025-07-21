@@ -40,7 +40,7 @@ import json
 import datetime
 from meshinfo_api import api
 from meshinfo_utils import (
-    get_meshdata, get_cache_timeout, auth, config, log_memory_usage, cleanup_cache, 
+    get_meshdata, get_cache_timeout, auth, config, log_memory_usage, 
     clear_nodes_cache, clear_database_cache, get_cached_chat_data, get_node_page_data,
     calculate_node_distance, find_relay_node_by_suffix, get_elsewhere_links, get_role_badge
 )

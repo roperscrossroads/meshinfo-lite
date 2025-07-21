@@ -1,13 +1,89 @@
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime, timedelta
 import logging
-from meshinfo_utils import get_meshdata, get_cache_timeout, auth, config
+import sys
+import psutil
+from meshinfo_utils import get_meshdata, get_cache_timeout, auth, config, log_cache_stats
 from meshdata import MeshData
+from database_cache import DatabaseCache
 import utils
 import time
 
 # Create API blueprint
 api = Blueprint('api', __name__, url_prefix='/api')
+
+def log_detailed_memory_analysis():
+    """Perform detailed memory analysis to identify potential leaks."""
+    try:
+        import gc
+        gc.collect()
+        
+        logging.info("=== DETAILED MEMORY ANALYSIS ===")
+        
+        # Check database connections
+        db_connections = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'mysql' in str(obj.__class__).lower():
+                db_connections += 1
+        logging.info(f"Database connection objects: {db_connections}")
+        
+        # Check cache objects
+        cache_objects = 0
+        cache_size = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'cache' in str(obj.__class__).lower():
+                cache_objects += 1
+                try:
+                    cache_size += sys.getsizeof(obj)
+                except:
+                    pass
+        logging.info(f"Cache objects: {cache_objects} ({cache_size / 1024 / 1024:.1f} MB)")
+        
+        # Check for Flask/WSGI objects
+        flask_objects = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'flask' in str(obj.__class__).lower():
+                flask_objects += 1
+        logging.info(f"Flask objects: {flask_objects}")
+        
+        # Check for template objects
+        template_objects = 0
+        for obj in gc.get_objects():
+            if hasattr(obj, '__class__') and 'template' in str(obj.__class__).lower():
+                template_objects += 1
+        logging.info(f"Template objects: {template_objects}")
+        
+        # Check for large dictionaries and lists
+        large_dicts = []
+        large_lists = []
+        for obj in gc.get_objects():
+            try:
+                if isinstance(obj, dict) and len(obj) > 1000:
+                    large_dicts.append((len(obj), str(obj)[:50]))
+                elif isinstance(obj, list) and len(obj) > 1000:
+                    large_lists.append((len(obj), str(obj)[:50]))
+            except:
+                pass
+        
+        if large_dicts:
+            logging.info("Large dictionaries:")
+            for size, repr_str in sorted(large_dicts, reverse=True)[:5]:
+                logging.info(f"  Dict with {size:,} items: {repr_str}")
+                
+        if large_lists:
+            logging.info("Large lists:")
+            for size, repr_str in sorted(large_lists, reverse=True)[:5]:
+                logging.info(f"  List with {size:,} items: {repr_str}")
+        
+        # Check for circular references
+        circular_refs = gc.collect()
+        if circular_refs > 0:
+            logging.warning(f"Found {circular_refs} circular references")
+        
+        logging.info("=== END DETAILED ANALYSIS ===")
+        
+    except Exception as e:
+        logging.error(f"Error in detailed memory analysis: {e}")
 
 def get_cached_nodes():
     """Get nodes data for API endpoints."""
@@ -536,67 +612,130 @@ def api_environmental_telemetry(node_id):
 
 @api.route('/debug/memory')
 def debug_memory():
-    """Debug endpoint to get memory usage information."""
-    import psutil
-    import gc
+    """Manual trigger for detailed memory analysis."""
+    if not auth():
+        abort(401)
     
-    process = psutil.Process()
-    memory_info = process.memory_info()
-    
-    # Force garbage collection
-    gc.collect()
+    log_memory_usage(force=True)
+    log_detailed_memory_analysis()
     
     return jsonify({
-        'rss_mb': memory_info.rss / 1024 / 1024,
-        'vms_mb': memory_info.vms / 1024 / 1024,
-        'percent': process.memory_percent(),
-        'available_mb': psutil.virtual_memory().available / 1024 / 1024,
-        'total_mb': psutil.virtual_memory().total / 1024 / 1024
+        'status': 'success',
+        'message': 'Memory analysis completed. Check logs for details.'
     })
 
 @api.route('/debug/cache')
 def debug_cache():
-    """Debug endpoint to get cache information."""
-    from meshinfo_utils import get_cache_size, get_cache_entry_count, get_largest_cache_entries
+    """Manual trigger for cache analysis."""
+    if not auth():
+        abort(401)
+    
+    log_cache_stats()
     
     return jsonify({
-        'cache_size_mb': get_cache_size() / 1024 / 1024,
-        'entry_count': get_cache_entry_count(),
-        'largest_entries': get_largest_cache_entries(10)
+        'status': 'success',
+        'message': 'Cache analysis completed. Check logs for details.'
     })
 
 @api.route('/debug/cleanup')
 def debug_cleanup():
-    """Debug endpoint to trigger cache cleanup."""
-    from meshinfo_utils import cleanup_cache
+    """Manual trigger for cache cleanup."""
+    if not auth():
+        abort(401)
     
     try:
+        # Check database privileges first
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        db_cache = DatabaseCache(config)
+        privileges = db_cache.check_privileges()
+        
+        # Perform cleanup operations
         cleanup_cache()
-        return jsonify({'status': 'success', 'message': 'Cache cleanup completed'})
+        
+        # Also clear nodes cache and force garbage collection
+        clear_nodes_cache()
+        clear_database_cache()
+        gc.collect()
+        
+        # Prepare response message
+        if privileges['reload']:
+            message = 'Cache cleanup completed successfully. Database query cache cleared.'
+        else:
+            message = 'Cache cleanup completed. Note: Database query cache could not be cleared due to insufficient privileges (RELOAD required).'
+        
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'database_privileges': privileges
+        })
+        
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logging.error(f"Error during debug cleanup: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error during cache cleanup: {str(e)}'
+        }), 500
 
 @api.route('/debug/clear-nodes')
 def debug_clear_nodes():
-    """Debug endpoint to clear nodes cache."""
-    from meshinfo_utils import clear_nodes_cache
+    """Manual trigger to clear nodes cache."""
+    if not auth():
+        abort(401)
     
-    try:
-        clear_nodes_cache()
-        return jsonify({'status': 'success', 'message': 'Nodes cache cleared'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    clear_nodes_cache()
+    clear_database_cache()
+    gc.collect()
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Nodes cache cleared. Check logs for details.'
+    })
 
 @api.route('/debug/database-cache')
 def debug_database_cache():
-    """Debug endpoint to clear database cache."""
-    from meshinfo_utils import clear_database_cache
+    """Manual trigger for database cache analysis."""
+    if not auth():
+        abort(401)
     
     try:
-        clear_database_cache()
-        return jsonify({'status': 'success', 'message': 'Database cache cleared'})
+        # Check database privileges
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        db_cache = DatabaseCache(config)
+        privileges = db_cache.check_privileges()
+        
+        md = get_meshdata()
+        if md and hasattr(md, 'db_cache'):
+            stats = md.db_cache.get_cache_stats()
+            
+            # Get application cache info
+            app_cache_info = {}
+            if hasattr(md, '_nodes_cache'):
+                app_cache_info = {
+                    'cache_entries': len(md._nodes_cache),
+                    'cache_keys': list(md._nodes_cache.keys()),
+                    'cache_timestamps': {k: v['timestamp'] for k, v in md._nodes_cache.items()}
+                }
+            
+            return jsonify({
+                'status': 'success',
+                'database_cache_stats': stats,
+                'application_cache_info': app_cache_info,
+                'database_privileges': privileges
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Database cache not available'
+            }), 500
+            
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logging.error(f"Error during database cache analysis: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error during database cache analysis: {str(e)}'
+        }), 500
 
 @api.route('/geocode')
 def api_geocode():

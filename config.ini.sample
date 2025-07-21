@@ -87,6 +87,8 @@ accent_color=#17a2b8
 page_background_color=#ffffff
 # Table header background color
 table_header_color=#D7F9FF
+# Table subheader background color
+table_subheader_color=#e1ebef
 # Table border color
 table_border_color=#dee2e6
 # Table alternating row background color

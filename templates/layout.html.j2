@@ -111,7 +111,7 @@
         {% set current_local_time = convert_to_local(datetime.now().timestamp()) %}
         {% if current_local_time.weekday() == 0 %}
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
-          <a class="nav-link" href="monday.html"><span class="d-lg-none d-xl-inline"><i class="bi bi-calendar-event me-1"></i></span>#MeshtasticMonday</a>
+          <a class="nav-link" href="monday.html"><span class="d-lg-none d-xl-inline"></span>#MeshtasticMonday</a>
         </li>
         {% endif %}
       </ul>
