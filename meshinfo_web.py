@@ -69,18 +69,25 @@ def generate_message_map_image_staticmaps(message_id, sender_pos, receiver_posit
     extra = 40  # extra height for attribution
     context = staticmaps.Context()
     context.set_tile_provider(staticmaps.tile_provider_OSM)
-    sender = staticmaps.create_latlng(sender_pos['latitude'], sender_pos['longitude'])
     
-    # Add all lines first (so they appear behind markers)
-    for pos in receiver_positions:
-        receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
-        context.add_object(staticmaps.Line([sender, receiver], color=staticmaps.BLUE, width=2))
+    # Add sender marker and lines if sender position is available
+    if sender_pos and sender_pos.get('latitude') and sender_pos.get('longitude'):
+        sender = staticmaps.create_latlng(sender_pos['latitude'], sender_pos['longitude'])
+        
+        # Add all lines from sender to receivers first (so they appear behind markers)
+        for pos in receiver_positions:
+            if pos.get('latitude') and pos.get('longitude'):
+                receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
+                context.add_object(staticmaps.Line([sender, receiver], color=staticmaps.BLUE, width=2))
+        
+        # Add sender marker
+        context.add_object(staticmaps.Marker(sender, color=staticmaps.RED, size=8))
     
-    # Add all markers after lines (so they appear on top)
-    context.add_object(staticmaps.Marker(sender, color=staticmaps.RED, size=8))
+    # Add all receiver markers
     for pos in receiver_positions:
-        receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
-        context.add_object(staticmaps.Marker(receiver, color=staticmaps.BLUE, size=6))
+        if pos.get('latitude') and pos.get('longitude'):
+            receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
+            context.add_object(staticmaps.Marker(receiver, color=staticmaps.BLUE, size=6))
     
     image = context.render_pillow(width, height + extra)
     # Crop off the bottom 'extra' pixels to remove attribution
@@ -95,9 +102,10 @@ def generate_message_map_image_staticmaps(message_id, sender_pos, receiver_posit
 def og_image_message_map(message_id):
     from meshinfo_web import get_cached_message_map_data
     data = get_cached_message_map_data(message_id)
-    if not data or not data.get('sender_position') or not data.get('receiver_positions'):
+    if not data or not data.get('receiver_positions'):
         abort(404)
-    sender_pos = data['sender_position']
+    
+    sender_pos = data.get('sender_position')
     def get_latlon(pos):
         lat = pos.get('latitude')
         lon = pos.get('longitude')
@@ -106,12 +114,21 @@ def og_image_message_map(message_id):
         if lon is None and 'longitude_i' in pos:
             lon = pos['longitude_i'] / 1e7
         return {'latitude': lat, 'longitude': lon}
-    sender_pos = get_latlon(sender_pos)
+    
+    # Handle sender position (optional)
+    sender_pos_processed = None
+    if sender_pos:
+        sender_pos_processed = get_latlon(sender_pos)
+        if not sender_pos_processed['latitude'] or not sender_pos_processed['longitude']:
+            sender_pos_processed = None
+    
+    # Process receiver positions
     receiver_positions = [get_latlon(p) for p in data['receiver_positions'].values() if p]
-    if not sender_pos['latitude'] or not sender_pos['longitude']:
-        abort(404)
+    receiver_positions = [p for p in receiver_positions if p['latitude'] and p['longitude']]
+    
     if not receiver_positions:
         abort(404)
+    
     path = os.path.join("/tmp/og_images", f"message_map_{message_id}.png")
     cache_expired = False
     
@@ -132,7 +149,7 @@ def og_image_message_map(message_id):
             cache_expired = True
     
     if not os.path.exists(path) or cache_expired:
-        generate_message_map_image_staticmaps(message_id, sender_pos, receiver_positions)
+        generate_message_map_image_staticmaps(message_id, sender_pos_processed, receiver_positions)
     return send_file(path, mimetype='image/png')
 
 def generate_traceroute_map_image_staticmaps(traceroute_id, source_pos, destination_pos, forward_hop_positions, return_hop_positions):
