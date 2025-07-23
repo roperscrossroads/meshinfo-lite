@@ -1156,8 +1156,8 @@ body.monday-page {
 }
 /* --- End Monday Page Styles --- */ 
 
-/* Modern Table Styling for Routing Page (container-fluid) */
-.container-fluid .table {
+/* Modern Table Styling for Routing Page (custom-wide-container) */
+.custom-wide-container .table {
   border-radius: 8px !important;
   overflow: hidden !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
@@ -1165,23 +1165,23 @@ body.monday-page {
   margin-bottom: 1rem !important;
 }
 
-.container-fluid .table thead th {
+.custom-wide-container .table thead th {
   border: none !important;
   padding: 0.75rem 0.5rem !important;
   font-weight: 600 !important;
 }
 
-.container-fluid .table tbody td {
+.custom-wide-container .table tbody td {
   border: none !important;
   border-bottom: 1px solid rgba(0,0,0,0.05) !important;
   padding: 0.375rem 0.5rem !important;
 }
 
-.container-fluid .table tbody tr:last-child td {
+.custom-wide-container .table tbody tr:last-child td {
   border-bottom: none !important;
 }
 
-.container-fluid .table tbody tr:hover {
+.custom-wide-container .table tbody tr:hover {
   background-color: rgba(0,0,0,0.02) !important;
 } 
 
