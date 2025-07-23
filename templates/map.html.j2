@@ -6,6 +6,11 @@
   {% include "map_dependencies.html.j2" %}
 {% endblock %}
 
+{% block og_title %}Live Node Map | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Explore the live map of all nodes in the {{ config['mesh']['short_name'] }} Meshtastic mesh network. See node locations, coverage, and activity in real time.{% endblock %}
+{% block twitter_title %}Live Node Map | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Explore the live map of all nodes in the {{ config['mesh']['short_name'] }} Meshtastic mesh network. See node locations, coverage, and activity in real time.{% endblock %}
+
 {% block content %}
   <div id="map" class="map" style="height: 100vh"></div>
   

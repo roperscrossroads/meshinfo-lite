@@ -3,6 +3,11 @@
 
 {% block title %}Telemetry | MeshInfo{% endblock %}
 
+{% block og_title %}Telemetry | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}View real-time sensor data and device metrics from nodes in the {{ config['mesh']['short_name'] }} mesh network: battery, environment, and more.{% endblock %}
+{% block twitter_title %}Telemetry | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}View real-time sensor data and device metrics from nodes in the {{ config['mesh']['short_name'] }} mesh network: battery, environment, and more.{% endblock %}
+
 {% block content %}
 <div class="container pt-3">
   <div class="d-flex align-items-center mb-3">

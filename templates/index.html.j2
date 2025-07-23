@@ -2,6 +2,11 @@
 
 {% block title %}{{ config["mesh"]["name"] }}{% endblock %}
 
+{% block og_title %}{{ mesh_name }} - Mesh Network Overview{% endblock %}
+{% block og_description %}Welcome to MeshInfo for the {{ mesh_region }} region! View active nodes, network coverage, and community info for the {{ mesh_short_name }} Meshtastic mesh network.{% endblock %}
+{% block twitter_title %}{{ mesh_name }} - Mesh Network Overview{% endblock %}
+{% block twitter_description %}Welcome to MeshInfo for the {{ mesh_region }} region! View active nodes, network coverage, and community info for the {{ mesh_short_name }} Meshtastic mesh network.{% endblock %}
+
 {% block content %}
 {% set mesh_name = config['mesh'].get('name', 'Mesh Network') or 'Mesh Network' %}
 {% set mesh_region = config['mesh'].get('region', 'your region') or 'your region' %}

@@ -2,6 +2,20 @@
 {% extends "layout.html.j2" %}
 
 {% block title %}Message Paths | MeshInfo{% endblock %}
+
+{% block og_title %}Message Paths | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Visualize inferred relay paths and message propagation in the {{ config['mesh']['short_name'] }} mesh network. See how messages flow through intermediate nodes.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}Message Paths | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Visualize inferred relay paths and message propagation in the {{ config['mesh']['short_name'] }} mesh network. See how messages flow through intermediate nodes.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
+{% block head %}
+  {{ super() }}
+{% endblock %}
+
 {% block content %}
   <div class="container pt-3">
     <h5>📡 Message Paths</h5>

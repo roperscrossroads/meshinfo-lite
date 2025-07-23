@@ -3,19 +3,29 @@
 
 {% block title %}MQTT | MeshInfo{% endblock %}
 
+{% block og_title %}Logs | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Browse message and event logs for the {{ config['mesh']['short_name'] }} mesh network. Track activity, errors, and network events.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}Logs | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Browse message and event logs for the {{ config['mesh']['short_name'] }} mesh network. Track activity, errors, and network events.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
 {% block head %}
-<style>
-  .filter-control {
-    height: 34px !important;
-    font-size: 1rem !important;
-    padding-top: 0.25rem !important;
-    padding-bottom: 0.25rem !important;
-  }
-  .filter-bar {
-    width: 100%;
-    max-width: 100%;
-  }
-</style>
+  {{ super() }}
+  <style>
+    .filter-control {
+      height: 34px !important;
+      font-size: 1rem !important;
+      padding-top: 0.25rem !important;
+      padding-bottom: 0.25rem !important;
+    }
+    .filter-bar {
+      width: 100%;
+      max-width: 100%;
+    }
+  </style>
 {% endblock %}
 
 {% block content %}

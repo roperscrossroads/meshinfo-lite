@@ -3,6 +3,19 @@
 
 {% block title %}All Nodes | MeshInfo{% endblock %}
 
+{% block og_title %}All Nodes | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Complete list of all nodes in the {{ config['mesh']['short_name'] }} mesh network, including offline nodes. Search, filter, and view detailed node information.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}All Nodes | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Complete list of all nodes in the {{ config['mesh']['short_name'] }} mesh network, including offline nodes. Search, filter, and view detailed node information.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
+{% block head %}
+  {{ super() }}
+{% endblock %}
+
 {% block content %}
 {% if latest and latest.id is not none %}
 {% set lnodeid = utils.convert_node_id_from_int_to_hex(latest.id) %}

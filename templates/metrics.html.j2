@@ -8,8 +8,14 @@ Mesh Metrics
 {% endif %}
 {% endblock %}
 
+{% block og_title %}Network Metrics | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}View network statistics, trends, and performance metrics for the {{ config['mesh']['short_name'] }} Meshtastic mesh network.{% endblock %}
+{% block twitter_title %}Network Metrics | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}View network statistics, trends, and performance metrics for the {{ config['mesh']['short_name'] }} Meshtastic mesh network.{% endblock %}
+
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  {{ super() }}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     .page-header {
         display: flex;

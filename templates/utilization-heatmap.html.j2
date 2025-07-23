@@ -2,7 +2,18 @@
 {% extends "layout.html.j2" %}
 
 {% block title %}Channel Utilization Map | MeshInfo{% endblock %}
+
+{% block og_title %}Channel Utilization Heatmap | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Heatmap visualization of channel utilization across the {{ config['mesh']['name'] }} mesh network. Analyze network activity patterns and coverage density.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}Channel Utilization Heatmap | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Heatmap visualization of channel utilization across the {{ config['mesh']['name'] }} mesh network. Analyze network activity patterns and coverage density.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
 {% block head %}
+  {{ super() }}
   {% include "map_dependencies.html.j2" %}
 {% endblock %}
 

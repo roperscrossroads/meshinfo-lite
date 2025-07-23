@@ -3,7 +3,18 @@
 
 {% block title %}Chat | MeshInfo{% endblock %}
 
+{% block og_title %}Chat | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Real-time chat messages from the {{ config['mesh']['name'] }} mesh network. View conversations, message propagation, and network activity.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}Chat | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Real-time chat messages from the {{ config['mesh']['name'] }} mesh network. View conversations, message propagation, and network activity.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
 {% block head %}
+  {{ super() }}
+
 <script>
 // Function to initialize popovers
 function initializePopovers() {

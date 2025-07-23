@@ -3,6 +3,19 @@
 
 {% block title %}{{ this_page }}{% endblock %}
 
+{% block og_title %}#MeshtasticMonday | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Weekly #MeshtasticMonday event for the {{ config['mesh']['short_name'] }} mesh network. View check-ins, streaks, and community participation.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}#MeshtasticMonday | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Weekly #MeshtasticMonday event for the {{ config['mesh']['short_name'] }} mesh network. View check-ins, streaks, and community participation.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
+{% block head %}
+  {{ super() }}
+{% endblock %}
+
 {# Add a body class for Monday page theming #}
 {% block body_class %}monday-page{% endblock %}
 

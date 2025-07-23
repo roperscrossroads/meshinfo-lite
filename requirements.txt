@@ -21,3 +21,4 @@ Flask-Caching
 pandas
 psutil>=7.0.0
 shapely
+py-staticmaps

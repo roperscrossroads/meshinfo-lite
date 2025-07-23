@@ -2,6 +2,7 @@
 
 {% block title %}Traceroute Map | MeshInfo{% endblock %}
 {% block head %}
+  {{ super() }}
   {% include "map_dependencies.html.j2" %}
   
   <script>
@@ -45,6 +46,17 @@
   });
   </script>
 {% endblock %}
+
+{% block og_image %}{{ url_for('og_image_traceroute_map', traceroute_id=traceroute.id, _external=True) }}{% endblock %}
+{% block og_image_width %}800{% endblock %}
+{% block og_image_height %}400{% endblock %}
+{% block og_title %}Traceroute from {{ nodes[traceroute.from_id_hex].long_name if traceroute.from_id_hex in nodes else 'Unknown' }} to {{ nodes[traceroute.to_id_hex].long_name if traceroute.to_id_hex in nodes else 'Unknown' }} | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Network path analysis showing {{ traceroute.route|length }} forward hops{% if traceroute.route_back %} and {{ traceroute.route_back|length }} return hops{% endif %} between nodes.{% endblock %}
+{% block twitter_title %}Traceroute from {{ nodes[traceroute.from_id_hex].long_name if traceroute.from_id_hex in nodes else 'Unknown' }} to {{ nodes[traceroute.to_id_hex].long_name if traceroute.to_id_hex in nodes else 'Unknown' }} | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Network path analysis showing {{ traceroute.route|length }} forward hops{% if traceroute.route_back %} and {{ traceroute.route_back|length }} return hops{% endif %} between nodes.{% endblock %}
+{% block twitter_image %}{{ url_for('og_image_traceroute_map', traceroute_id=traceroute.id, _external=True) }}{% endblock %}
+{% block twitter_image_width %}800{% endblock %}
+{% block twitter_image_height %}400{% endblock %}
 
 {% block content %}
 <div class="container pt-3">

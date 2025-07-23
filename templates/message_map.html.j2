@@ -2,8 +2,20 @@
 
 {% block title %}Message Map | MeshInfo{% endblock %}
 {% block head %}
+  {{ super() }}
   {% include "map_dependencies.html.j2" %}
 {% endblock %}
+
+{% block og_image %}{{ url_for('og_image_message_map', message_id=message.id, _external=True) }}{% endblock %}
+{% block og_image_width %}800{% endblock %}
+{% block og_image_height %}400{% endblock %}
+{% block og_title %}Message from {{ nodes[utils.convert_node_id_from_int_to_hex(message.from_id)].long_name if message.from_id and utils.convert_node_id_from_int_to_hex(message.from_id) in nodes else 'Unknown' }} | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}{{ message.text|truncate(120, True, '...') }}{% endblock %}
+{% block twitter_title %}Message from {{ nodes[utils.convert_node_id_from_int_to_hex(message.from_id)].long_name if message.from_id and utils.convert_node_id_from_int_to_hex(message.from_id) in nodes else 'Unknown' }} | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}{{ message.text|truncate(120, True, '...') }}{% endblock %}
+{% block twitter_image %}{{ url_for('og_image_message_map', message_id=message.id, _external=True) }}{% endblock %}
+{% block twitter_image_width %}800{% endblock %}
+{% block twitter_image_height %}400{% endblock %}
 
 {% block content %}
 <div class="container pt-3">

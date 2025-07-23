@@ -9,7 +9,8 @@ from flask import (
     abort,
     g,
     jsonify,
-    current_app
+    current_app,
+    send_file
 )
 from flask_caching import Cache
 from waitress import serve
@@ -26,6 +27,9 @@ import re
 import sys
 import math
 from shapely.geometry import MultiPoint
+import requests
+from io import BytesIO
+import staticmaps
 
 import utils
 import meshtastic_support
@@ -44,8 +48,243 @@ from meshinfo_utils import (
     clear_nodes_cache, clear_database_cache, get_cached_chat_data, get_node_page_data,
     calculate_node_distance, find_relay_node_by_suffix, get_elsewhere_links, get_role_badge
 )
+from PIL import Image, ImageDraw
+import PIL.ImageDraw
+
+def textsize(self: PIL.ImageDraw.ImageDraw, *args, **kwargs):
+    x, y, w, h = self.textbbox((0, 0), *args, **kwargs)
+    return w, h
+
+# Monkeypatch fix for https://github.com/flopp/py-staticmaps/issues/39
+PIL.ImageDraw.ImageDraw.textsize = textsize
 
 app = Flask(__name__)
+
+# --- OG image generation for message_map ---
+OG_IMAGE_DIR = "/tmp/og_images"
+os.makedirs(OG_IMAGE_DIR, exist_ok=True)
+
+def generate_message_map_image_staticmaps(message_id, sender_pos, receiver_positions):
+    width, height = 800, 400
+    extra = 40  # extra height for attribution
+    context = staticmaps.Context()
+    context.set_tile_provider(staticmaps.tile_provider_OSM)
+    sender = staticmaps.create_latlng(sender_pos['latitude'], sender_pos['longitude'])
+    
+    # Add all lines first (so they appear behind markers)
+    for pos in receiver_positions:
+        receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
+        context.add_object(staticmaps.Line([sender, receiver], color=staticmaps.BLUE, width=2))
+    
+    # Add all markers after lines (so they appear on top)
+    context.add_object(staticmaps.Marker(sender, color=staticmaps.RED, size=8))
+    for pos in receiver_positions:
+        receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
+        context.add_object(staticmaps.Marker(receiver, color=staticmaps.BLUE, size=6))
+    
+    image = context.render_pillow(width, height + extra)
+    # Crop off the bottom 'extra' pixels to remove attribution
+    image = image.crop((0, 0, width, height))
+    OG_IMAGE_DIR = "/tmp/og_images"
+    os.makedirs(OG_IMAGE_DIR, exist_ok=True)
+    path = os.path.join(OG_IMAGE_DIR, f"message_map_{message_id}.png")
+    image.save(path)
+    return path
+
+@app.route('/og_image/message_map/<int:message_id>.png')
+def og_image_message_map(message_id):
+    from meshinfo_web import get_cached_message_map_data
+    data = get_cached_message_map_data(message_id)
+    if not data or not data.get('sender_position') or not data.get('receiver_positions'):
+        abort(404)
+    sender_pos = data['sender_position']
+    def get_latlon(pos):
+        lat = pos.get('latitude')
+        lon = pos.get('longitude')
+        if lat is None and 'latitude_i' in pos:
+            lat = pos['latitude_i'] / 1e7
+        if lon is None and 'longitude_i' in pos:
+            lon = pos['longitude_i'] / 1e7
+        return {'latitude': lat, 'longitude': lon}
+    sender_pos = get_latlon(sender_pos)
+    receiver_positions = [get_latlon(p) for p in data['receiver_positions'].values() if p]
+    if not sender_pos['latitude'] or not sender_pos['longitude']:
+        abort(404)
+    if not receiver_positions:
+        abort(404)
+    path = os.path.join("/tmp/og_images", f"message_map_{message_id}.png")
+    cache_expired = False
+    
+    if os.path.exists(path):
+        # Check file age
+        file_age = time.time() - os.path.getmtime(path)
+        max_cache_age = 3600  # 1 hour in seconds
+        
+        # Also check if message was updated since image was created
+        if data.get('message', {}).get('ts_created'):
+            message_created = data['message']['ts_created']
+            if hasattr(message_created, 'timestamp'):
+                message_created = message_created.timestamp()
+            
+            if file_age > max_cache_age or (message_created and os.path.getmtime(path) < message_created):
+                cache_expired = True
+        elif file_age > max_cache_age:
+            cache_expired = True
+    
+    if not os.path.exists(path) or cache_expired:
+        generate_message_map_image_staticmaps(message_id, sender_pos, receiver_positions)
+    return send_file(path, mimetype='image/png')
+
+def generate_traceroute_map_image_staticmaps(traceroute_id, source_pos, destination_pos, forward_hop_positions, return_hop_positions):
+    width, height = 800, 400
+    extra = 40  # extra height for attribution
+    context = staticmaps.Context()
+    context.set_tile_provider(staticmaps.tile_provider_OSM)
+    
+    # Add all lines first (so they appear behind markers)
+    if source_pos and destination_pos:
+        source = staticmaps.create_latlng(source_pos['latitude'], source_pos['longitude'])
+        destination = staticmaps.create_latlng(destination_pos['latitude'], destination_pos['longitude'])
+        
+        # Create forward path through all hops
+        forward_path_points = [source]
+        for hop_pos in forward_hop_positions:
+            if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
+                forward_path_points.append(staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude']))
+        forward_path_points.append(destination)
+        
+        # Add forward path lines (green)
+        for i in range(len(forward_path_points) - 1):
+            context.add_object(staticmaps.Line([forward_path_points[i], forward_path_points[i+1]], color=staticmaps.Color(68, 170, 68), width=2))
+        
+        # Create return path if return hops exist
+        if return_hop_positions:
+            return_path_points = [destination]
+            for hop_pos in return_hop_positions:
+                if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
+                    return_path_points.append(staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude']))
+            return_path_points.append(source)
+            
+            # Add return path lines (purple)
+            for i in range(len(return_path_points) - 1):
+                context.add_object(staticmaps.Line([return_path_points[i], return_path_points[i+1]], color=staticmaps.Color(170, 68, 170), width=2))
+    
+    # Add all markers after lines (so they appear on top)
+    if source_pos:
+        source = staticmaps.create_latlng(source_pos['latitude'], source_pos['longitude'])
+        context.add_object(staticmaps.Marker(source, color=staticmaps.RED, size=8))
+    
+    # Add forward hop markers (green)
+    for i, hop_pos in enumerate(forward_hop_positions):
+        if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
+            hop = staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude'])
+            context.add_object(staticmaps.Marker(hop, color=staticmaps.Color(68, 170, 68), size=6))
+    
+    if destination_pos:
+        destination = staticmaps.create_latlng(destination_pos['latitude'], destination_pos['longitude'])
+        context.add_object(staticmaps.Marker(destination, color=staticmaps.BLUE, size=8))
+    
+    # Add return hop markers (purple) - but only if they're different from forward hops
+    for i, hop_pos in enumerate(return_hop_positions):
+        if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
+            hop = staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude'])
+            context.add_object(staticmaps.Marker(hop, color=staticmaps.Color(170, 68, 170), size=6))
+    
+    image = context.render_pillow(width, height + extra)
+    # Crop off the bottom 'extra' pixels to remove attribution
+    image = image.crop((0, 0, width, height))
+    OG_IMAGE_DIR = "/tmp/og_images"
+    os.makedirs(OG_IMAGE_DIR, exist_ok=True)
+    path = os.path.join(OG_IMAGE_DIR, f"traceroute_map_{traceroute_id}.png")
+    image.save(path)
+    return path
+
+@app.route('/og_image/traceroute_map/<int:traceroute_id>.png')
+def og_image_traceroute_map(traceroute_id):
+    md = get_meshdata()
+    if not md:
+        abort(404)
+    
+    # Get traceroute data
+    cursor = md.db.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT from_id, to_id, route, route_back, ts_created
+        FROM traceroute 
+        WHERE traceroute_id = %s
+    """, (traceroute_id,))
+    traceroute_data = cursor.fetchone()
+    cursor.close()
+    
+    if not traceroute_data:
+        abort(404)
+    
+    # Get positions for source and destination
+    def get_node_position(node_id):
+        cursor = md.db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT latitude_i, longitude_i, position_time
+            FROM position 
+            WHERE id = %s 
+            ORDER BY position_time DESC 
+            LIMIT 1
+        """, (node_id,))
+        pos = cursor.fetchone()
+        cursor.close()
+        
+        if pos and pos['latitude_i'] is not None and pos['longitude_i'] is not None:
+            return {
+                'latitude': pos['latitude_i'] / 1e7,
+                'longitude': pos['longitude_i'] / 1e7,
+                'position_time': pos['position_time']
+            }
+        return None
+    
+    source_pos = get_node_position(traceroute_data['from_id'])
+    destination_pos = get_node_position(traceroute_data['to_id'])
+    
+    if not source_pos or not destination_pos:
+        abort(404)
+    
+    # Get positions for all hops
+    forward_hop_positions = []
+    if traceroute_data['route']:
+        route = [int(hop) for hop in traceroute_data['route'].split(';') if hop]
+        for hop_id in route:
+            hop_pos = get_node_position(hop_id)
+            forward_hop_positions.append(hop_pos)
+    
+    # Get positions for return hops
+    return_hop_positions = []
+    if traceroute_data['route_back']:
+        route_back = [int(hop) for hop in traceroute_data['route_back'].split(';') if hop]
+        for hop_id in route_back:
+            hop_pos = get_node_position(hop_id)
+            return_hop_positions.append(hop_pos)
+    
+    # Generate the image
+    path = os.path.join("/tmp/og_images", f"traceroute_map_{traceroute_id}.png")
+    cache_expired = False
+    
+    if os.path.exists(path):
+        # Check file age
+        file_age = time.time() - os.path.getmtime(path)
+        max_cache_age = 3600  # 1 hour in seconds
+        
+        # Also check if traceroute was updated since image was created
+        if traceroute_data.get('ts_created'):
+            traceroute_created = traceroute_data['ts_created']
+            if hasattr(traceroute_created, 'timestamp'):
+                traceroute_created = traceroute_created.timestamp()
+            
+            if file_age > max_cache_age or (traceroute_created and os.path.getmtime(path) < traceroute_created):
+                cache_expired = True
+        elif file_age > max_cache_age:
+            cache_expired = True
+    
+    if not os.path.exists(path) or cache_expired:
+        generate_traceroute_map_image_staticmaps(traceroute_id, source_pos, destination_pos, forward_hop_positions, return_hop_positions)
+    
+    return send_file(path, mimetype='image/png')
 
 cache_dir = os.path.join(os.path.dirname(__file__), 'runtime_cache')
 
@@ -1639,6 +1878,92 @@ def get_cached_hardware_models():
     except Exception as e:
         logging.error(f"Error fetching hardware models: {e}")
         return {'error': 'Failed to fetch hardware model data'}
+
+def generate_node_map_image_staticmaps(node_id, node_position, node_name):
+    width, height = 800, 400
+    extra = 40  # extra height for attribution
+    context = staticmaps.Context()
+    context.set_tile_provider(staticmaps.tile_provider_OSM)
+    
+    # Convert position coordinates
+    lat = node_position['latitude_i'] / 10000000.0
+    lon = node_position['longitude_i'] / 10000000.0
+    node_point = staticmaps.create_latlng(lat, lon)
+    
+    # Add node marker
+    context.add_object(staticmaps.Marker(node_point, color=staticmaps.RED, size=16))
+    
+    # Render the image
+    image = context.render_pillow(width, height + extra)
+    # Crop off the bottom 'extra' pixels to remove attribution
+    image = image.crop((0, 0, width, height))
+    
+    return image
+
+@app.route('/og_image/node_map/<int:node_id>.png')
+def og_image_node_map(node_id):
+    """Generate OG image for a node showing its position on a map."""
+    try:
+        # Ensure the OG images directory exists
+        os.makedirs("/tmp/og_images", exist_ok=True)
+        
+        # Get node data using the existing cached function
+        nodes = get_cached_nodes()
+        if not nodes:
+            return "Database unavailable", 503
+        
+        # Convert node ID to hex format
+        node_id_hex = utils.convert_node_id_from_int_to_hex(node_id)
+        
+        # Get node data
+        node_data = nodes.get(node_id_hex)
+        if not node_data:
+            return "Node not found", 404
+        
+        # Check if node has position data
+        position = node_data.get('position')
+        if not position or not position.get('latitude_i') or not position.get('longitude_i'):
+            return "Node has no position data", 404
+        
+        # Check cache expiration
+        path = os.path.join("/tmp/og_images", f"node_map_{node_id}.png")
+        cache_expired = False
+        
+        if os.path.exists(path):
+            # Check file age
+            file_age = time.time() - os.path.getmtime(path)
+            max_cache_age = 3600  # 1 hour in seconds
+            
+            # Also check if node position has been updated since image was created
+            ts_seen = node_data.get('ts_seen')
+            if ts_seen:
+                if hasattr(ts_seen, 'timestamp'):
+                    node_last_seen = ts_seen.timestamp()
+                else:
+                    node_last_seen = ts_seen
+                
+                if file_age > max_cache_age or (node_last_seen and os.path.getmtime(path) < node_last_seen):
+                    cache_expired = True
+            elif file_age > max_cache_age:
+                cache_expired = True
+        
+        # Generate the image if it doesn't exist or is expired
+        if not os.path.exists(path) or cache_expired:
+            node_position = {
+                'latitude_i': position['latitude_i'],
+                'longitude_i': position['longitude_i']
+            }
+            node_name = node_data.get('short_name') or node_data.get('long_name') or f"Node {node_id}"
+            
+            image = generate_node_map_image_staticmaps(node_id, node_position, node_name)
+            image.save(path)
+        
+        # Serve the image
+        return send_file(path, mimetype='image/png')
+        
+    except Exception as e:
+        logging.error(f"Error generating node map OG image: {e}")
+        return "Error generating image", 500
 
 def run():
     # Enable Waitress logging

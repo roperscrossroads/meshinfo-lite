@@ -3,6 +3,11 @@
 
 {% block title %}Neighbors | MeshInfo{% endblock %}
 
+{% block og_title %}Neighbor Info | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}See direct neighbor connections and link quality for nodes in the {{ config['mesh']['short_name'] }} mesh network. Analyze SNR and network topology.{% endblock %}
+{% block twitter_title %}Neighbor Info | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}See direct neighbor connections and link quality for nodes in the {{ config['mesh']['short_name'] }} mesh network. Analyze SNR and network topology.{% endblock %}
+
 {% block content %}
 <div class="container pt-3">
   <div class="d-flex align-items-center mb-3">

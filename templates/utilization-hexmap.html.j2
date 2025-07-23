@@ -2,7 +2,18 @@
 {% extends "layout.html.j2" %}
 
 {% block title %}Channel Utilization Map (Hex) | MeshInfo{% endblock %}
+
+{% block og_title %}Channel Utilization Hexmap | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Hexagonal heatmap showing channel utilization across the {{ config['mesh']['name'] }} mesh network. Visualize network activity and coverage patterns.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}Channel Utilization Hexmap | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Hexagonal heatmap showing channel utilization across the {{ config['mesh']['name'] }} mesh network. Visualize network activity and coverage patterns.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
 {% block head %}
+  {{ super() }}
   <!-- Use CDN for both OpenLayers and ol-ext -->
   <script src="https://cdn.jsdelivr.net/npm/ol@10.5.0/dist/ol.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/ol@10.5.0/ol.css" rel="stylesheet">

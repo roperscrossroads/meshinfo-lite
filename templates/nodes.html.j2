@@ -2,6 +2,10 @@
 {% extends "layout.html.j2" %}
 
 {% block title %}Nodes | MeshInfo{% endblock %}
+{% block og_title %}Node Directory | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Browse all active nodes in the {{ config['mesh']['short_name'] }} Meshtastic mesh network. View node details, hardware, and activity.{% endblock %}
+{% block twitter_title %}Node Directory | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Browse all active nodes in the {{ config['mesh']['short_name'] }} Meshtastic mesh network. View node details, hardware, and activity.{% endblock %}
 
 {% block content %}
 {% if latest and latest.id is not none %}

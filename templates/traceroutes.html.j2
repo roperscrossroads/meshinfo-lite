@@ -3,8 +3,18 @@
 
 {% block title %}Traceroutes | MeshInfo{% endblock %}
 
+{% block og_title %}Traceroutes | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Discover network paths and analyze routing between nodes in the {{ config['mesh']['short_name'] }} mesh network. See hop-by-hop routes and signal quality.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}Traceroutes | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Discover network paths and analyze routing between nodes in the {{ config['mesh']['short_name'] }} mesh network. See hop-by-hop routes and signal quality.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
 {% block head %}
-<script>
+  {{ super() }}
+  <script>
 // Function to initialize popovers
 function initializePopovers() {
     if (typeof jQuery !== 'undefined') {

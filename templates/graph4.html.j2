@@ -2,6 +2,20 @@
 {% extends "layout.html.j2" %}
 
 {% block title %}Graph | MeshInfo{% endblock %}
+
+{% block og_title %}Network Graph | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Interactive network graph showing node connections and relationships in the {{ config['mesh']['short_name'] }} mesh network. View neighbor info and zero-hop connections.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}Network Graph | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Interactive network graph showing node connections and relationships in the {{ config['mesh']['short_name'] }} mesh network. View neighbor info and zero-hop connections.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
+{% block head %}
+  {{ super() }}
+{% endblock %}
+
 {% block content %}
   <div class="container pt-3">
   <h5>{{ this_page.title() }}</h5>

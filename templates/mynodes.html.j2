@@ -3,10 +3,20 @@
 
 {% block title %}My Nodes | MeshInfo{% endblock %}
 
+{% block og_title %}My Nodes | {{ config['mesh']['name'] }}{% endblock %}
+{% block og_description %}Manage and monitor your linked nodes in the {{ config['mesh']['short_name'] }} mesh network. View telemetry, location, and status of your personal nodes.{% endblock %}
+{% block og_image_width %}1200{% endblock %}
+{% block og_image_height %}630{% endblock %}
+{% block twitter_title %}My Nodes | {{ config['mesh']['name'] }}{% endblock %}
+{% block twitter_description %}Manage and monitor your linked nodes in the {{ config['mesh']['short_name'] }} mesh network. View telemetry, location, and status of your personal nodes.{% endblock %}
+{% block twitter_image_width %}1200{% endblock %}
+{% block twitter_image_height %}630{% endblock %}
+
 {% block head %}
+  {{ super() }}
   {% include "map_dependencies.html.j2" %}
   
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 {% endblock %}
 
 {% block content %}
