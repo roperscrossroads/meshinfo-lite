@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import logging
 import sys
 import psutil
-from meshinfo_utils import get_meshdata, get_cache_timeout, auth, config, log_cache_stats
+from meshinfo_utils import get_meshdata, get_cache_timeout, auth, config, log_cache_stats, log_memory_usage
 from meshdata import MeshData
 from database_cache import DatabaseCache
 import utils
