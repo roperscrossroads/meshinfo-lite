@@ -36,6 +36,7 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 - text
 - traceroute
 - mapreport
+- routing
 
 ## Features
 
@@ -49,6 +50,7 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 - MQTT Messages
 - Telemetry
 - Traceroutes
+- Routing Messages
 
 ### Upcoming
 

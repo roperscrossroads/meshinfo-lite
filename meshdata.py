@@ -1725,6 +1725,8 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             self.store_telemetry(data)
         elif tp == "text":
             self.store_text(data, topic)  # Only one text handler, with topic parameter
+        elif tp == "routing":
+            self.store_routing(data, topic)
         elif tp == "store_forward":
             # Store & Forward messages are internal routing messages for delayed message delivery
             # We'll log them at debug level but not store them in the database
@@ -1884,6 +1886,35 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     source VARCHAR(35) NOT NULL,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, ts_created)
+)""",
+            """CREATE TABLE IF NOT EXISTS routing_messages (
+    routing_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    from_id INT UNSIGNED NOT NULL,
+    to_id INT UNSIGNED,
+    message_id BIGINT,
+    request_id BIGINT,
+    relay_node VARCHAR(10),
+    hop_limit TINYINT UNSIGNED,
+    hop_start TINYINT UNSIGNED,
+    hops_taken TINYINT UNSIGNED,
+    error_reason INT,
+    error_description VARCHAR(50),
+    is_error BOOLEAN DEFAULT FALSE,
+    success BOOLEAN DEFAULT FALSE,
+    channel TINYINT UNSIGNED,
+    rx_snr FLOAT,
+    rx_rssi FLOAT,
+    rx_time BIGINT,
+    routing_data JSON,
+    uplink_node INT UNSIGNED,
+    ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_routing_from (from_id),
+    INDEX idx_routing_to (to_id),
+    INDEX idx_routing_time (ts_created),
+    INDEX idx_routing_error (is_error),
+    INDEX idx_routing_relay (relay_node),
+    INDEX idx_routing_request (request_id),
+    INDEX idx_routing_uplink (uplink_node)
 )"""
         ]
         cur = self.db.cursor()
@@ -3075,6 +3106,210 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     cursor.close()
                 except Exception as e:
                     logging.error(f"Error closing cursor: {e}")
+
+    def store_routing(self, data, topic=None):
+        """Store routing information from routing packets."""
+        from_id = self.verify_node(data["from"])
+        to_id = self.verify_node(data["to"]) if "to" in data else None
+        payload = dict(data["decoded"]["json_payload"])
+        
+        # Extract routing data
+        routing_data = payload.get("routing_data", {})
+        error_reason = payload.get("error_reason")
+        request_id = data["decoded"].get("request_id")
+        if request_id is None:
+            request_id = payload.get("request_id")
+        relay_node = payload.get("relay_node")
+        hop_limit = payload.get("hop_limit")
+        hop_start = payload.get("hop_start")
+        hops_taken = payload.get("hops_taken")
+        is_error = payload.get("is_error", False)
+        success = payload.get("success", False)
+        error_description = payload.get("error_description")
+        
+        # Convert relay_node to hex format if it's a number
+        if relay_node and isinstance(relay_node, int):
+            relay_node = f"{relay_node:04x}"
+        
+        # Extract uplink node from topic if available
+        uplink_node = None
+        if topic:
+            # Topic format: msh/US/2/e/LongFast/!433f1f98
+            # Extract the node ID after the last '!'
+            if '!' in topic:
+                uplink_hex = topic.split('!')[-1]
+                try:
+                    uplink_node = self.int_id(uplink_hex)
+                except:
+                    uplink_node = None
+        
+        # Get message metadata
+        message_id = data.get("id")
+        channel = data.get("channel")
+        rx_snr = data.get("rx_snr")
+        rx_rssi = data.get("rx_rssi")
+        rx_time = data.get("rx_time")
+        
+        sql = """INSERT INTO routing_messages
+        (from_id, to_id, message_id, request_id, relay_node, hop_limit, hop_start, 
+        hops_taken, error_reason, error_description, is_error, success, channel,
+        rx_snr, rx_rssi, rx_time, routing_data, uplink_node, ts_created)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        ON DUPLICATE KEY UPDATE
+        relay_node = VALUES(relay_node),
+        hop_limit = VALUES(hop_limit),
+        hop_start = VALUES(hop_start),
+        hops_taken = VALUES(hops_taken),
+        error_reason = VALUES(error_reason),
+        error_description = VALUES(error_description),
+        is_error = VALUES(is_error),
+        success = VALUES(success),
+        rx_snr = VALUES(rx_snr),
+        rx_rssi = VALUES(rx_rssi),
+        rx_time = VALUES(rx_time),
+        routing_data = VALUES(routing_data),
+        uplink_node = VALUES(uplink_node)"""
+        
+        params = (
+            from_id,
+            to_id,
+            message_id,
+            request_id,
+            relay_node,
+            hop_limit,
+            hop_start,
+            hops_taken,
+            error_reason,
+            error_description,
+            is_error,
+            success,
+            channel,
+            rx_snr,
+            rx_rssi,
+            rx_time,
+            json.dumps(routing_data, cls=CustomJSONEncoder),
+            uplink_node
+        )
+        
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        self.db.commit()
+        cur.close()
+        
+        if self.debug:
+            logging.info(f"Stored routing message: from={from_id}, to={to_id}, error={error_description}, success={success}")
+
+    def get_routing_messages(self, page=1, per_page=50, error_only=False, days=7):
+        """Get routing messages with optional filtering."""
+        offset = (page - 1) * per_page
+        
+        # Build WHERE clause
+        where_conditions = ["rm.ts_created >= NOW() - INTERVAL %s DAY"]
+        params = [days]
+        
+        if error_only:
+            where_conditions.append("rm.is_error = TRUE")
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # Get total count
+        count_sql = f"SELECT COUNT(*) FROM routing_messages rm WHERE {where_clause}"
+        cur = self.db.cursor()
+        cur.execute(count_sql, params)
+        total_count = cur.fetchone()[0]
+        
+        # Get paginated results
+        sql = f"""SELECT rm.*, 
+                  n1.long_name as from_name, n1.short_name as from_short,
+                  n2.long_name as to_name, n2.short_name as to_short,
+                  n3.long_name as uplink_name, n3.short_name as uplink_short
+                  FROM routing_messages rm
+                  LEFT JOIN nodeinfo n1 ON rm.from_id = n1.id
+                  LEFT JOIN nodeinfo n2 ON rm.to_id = n2.id
+                  LEFT JOIN nodeinfo n3 ON rm.uplink_node = n3.id
+                  WHERE {where_clause}
+                  ORDER BY rm.ts_created DESC
+                  LIMIT %s OFFSET %s"""
+        
+        cur.execute(sql, params + [per_page, offset])
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+        messages = []
+        for row in rows:
+            message = dict(zip(columns, row))
+            # Parse routing_data JSON
+            if message.get('routing_data'):
+                try:
+                    message['routing_data'] = json.loads(message['routing_data'])
+                except:
+                    message['routing_data'] = {}
+            # Add hex IDs for template use
+            if message.get('from_id'):
+                message['from_id_hex'] = self.hex_id(message['from_id'])
+            if message.get('to_id'):
+                message['to_id_hex'] = self.hex_id(message['to_id'])
+            if message.get('uplink_node'):
+                message['uplink_node_hex'] = self.hex_id(message['uplink_node'])
+            messages.append(message)
+        
+        return {
+            'items': messages,
+            'total': total_count,
+            'page': page,
+            'per_page': per_page,
+            'pages': (total_count + per_page - 1) // per_page
+        }
+
+    def get_routing_stats(self, days=7):
+        """Get routing statistics for the specified time period."""
+        sql = """SELECT 
+                    COUNT(*) as total_messages,
+                    SUM(CASE WHEN is_error = TRUE THEN 1 ELSE 0 END) as error_count,
+                    SUM(CASE WHEN success = TRUE THEN 1 ELSE 0 END) as success_count,
+                    AVG(hops_taken) as avg_hops,
+                    COUNT(DISTINCT from_id) as unique_senders,
+                    COUNT(DISTINCT to_id) as unique_receivers,
+                    COUNT(DISTINCT relay_node) as unique_relays
+                  FROM routing_messages 
+                  WHERE ts_created >= NOW() - INTERVAL %s DAY"""
+        
+        cur = self.db.cursor()
+        cur.execute(sql, [days])
+        row = cur.fetchone()
+        cur.close()
+        
+        if row:
+            return {
+                'total_messages': row[0] or 0,
+                'error_count': row[1] or 0,
+                'success_count': row[2] or 0,
+                'avg_hops': float(row[3]) if row[3] else 0,
+                'unique_senders': row[4] or 0,
+                'unique_receivers': row[5] or 0,
+                'unique_relays': row[6] or 0,
+                'success_rate': (row[2] / row[0] * 100) if row[0] and row[0] > 0 else 0
+            }
+        return {}
+
+    def get_routing_errors_by_type(self, days=7):
+        """Get routing error breakdown by error type."""
+        sql = """SELECT 
+                    error_reason,
+                    error_description,
+                    COUNT(*) as count
+                  FROM routing_messages 
+                  WHERE ts_created >= NOW() - INTERVAL %s DAY
+                    AND is_error = TRUE
+                  GROUP BY error_reason, error_description
+                  ORDER BY count DESC"""
+        
+        cur = self.db.cursor()
+        cur.execute(sql, [days])
+        rows = cur.fetchall()
+        cur.close()
+        
+        return [{'error_reason': row[0], 'error_description': row[1], 'count': row[2]} for row in rows]
 
 
 def create_database():

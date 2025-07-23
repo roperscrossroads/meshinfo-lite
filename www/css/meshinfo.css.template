@@ -888,6 +888,26 @@ a:hover, a:focus {
     font-family: monospace, monospace;
     transition: border-color 0.2s ease;
 }
+
+/* Routing Page Form Controls - Override white text issue */
+.routing-filters .form-control,
+.routing-filters .form-select {
+    background-color: #fff !important;
+    color: #333 !important;
+    border: 1px solid {{control_color}} !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace, monospace;
+    transition: border-color 0.2s ease;
+}
+
+.routing-filters .form-control:focus,
+.routing-filters .form-select:focus {
+    border-color: {{control_color_hover}} !important;
+    outline: none !important;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.15);
+    background-color: #fff !important;
+    color: #333 !important;
+}
 #nodeFilter:focus,
 #senderFilter:focus,
 #messageTypeFilter:focus,
@@ -1135,3 +1155,42 @@ body.monday-page {
   color: #333;
 }
 /* --- End Monday Page Styles --- */ 
+
+/* Modern Table Styling for Routing Page (container-fluid) */
+.container-fluid .table {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  border: none !important;
+  margin-bottom: 1rem !important;
+}
+
+.container-fluid .table thead th {
+  border: none !important;
+  padding: 0.75rem 0.5rem !important;
+  font-weight: 600 !important;
+}
+
+.container-fluid .table tbody td {
+  border: none !important;
+  border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+  padding: 0.375rem 0.5rem !important;
+}
+
+.container-fluid .table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+.container-fluid .table tbody tr:hover {
+  background-color: rgba(0,0,0,0.02) !important;
+} 
+
+/* Custom wide container for routing page */
+.custom-wide-container {
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  padding-left: 15px;
+  padding-right: 15px;
+} 

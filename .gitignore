@@ -9,6 +9,8 @@ node_modules/
 .github_pat
 .env
 .venv
+.cursorrules
+.cursor/
 
 backups/*
 caddy

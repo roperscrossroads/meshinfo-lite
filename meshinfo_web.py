@@ -1120,6 +1120,41 @@ def logs():
         json=json
     )
 
+@app.route('/routing.html')
+def routing():
+    md = get_meshdata()
+    if not md: # Check if MeshData failed to initialize
+        abort(503, description="Database connection unavailable")
+    
+    # Get query parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    error_only = request.args.get('error_only', 'false').lower() == 'true'
+    days = request.args.get('days', 7, type=int)
+    
+    # Get routing messages
+    routing_data = md.get_routing_messages(page=page, per_page=per_page, error_only=error_only, days=days)
+    
+    # Get routing statistics
+    stats = md.get_routing_stats(days=days)
+    error_breakdown = md.get_routing_errors_by_type(days=days)
+    
+    return render_template(
+        "routing.html.j2",
+        auth=auth(),
+        config=config,
+        routing_messages=routing_data['items'],
+        pagination=routing_data,
+        stats=stats,
+        error_breakdown=error_breakdown,
+        error_only=error_only,
+        days=days,
+        utils=utils,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        meshtastic_support=meshtastic_support
+    )
+
 @app.route('/monday.html')
 def monday():
     md = get_meshdata()
