@@ -63,7 +63,7 @@
     <meta property="og:title" content="{% block og_title %}{{ config['mesh']['name'] }}{% endblock %}" />
     <meta property="og:type" content="{% block og_type %}website{% endblock %}" />
     <meta property="og:url" content="{% block og_url %}{{ request.url }}{% endblock %}" />
-    <meta property="og:image" content="{% block og_image %}{{ config['mesh'].get('og_image', '/images/logos/logo.webp') }}{% endblock %}" />
+    <meta property="og:image" content="{% block og_image %}{{ config['mesh'].get('og_image', request.url_root.rstrip('/') + '/images/logos/logo.webp') }}{% endblock %}" />
     <meta property="og:image:width" content="{% block og_image_width %}1200{% endblock %}" />
     <meta property="og:image:height" content="{% block og_image_height %}630{% endblock %}" />
     <meta property="og:description" content="{% block og_description %}MeshInfo provides real-time visibility into the {{ config['mesh']['region'] }} ({{ config['mesh']['short_name'] }}) Meshtastic mesh network: node locations, telemetry, and more.{% endblock %}" />
@@ -73,7 +73,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{% block twitter_title %}{{ config['mesh']['name'] }}{% endblock %}" />
     <meta name="twitter:description" content="{% block twitter_description %}MeshInfo provides real-time visibility into the {{ config['mesh']['region'] }} ({{ config['mesh']['short_name'] }}) Meshtastic mesh network: node locations, telemetry, and more.{% endblock %}" />
-    <meta name="twitter:image" content="{% block twitter_image %}{{ config['mesh'].get('og_image', '/images/logos/logo.webp') }}{% endblock %}" />
+    <meta name="twitter:image" content="{% block twitter_image %}{{ config['mesh'].get('og_image', request.url_root.rstrip('/') + '/images/logos/logo.webp') }}{% endblock %}" />
     <meta name="twitter:image:width" content="{% block twitter_image_width %}1200{% endblock %}" />
     <meta name="twitter:image:height" content="{% block twitter_image_height %}630{% endblock %}" />
   {% endblock %}

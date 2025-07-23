@@ -11,10 +11,10 @@
 {% block og_image %}{% if node.position and node.position.latitude_i and node.position.longitude_i %}{{ url_for('og_image_node_map', node_id=node.id, _external=True) }}{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block og_image_width %}800{% endblock %}
 {% block og_image_height %}400{% endblock %}
-{% block og_title %}{{ node.short_name }} - {{ node.long_name }} | {{ config['mesh']['name'] }}{% endblock %}
-{% block og_description %}Node {{ node.id_hex }} in the {{ config['mesh']['name'] }} mesh network{% if node.position and node.position.latitude_i and node.position.longitude_i %} at {{ "%.4f"|format(node.position.latitude_i / 10000000.0) }}, {{ "%.4f"|format(node.position.longitude_i / 10000000.0) }}{% endif %}{% endblock %}
-{% block twitter_title %}{{ node.short_name }} - {{ node.long_name }} | {{ config['mesh']['name'] }}{% endblock %}
-{% block twitter_description %}Node {{ node.id_hex }} in the {{ config['mesh']['name'] }} mesh network{% if node.position and node.position.latitude_i and node.position.longitude_i %} at {{ "%.4f"|format(node.position.latitude_i / 10000000.0) }}, {{ "%.4f"|format(node.position.longitude_i / 10000000.0) }}{% endif %}{% endblock %}
+{% block og_title %}{{ node.short_name }} - {{ node.long_name }} | {{ config['mesh']['short_name'] }}{% endblock %}
+{% block og_description %}Node {{ node.id_hex }} in the {{ config['mesh']['short_name'] }} mesh network{% if node.position and node.position.latitude_i and node.position.longitude_i %} at {{ "%.4f"|format(node.position.latitude_i / 10000000.0) }}, {{ "%.4f"|format(node.position.longitude_i / 10000000.0) }}{% endif %}{% endblock %}
+{% block twitter_title %}{{ node.short_name }} - {{ node.long_name }} | {{ config['mesh']['short_name'] }}{% endblock %}
+{% block twitter_description %}Node {{ node.id_hex }} in the {{ config['mesh']['short_name'] }} mesh network{% if node.position and node.position.latitude_i and node.position.longitude_i %} at {{ "%.4f"|format(node.position.latitude_i / 10000000.0) }}, {{ "%.4f"|format(node.position.longitude_i / 10000000.0) }}{% endif %}{% endblock %}
 {% block twitter_image %}{% if node.position and node.position.latitude_i and node.position.longitude_i %}{{ url_for('og_image_node_map', node_id=node.id, _external=True) }}{% else %}{{ super() }}{% endif %}{% endblock %}
 {% block twitter_image_width %}800{% endblock %}
 {% block twitter_image_height %}400{% endblock %}
