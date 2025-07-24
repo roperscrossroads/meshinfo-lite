@@ -33,24 +33,36 @@ def migrate(db):
             WHERE TABLE_NAME = 'message_reception'
         """)
         message_reception_exists = cursor.fetchone()[0] > 0
+        logging.info(f"message_reception table exists (info_schema): {message_reception_exists}")
         
         if message_reception_exists:
-            # Add index for reception lookups if it doesn't exist
-            cursor.execute("""
-                SELECT COUNT(*)
-                FROM information_schema.statistics
-                WHERE table_schema = DATABASE()
-                AND table_name = 'message_reception'
-                AND index_name = 'idx_messagereception_message_receiver'
-            """)
-            if cursor.fetchone()[0] == 0:
+            # Double-check that we can actually access the table
+            try:
+                cursor.execute("SELECT COUNT(*) FROM message_reception LIMIT 1")
+                logging.info("message_reception table is accessible")
+            except Exception as table_error:
+                logging.warning(f"message_reception table exists in schema but not accessible: {table_error}")
+                message_reception_exists = False
+            
+            if message_reception_exists:
+                # Add index for reception lookups if it doesn't exist
                 cursor.execute("""
-                    CREATE INDEX idx_messagereception_message_receiver 
-                    ON message_reception(message_id, received_by_id)
+                    SELECT COUNT(*)
+                    FROM information_schema.statistics
+                    WHERE table_schema = DATABASE()
+                    AND table_name = 'message_reception'
+                    AND index_name = 'idx_messagereception_message_receiver'
                 """)
-                logging.info("Added index idx_messagereception_message_receiver to message_reception table")
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute("""
+                        CREATE INDEX idx_messagereception_message_receiver 
+                        ON message_reception(message_id, received_by_id)
+                    """)
+                    logging.info("Added index idx_messagereception_message_receiver to message_reception table")
+                else:
+                    logging.info("Index idx_messagereception_message_receiver already exists on message_reception table")
             else:
-                logging.info("Index idx_messagereception_message_receiver already exists on message_reception table")
+                logging.info("message_reception table not accessible, skipping index creation")
         else:
             logging.info("message_reception table does not exist, skipping index creation")
         
