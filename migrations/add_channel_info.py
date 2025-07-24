@@ -76,25 +76,35 @@ def migrate(db):
         meshlog_exists = cursor.fetchone()[0] > 0
         
         if meshlog_exists:
-            # Check if we have any messages with channel information
+            # Check if channel column exists in meshlog table
             cursor.execute("""
                 SELECT COUNT(*)
-                FROM meshlog
-                WHERE JSON_EXTRACT(message, '$.channel') IS NOT NULL
-                AND channel IS NULL
-            """)
-            has_channel_data = cursor.fetchone()[0] > 0
+                FROM information_schema.COLUMNS 
+                WHERE TABLE_NAME = 'meshlog'
+                AND COLUMN_NAME = 'channel'
+            """, ())
+            has_channel_column = cursor.fetchone()[0] > 0
             
-            if has_channel_data:
-                logging.info("Extracting channel information from meshlog messages...")
+            if has_channel_column:
+                # Check if we have any messages with channel information
                 cursor.execute("""
-                    UPDATE meshlog
-                    SET channel = CAST(JSON_EXTRACT(message, '$.channel') AS UNSIGNED)
+                    SELECT COUNT(*)
+                    FROM meshlog
                     WHERE JSON_EXTRACT(message, '$.channel') IS NOT NULL
                     AND channel IS NULL
                 """)
-                db.commit()
-                logging.info("Extracted channel information successfully")
+                has_channel_data = cursor.fetchone()[0] > 0
+                
+                if has_channel_data:
+                    logging.info("Extracting channel information from meshlog messages...")
+                    cursor.execute("""
+                        UPDATE meshlog
+                        SET channel = CAST(JSON_EXTRACT(message, '$.channel') AS UNSIGNED)
+                        WHERE JSON_EXTRACT(message, '$.channel') IS NOT NULL
+                        AND channel IS NULL
+                    """)
+                    db.commit()
+                    logging.info("Extracted channel information successfully")
         
         logging.info("Channel information migration completed successfully")
         
