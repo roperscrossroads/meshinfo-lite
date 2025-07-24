@@ -1813,8 +1813,13 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     owner VARCHAR(255),
     updated_via INT UNSIGNED,
     ts_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ts_uplink TIMESTAMP DEFAULT NULL,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     ts_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    has_default_channel BOOLEAN NULL,
+    num_online_local_nodes INT UNSIGNED NULL,
+    region INT UNSIGNED NULL,
+    modem_preset INT UNSIGNED NULL,
     FOREIGN KEY (owner) REFERENCES meshuser(email)
 )""",
             """CREATE TABLE IF NOT EXISTS position (
@@ -1839,11 +1844,26 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     PRIMARY KEY (id, neighbor_id)
 )""",
             """CREATE TABLE IF NOT EXISTS traceroute (
+    traceroute_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    request_id BIGINT,
     from_id INT UNSIGNED NOT NULL,
     to_id INT UNSIGNED NOT NULL,
+    channel TINYINT UNSIGNED,
+    hop_limit TINYINT UNSIGNED,
+    success TINYINT(1) DEFAULT 0,
+    time TIMESTAMP NULL,
     route VARCHAR(255),
-    snr VARCHAR(255),
-    ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    route_back TEXT,
+    ts_created TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    snr_towards TEXT,
+    snr_back TEXT,
+    is_reply TINYINT(1) DEFAULT 0,
+    error_reason INT,
+    attempt_number INT,
+    INDEX idx_traceroute_nodes (from_id, to_id),
+    INDEX idx_traceroute_channel (channel),
+    INDEX idx_traceroute_time (ts_created),
+    INDEX idx_traceroute_request_id (request_id)
 )""",
             """CREATE TABLE IF NOT EXISTS telemetry (
     id INT UNSIGNED NOT NULL,
@@ -1863,8 +1883,7 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     channel INT,
     UNIQUE KEY unique_telemetry (id, packet_id),
     INDEX idx_telemetry_id (id)
-)
-""",
+)""",
             """CREATE TABLE IF NOT EXISTS text (
     from_id INT UNSIGNED NOT NULL,
     to_id INT UNSIGNED NOT NULL,
@@ -1874,18 +1893,19 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_text_message_id (message_id)
 )""",
-            """CREATE TABLE IF NOT EXISTS  meshlog (
+            """CREATE TABLE IF NOT EXISTS meshlog (
     topic varchar(255) not null,
     message text,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )""",
-            """CREATE TABLE IF NOT EXISTS  positionlog (
+            """CREATE TABLE IF NOT EXISTS positionlog (
+    log_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id INT UNSIGNED NOT NULL,
     latitude_i INT NOT NULL,
     longitude_i INT NOT NULL,
     source VARCHAR(35) NOT NULL,
     ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id, ts_created)
+    INDEX idx_positionlog_id_ts (id, ts_created)
 )""",
             """CREATE TABLE IF NOT EXISTS routing_messages (
     routing_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -1915,6 +1935,31 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
     INDEX idx_routing_relay (relay_node),
     INDEX idx_routing_request (request_id),
     INDEX idx_routing_uplink (uplink_node)
+)""",
+            """CREATE TABLE IF NOT EXISTS message_reception (
+    id INTEGER PRIMARY KEY AUTO_INCREMENT,
+    message_id BIGINT NOT NULL,
+    from_id INTEGER UNSIGNED NOT NULL,
+    received_by_id INTEGER UNSIGNED NOT NULL,
+    rx_time INTEGER,
+    rx_snr REAL,
+    rx_rssi INTEGER,
+    hop_limit INTEGER DEFAULT NULL,
+    hop_start INTEGER DEFAULT NULL,
+    relay_node VARCHAR(4) DEFAULT NULL,
+    ts_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_reception (message_id, received_by_id),
+    INDEX idx_messagereception_message_receiver (message_id, received_by_id),
+    INDEX idx_message_reception_relay_node (relay_node)
+)""",
+            """CREATE TABLE IF NOT EXISTS relay_edges (
+    from_node VARCHAR(8) NOT NULL,
+    relay_suffix VARCHAR(2) NOT NULL,
+    to_node VARCHAR(8) NOT NULL,
+    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    count INT DEFAULT 1,
+    PRIMARY KEY (from_node, relay_suffix, to_node)
 )"""
         ]
         cur = self.db.cursor()
