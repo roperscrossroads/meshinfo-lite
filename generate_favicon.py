@@ -58,14 +58,21 @@ SVG_TEMPLATE = '''<?xml version="1.0" encoding="UTF-8" standalone="no"?>
       y="-99.204262"
       inkscape:label="bg" />
     <g id="g353" transform="matrix(3.2755924,0,0,3.2755924,24.465246,203.41775)">
-      <path d="M 7.4991582,107.52902 76.014438,6.7704175" style="fill:none;stroke:#000000;stroke-width:14.4391px" id="m1" inkscape:label="M" />
-      <path d="M 71.87505,107.19881 137.46054,11.01544 203.197,107.04682" style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:14.2234px" id="m2" inkscape:label="M" />
+      <path d="M 7.4991582,107.52902 76.014438,6.7704175" style="fill:none;stroke:{stroke_color};stroke-width:14.4391px" id="m1" inkscape:label="M" />
+      <path d="M 71.87505,107.19881 137.46054,11.01544 203.197,107.04682" style="fill:none;fill-opacity:1;stroke:{stroke_color};stroke-width:14.2234px" id="m2" inkscape:label="M" />
     </g>
   </g>
   <metadata id="metadata342"><rdf:RDF><cc:Work rdf:about=""><dc:title>Meshtastic Logo</dc:title><dc:subject><rdf:Bag><rdf:li>meshtastic</rdf:li><rdf:li>meshtastik</rdf:li><rdf:li>мештастик</rdf:li></rdf:Bag></dc:subject><cc:license rdf:resource="http://creativecommons.org/licenses/by/4.0/" /><dc:source>https://meshtastic.org</dc:source><dc:language>EN</dc:language></cc:Work><cc:License rdf:about="http://creativecommons.org/licenses/by/4.0/"><cc:permits rdf:resource="http://creativecommons.org/ns#Reproduction" /><cc:permits rdf:resource="http://creativecommons.org/ns#Distribution" /><cc:requires rdf:resource="http://creativecommons.org/ns#Notice" /><cc:requires rdf:resource="http://creativecommons.org/ns#Attribution" /><cc:permits rdf:resource="http://creativecommons.org/ns#DerivativeWorks" /></cc:License></rdf:RDF></metadata>
 </svg>'''
 
 SIZES = [16, 32, 48, 64]
+
+def is_dark(hex_color):
+    hex_color = hex_color.lstrip('#')
+    r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    brightness = 0.299 * r + 0.587 * g + 0.114 * b
+    return brightness < 128
+
 
 def main():
     config = configparser.ConfigParser()
@@ -74,7 +81,8 @@ def main():
     theme.update(config['theme'] if 'theme' in config else {})
     accent_color = theme['accent_color']
 
-    svg_content = SVG_TEMPLATE.format(accent_color=accent_color)
+    stroke_color = '#FFFFFF' if is_dark(accent_color) else '#000000'
+    svg_content = SVG_TEMPLATE.format(accent_color=accent_color, stroke_color=stroke_color)
     png_images = []
 
     for size in SIZES:
