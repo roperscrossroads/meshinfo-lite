@@ -1,6 +1,14 @@
 import logging
 import configparser
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Migrate database to add message_id and message_reception tracking
@@ -41,6 +49,18 @@ def migrate(db):
         """)
         has_reception_table = cursor.fetchone()[0] > 0
         logging.info(f"message_reception table exists: {has_reception_table}")
+
+        # Double-check that we can actually access the table
+        if has_reception_table:
+            # Clear any unread results before checking table accessibility
+            clear_unread_results(cursor)
+            try:
+                cursor.execute("SELECT COUNT(*) FROM message_reception LIMIT 1")
+                result = cursor.fetchone()
+                logging.info("message_reception table is accessible")
+            except Exception as table_error:
+                logging.warning(f"message_reception table exists in schema but not accessible: {table_error}")
+                has_reception_table = False
 
         if not has_reception_table:
             logging.info("Creating message_reception table...")
