@@ -94,17 +94,17 @@
             <table class="table table-sm table-striped">
                 <thead>
                     <tr>
-                        <th>Error Type</th>
-                        <th>Description</th>
-                        <th>Count</th>
-                        <th>Percentage</th>
+                        <th class="text-start">Error Type</th>
+                        <th class="text-start">Description</th>
+                        <th class="text-start">Count</th>
+                        <th class="text-start">Percentage</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for error in error_breakdown %}
                     <tr>
                         <td><code>{{ error.error_reason }}</code></td>
-                        <td>{{ error.error_description }}</td>
+                        <td>{{ meshtastic_support.get_routing_error_description(error.error_reason) }}</td>
                         <td>{{ error.count }}</td>
                         <td>{{ "%.1f"|format(error.count / stats.error_count * 100) if stats.error_count > 0 else 0 }}%</td>
                     </tr>
@@ -123,17 +123,17 @@
             <table class="table table-striped table-bordered table-sm">
                             <thead>
                                 <tr>
-                                    <th>Time</th>
-                                    <th>From</th>
-                                    <th>To</th>
-                                    <th>Uplink</th>
-                                    <th>Relay</th>
-                                    <th>Hops</th>
-                                    <th>Status</th>
-                                    <th>Error</th>
-                                    <th>Channel</th>
-                                    <th>SNR/RSSI</th>
-                                    <th>Request ID</th>
+                                    <th class="text-start">Time</th>
+                                    <th class="text-start">From</th>
+                                    <th class="text-start">To</th>
+                                    <th class="text-start">Uplink</th>
+                                    <th class="text-start">Relay</th>
+                                    <th class="text-start">Hops</th>
+                                    <th class="text-start">Status</th>
+                                    <th class="text-start">Error</th>
+                                    <th class="text-start">Channel</th>
+                                    <th class="text-start">SNR/RSSI</th>
+                                    <th class="text-start">Request ID</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -196,8 +196,10 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if msg.error_description %}
-                                            <span class="text-danger">{{ msg.error_description }}</span>
+                                        {% if msg.error_description and msg.error_reason != 0 %}
+                                            <span class="text-danger">{{ meshtastic_support.get_routing_error_description(msg.error_reason) }}</span>
+                                        {% elif msg.error_description %}
+                                            <span class="text-muted">{{ meshtastic_support.get_routing_error_description(msg.error_reason) }}</span>
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}

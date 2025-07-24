@@ -191,6 +191,29 @@ class ModemPreset(Enum):
     LONG_MODERATE = 7
     SHORT_TURBO = 8  # Fastest preset with 500kHz bandwidth, not legal in all regions
 
+class RoutingError(Enum):
+    """
+    Meshtastic routing error codes
+    from https://buf.build/meshtastic/protobufs/docs/main:meshtastic#meshtastic.RoutingError
+    """
+    NONE = 0
+    NO_ROUTE = 1
+    GOT_NAK = 2
+    TIMEOUT = 3
+    NO_INTERFACE = 4
+    MAX_RETRANSMIT = 5
+    NO_CHANNEL = 6
+    TOO_LARGE = 7
+    NO_RESPONSE = 8
+    DUTY_CYCLE_LIMIT = 9
+    BAD_REQUEST = 32
+    NOT_AUTHORIZED = 33
+    PKI_FAILED = 34
+    PKI_UNKNOWN_PUBKEY = 35
+    ADMIN_BAD_SESSION_KEY = 36
+    ADMIN_PUBLIC_KEY_UNAUTHORIZED = 37
+    RATE_LIMIT_EXCEEDED = 38
+
 def get_channel_name(channel_value, use_short_names=False):
     """
     Convert a channel number to a human-readable name.
@@ -679,3 +702,65 @@ def get_modem_preset_name(modem_preset_value):
         return f"Unknown ({modem_preset_value})"
     except Exception:
         return f"Unknown ({modem_preset_value})"
+
+def get_routing_error_name(error_value):
+    """
+    Convert a routing error value to a human-readable name.
+    
+    Args:
+        error_value: The numeric routing error value
+        
+    Returns:
+        A human-readable routing error name or "Unknown (value)" if not recognized
+    """
+    if error_value is None:
+        return "None"
+    
+    try:
+        for error in RoutingError:
+            if error.value == error_value:
+                return error.name
+        return f"Unknown ({error_value})"
+    except Exception:
+        return f"Unknown ({error_value})"
+
+def get_routing_error_description(error_value):
+    """
+    Get a human-readable description of a routing error.
+    
+    Args:
+        error_value: The numeric routing error value
+        
+    Returns:
+        A human-readable description of the routing error
+    """
+    if error_value is None:
+        return "No error"
+    
+    error_descriptions = {
+        RoutingError.NONE: "Message sent successfully",
+        RoutingError.NO_ROUTE: "No path available to reach the destination",
+        RoutingError.GOT_NAK: "Message was rejected by a relay node",
+        RoutingError.TIMEOUT: "Message timed out during transmission",
+        RoutingError.NO_INTERFACE: "No communication interface available for delivery",
+        RoutingError.MAX_RETRANSMIT: "Maximum retry attempts exceeded",
+        RoutingError.NO_CHANNEL: "Requested channel is not available or disabled",
+        RoutingError.TOO_LARGE: "Message is too large to send",
+        RoutingError.NO_RESPONSE: "Destination received the message but no service responded",
+        RoutingError.DUTY_CYCLE_LIMIT: "Cannot send due to radio duty cycle restrictions",
+        RoutingError.BAD_REQUEST: "Destination received the message but considered it invalid",
+        RoutingError.NOT_AUTHORIZED: "Message sent on wrong channel or lacks proper authorization",
+        RoutingError.PKI_FAILED: "Encrypted transport failed - message not sent",
+        RoutingError.PKI_UNKNOWN_PUBKEY: "Destination has no encryption key available",
+        RoutingError.ADMIN_BAD_SESSION_KEY: "Admin message uses invalid or expired session key",
+        RoutingError.ADMIN_PUBLIC_KEY_UNAUTHORIZED: "Admin message from unauthorized sender",
+        RoutingError.RATE_LIMIT_EXCEEDED: "Message blocked by airtime fairness limits"
+    }
+    
+    try:
+        for error in RoutingError:
+            if error.value == error_value:
+                return error_descriptions.get(error, f"Unknown error ({error_value})")
+        return f"Unknown error ({error_value})"
+    except Exception:
+        return f"Unknown error ({error_value})"

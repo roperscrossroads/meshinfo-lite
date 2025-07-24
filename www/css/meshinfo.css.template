@@ -9,6 +9,11 @@ th {
     text-align: center;
 }
 
+/* Override for left-aligned headers */
+th.text-start {
+    text-align: left !important;
+}
+
 nav {
     background-color: {{header_color}};
 }
