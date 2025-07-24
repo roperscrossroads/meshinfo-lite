@@ -26,22 +26,33 @@ def migrate(db):
         else:
             logging.info("Index idx_positionlog_id_ts already exists on positionlog table")
         
-        # Add index for reception lookups if it doesn't exist
+        # Check if message_reception table exists before adding indexes
         cursor.execute("""
             SELECT COUNT(*)
-            FROM information_schema.statistics
-            WHERE table_schema = DATABASE()
-            AND table_name = 'message_reception'
-            AND index_name = 'idx_messagereception_message_receiver'
+            FROM information_schema.TABLES 
+            WHERE TABLE_NAME = 'message_reception'
         """)
-        if cursor.fetchone()[0] == 0:
+        message_reception_exists = cursor.fetchone()[0] > 0
+        
+        if message_reception_exists:
+            # Add index for reception lookups if it doesn't exist
             cursor.execute("""
-                CREATE INDEX idx_messagereception_message_receiver 
-                ON message_reception(message_id, received_by_id)
+                SELECT COUNT(*)
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                AND table_name = 'message_reception'
+                AND index_name = 'idx_messagereception_message_receiver'
             """)
-            logging.info("Added index idx_messagereception_message_receiver to message_reception table")
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("""
+                    CREATE INDEX idx_messagereception_message_receiver 
+                    ON message_reception(message_id, received_by_id)
+                """)
+                logging.info("Added index idx_messagereception_message_receiver to message_reception table")
+            else:
+                logging.info("Index idx_messagereception_message_receiver already exists on message_reception table")
         else:
-            logging.info("Index idx_messagereception_message_receiver already exists on message_reception table")
+            logging.info("message_reception table does not exist, skipping index creation")
         
         db.commit()
         logging.info("Successfully added message map performance indexes")

@@ -54,7 +54,8 @@ def migrate(db):
                     rx_rssi INTEGER,
                     hop_limit INTEGER DEFAULT NULL,
                     hop_start INTEGER DEFAULT NULL,
-                    UNIQUE KEY unique_reception (message_id, received_by_id)
+                    UNIQUE KEY unique_reception (message_id, received_by_id),
+                    INDEX idx_messagereception_message_receiver (message_id, received_by_id)
                 )
             """)
             db.commit()
@@ -109,6 +110,27 @@ def migrate(db):
                 logging.info("Migrating from hop_count to hop_limit/hop_start...")
                 # No need to remove the hop_count column, just leave it for backward compatibility
                 logging.info("Migration complete")
+                
+            # Check if the performance index exists
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                AND table_name = 'message_reception'
+                AND index_name = 'idx_messagereception_message_receiver'
+            """)
+            has_performance_index = cursor.fetchone()[0] > 0
+            
+            if not has_performance_index:
+                logging.info("Adding performance index to message_reception table...")
+                cursor.execute("""
+                    CREATE INDEX idx_messagereception_message_receiver 
+                    ON message_reception(message_id, received_by_id)
+                """)
+                db.commit()
+                logging.info("Added performance index to message_reception table successfully")
+            else:
+                logging.info("Performance index already exists on message_reception table")
 
     except Exception as e:
         logging.error(f"Error performing migration: {e}")
