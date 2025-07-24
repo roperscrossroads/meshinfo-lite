@@ -1,5 +1,13 @@
 import logging
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Add channel information to tables that don't have it
@@ -119,26 +127,55 @@ def migrate(db):
                 """)
                 channel_exists = cursor.fetchone()[0] > 0
                 
+                # Additional check: try to actually query the channel column
                 if channel_exists:
-                    # Check if we have any messages with channel information
-                    cursor.execute("""
-                        SELECT COUNT(*)
-                        FROM meshlog
-                        WHERE JSON_EXTRACT(message, '$.channel') IS NOT NULL
-                        AND channel IS NULL
-                    """)
-                    has_channel_data = cursor.fetchone()[0] > 0
+                    try:
+                        cursor.execute("SELECT COUNT(*) FROM meshlog WHERE channel IS NULL")
+                        result = cursor.fetchone()
+                        logging.info("Channel column is queryable in meshlog table")
+                    except Exception as query_error:
+                        logging.warning(f"Channel column exists in schema but not queryable: {query_error}")
+                        channel_exists = False
+                
+                if channel_exists:
+                    logging.info("Channel column confirmed to exist in meshlog table")
                     
-                    if has_channel_data:
-                        logging.info("Extracting channel information from meshlog messages...")
+                    # Clear any unread results before proceeding
+                    clear_unread_results(cursor)
+                    
+                    # Check if we have any messages with channel information
+                    try:
+                        logging.info("Checking for messages with channel information...")
                         cursor.execute("""
-                            UPDATE meshlog
-                            SET channel = CAST(JSON_EXTRACT(message, '$.channel') AS UNSIGNED)
+                            SELECT COUNT(*)
+                            FROM meshlog
                             WHERE JSON_EXTRACT(message, '$.channel') IS NOT NULL
                             AND channel IS NULL
                         """)
-                        db.commit()
-                        logging.info("Extracted channel information successfully")
+                        result = cursor.fetchone()
+                        has_channel_data = result[0] > 0
+                        logging.info(f"Found {has_channel_data} messages with channel information to extract")
+                        
+                        if has_channel_data:
+                            logging.info("Extracting channel information from meshlog messages...")
+                            cursor.execute("""
+                                UPDATE meshlog
+                                SET channel = CAST(JSON_EXTRACT(message, '$.channel') AS UNSIGNED)
+                                WHERE JSON_EXTRACT(message, '$.channel') IS NOT NULL
+                                AND channel IS NULL
+                            """)
+                            db.commit()
+                            logging.info("Extracted channel information successfully")
+                    except Exception as e:
+                        logging.error(f"Error during channel extraction from meshlog: {e}")
+                        # Try to get more information about the table structure
+                        try:
+                            cursor.execute("DESCRIBE meshlog")
+                            columns = cursor.fetchall()
+                            logging.info(f"Meshlog table structure: {columns}")
+                        except Exception as desc_error:
+                            logging.error(f"Error describing meshlog table: {desc_error}")
+                        raise
                 else:
                     logging.warning("Channel column was not found in meshlog table, skipping channel extraction")
         
