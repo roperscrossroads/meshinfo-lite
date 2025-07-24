@@ -1,5 +1,13 @@
 import logging
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Add indexes to improve message map performance:
@@ -39,12 +47,16 @@ def migrate(db):
             # Double-check that we can actually access the table
             try:
                 cursor.execute("SELECT COUNT(*) FROM message_reception LIMIT 1")
+                result = cursor.fetchone()
                 logging.info("message_reception table is accessible")
             except Exception as table_error:
                 logging.warning(f"message_reception table exists in schema but not accessible: {table_error}")
                 message_reception_exists = False
             
             if message_reception_exists:
+                # Clear any unread results before proceeding
+                clear_unread_results(cursor)
+                
                 # Add index for reception lookups if it doesn't exist
                 cursor.execute("""
                     SELECT COUNT(*)
