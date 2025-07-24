@@ -10,11 +10,10 @@ def clear_unread_results(cursor):
         pass
 
 def migrate(db):
-    """
-    Migrate database to add message_id and message_reception tracking
-    """
+    cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # Ensure we're in the correct database
         cursor.execute("SELECT DATABASE()")
@@ -161,6 +160,11 @@ def migrate(db):
 
     except Exception as e:
         logging.error(f"Error performing migration: {e}")
+        db.rollback()
         raise
     finally:
-        cursor.close()
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass

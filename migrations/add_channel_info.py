@@ -9,11 +9,10 @@ def clear_unread_results(cursor):
         pass
 
 def migrate(db):
-    """
-    Add channel information to tables that don't have it
-    """
+    cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # List of tables that should have channel information
         tables_to_update = [
@@ -185,4 +184,8 @@ def migrate(db):
         logging.error(f"Error performing channel information migration: {e}")
         raise
     finally:
-        cursor.close() 
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass 

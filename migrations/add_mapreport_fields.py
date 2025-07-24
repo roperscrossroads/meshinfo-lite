@@ -1,15 +1,18 @@
 import logging
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
-    """
-    Add mapreport-specific fields to nodeinfo table:
-    - has_default_channel: Boolean indicating if node uses default channel
-    - num_online_local_nodes: Count of local nodes visible to this node
-    - region: LoRa radio region preset
-    - modem_preset: LoRa modem preset configuration
-    """
+    cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # Check if columns already exist
         cursor.execute("""
@@ -95,3 +98,9 @@ def migrate(db):
         logging.error(f"Failed to add mapreport fields to nodeinfo table: {e}")
         db.rollback()
         raise 
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass 

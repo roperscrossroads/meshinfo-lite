@@ -1,6 +1,18 @@
-def migrate(db):
-    cursor = db.cursor()
+import logging
+
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
     try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
+def migrate(db):
+    cursor = None
+    try:
+        cursor = db.cursor()
+        clear_unread_results(cursor)
         # Start transaction
         cursor.execute("START TRANSACTION")
         
@@ -67,8 +79,12 @@ def migrate(db):
         print("Migration completed successfully")
         
     except Exception as e:
-        print(f"Migration error: {str(e)}")
+        logging.error(f"Error during traceroute id migration: {e}")
         db.rollback()
         raise
     finally:
-        cursor.close()
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass

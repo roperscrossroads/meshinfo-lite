@@ -2,6 +2,14 @@ import logging
 import mysql.connector
 from mysql.connector import Error
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Add improvements to traceroute table:
@@ -13,6 +21,7 @@ def migrate(db):
     cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # Check which columns already exist
         cursor.execute("SHOW COLUMNS FROM traceroute")
@@ -66,10 +75,13 @@ def migrate(db):
         db.commit()
         logging.info("Successfully added traceroute improvements")
         
-    except Error as e:
+    except Exception as e:
         logging.error(f"Error during traceroute improvements migration: {e}")
         db.rollback()
         raise
     finally:
         if cursor:
-            cursor.close() 
+            try:
+                cursor.close()
+            except:
+                pass 

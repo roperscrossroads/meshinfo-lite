@@ -1,12 +1,21 @@
 import logging
 import configparser
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
-    """
-    Migrate database to add relay_node column to message_reception table
-    """
+    cursor = None
     try:
         cursor = db.cursor()
+        
+        # Clear any unread results before proceeding
+        clear_unread_results(cursor)
         
         # Ensure we're in the correct database
         cursor.execute("SELECT DATABASE()")
@@ -106,3 +115,9 @@ def migrate(db):
         logging.error(f"Error during relay_node migration: {e}")
         db.rollback()
         raise 
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass 

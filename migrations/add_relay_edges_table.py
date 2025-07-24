@@ -9,15 +9,9 @@ def clear_unread_results(cursor):
         pass
 
 def migrate(db):
-    """
-    Create relay_edges table for inferred relay network paths.
-    """
     try:
         cursor = db.cursor()
-        
-        # Clear any unread results before proceeding
         clear_unread_results(cursor)
-        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS relay_edges (
                 from_node VARCHAR(8) NOT NULL,
@@ -30,8 +24,8 @@ def migrate(db):
             )
         """)
         db.commit()
-        logging.info("relay_edges table created or already exists.")
+        logging.info("relay_edges table created successfully.")
+        cursor.close()
     except Exception as e:
         logging.error(f"Error creating relay_edges table: {e}")
-        db.rollback()
-        raise 
+        logging.info("Continuing despite relay_edges table creation error") 

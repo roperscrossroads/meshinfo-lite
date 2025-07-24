@@ -1,11 +1,23 @@
 import logging
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Add ts_created column to message_reception table for compatibility
     """
+    cursor = None
     try:
         cursor = db.cursor()
+        
+        # Clear any unread results before proceeding
+        clear_unread_results(cursor)
         
         # Check if ts_created column exists in message_reception table
         cursor.execute("""
@@ -42,4 +54,8 @@ def migrate(db):
         db.rollback()
         raise
     finally:
-        cursor.close() 
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass 

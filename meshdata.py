@@ -1924,25 +1924,31 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
 
         # Run migrations before final commit
         try:
-            # Use explicit path relative to meshdata.py location
             import os
             import sys
             migrations_path = os.path.join(os.path.dirname(__file__), 'migrations')
             sys.path.insert(0, os.path.dirname(__file__))
             from migrations import MIGRATIONS
-            
-            # Run all migrations in order
+
+            # Run all migrations in order, each with a fresh connection
             for migration in MIGRATIONS:
                 try:
-                    migration(self.db)
+                    db = mysql.connector.connect(
+                        host=self.config["database"]["host"],
+                        user=self.config["database"]["username"],
+                        password=self.config["database"]["password"],
+                        database=self.config["database"]["database"],
+                        charset="utf8mb4",
+                        connection_timeout=10
+                    )
+                    migration(db)
+                    db.close()
                     logging.info(f"Successfully ran migration: {migration.__name__}")
                 except Exception as e:
                     logging.error(f"Failed to run migration {migration.__name__}: {e}")
                     raise
-                    
         except ImportError as e:
             logging.error(f"Failed to import migration module: {e}")
-            # Continue with database setup even if migration fails
             pass
         except Exception as e:
             logging.error(f"Failed to run migrations: {e}")

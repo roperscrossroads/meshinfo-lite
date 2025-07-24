@@ -1,11 +1,21 @@
 import logging
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Update traceroute table to store separate SNR values for forward and return paths
     """
+    cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # First check if the table exists
         cursor.execute("""
@@ -122,4 +132,8 @@ def migrate(db):
         logging.error(f"Error performing traceroute SNR migration: {e}")
         raise
     finally:
-        cursor.close()
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass

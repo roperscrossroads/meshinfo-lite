@@ -2,6 +2,14 @@ import logging
 import mysql.connector
 from mysql.connector import Error
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Add routing_messages table to store routing packet information.
@@ -10,6 +18,7 @@ def migrate(db):
     cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # Check if table already exists
         cursor.execute("""
@@ -65,4 +74,7 @@ def migrate(db):
         raise
     finally:
         if cursor:
-            cursor.close() 
+            try:
+                cursor.close()
+            except:
+                pass 

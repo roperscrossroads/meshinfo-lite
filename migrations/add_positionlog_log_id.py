@@ -1,13 +1,18 @@
 import logging
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
-    """
-    Add an auto-increment log_id column as the new primary key to the positionlog table,
-    allowing duplicate (id, ts_created) entries. If log_id already exists, do nothing.
-    Add a secondary index on (id, ts_created) for fast lookups.
-    """
+    cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         # Check if log_id column already exists
         cursor.execute("""
             SELECT COUNT(*)
@@ -46,7 +51,12 @@ def migrate(db):
 
         db.commit()
     except Exception as e:
-        logging.error(f"Error adding log_id column to positionlog: {e}")
+        logging.error(f"Error during positionlog log_id migration: {e}")
+        db.rollback()
         raise
     finally:
-        cursor.close() 
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass 

@@ -1,11 +1,21 @@
 import logging
 
+def clear_unread_results(cursor):
+    """Clear any unread results from the cursor"""
+    try:
+        while cursor.nextset():
+            pass
+    except:
+        pass
+
 def migrate(db):
     """
     Add ts_uplink column to nodeinfo table to track MQTT uplink status
     """
+    cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # Check if column exists
         cursor.execute("""
@@ -29,7 +39,12 @@ def migrate(db):
             logging.info("ts_uplink column already exists")
 
     except Exception as e:
-        logging.error(f"Error adding ts_uplink column: {e}")
+        logging.error(f"Error during ts_uplink migration: {e}")
+        db.rollback()
         raise
     finally:
-        cursor.close() 
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass 

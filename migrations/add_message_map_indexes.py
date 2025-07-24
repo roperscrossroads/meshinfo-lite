@@ -9,13 +9,10 @@ def clear_unread_results(cursor):
         pass
 
 def migrate(db):
-    """
-    Add indexes to improve message map performance:
-    - Index on positionlog for faster position lookups (if not already added by add_positionlog_log_id)
-    - Index on message_reception for faster reception detail lookups
-    """
+    cursor = None
     try:
         cursor = db.cursor()
+        clear_unread_results(cursor)
         
         # Check if positionlog index already exists (might have been added by add_positionlog_log_id)
         cursor.execute("""
@@ -85,3 +82,9 @@ def migrate(db):
         db.rollback()
         logging.error(f"Failed to add message map indexes: {str(e)}")
         raise 
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass 
