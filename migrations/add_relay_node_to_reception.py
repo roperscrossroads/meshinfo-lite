@@ -14,6 +14,18 @@ def migrate(db):
         if not current_db:
             raise Exception("No database selected")
         
+        # Check if message_reception table exists
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM information_schema.TABLES 
+            WHERE TABLE_NAME = 'message_reception'
+        """)
+        has_reception_table = cursor.fetchone()[0] > 0
+        
+        if not has_reception_table:
+            logging.info("message_reception table does not exist, skipping relay_node column addition")
+            return
+            
         # Check if relay_node column exists in message_reception table
         cursor.execute("""
             SELECT COUNT(*)

@@ -75,8 +75,10 @@ def migrate(db):
                     rx_rssi INTEGER,
                     hop_limit INTEGER DEFAULT NULL,
                     hop_start INTEGER DEFAULT NULL,
+                    relay_node VARCHAR(4) DEFAULT NULL,
                     UNIQUE KEY unique_reception (message_id, received_by_id),
-                    INDEX idx_messagereception_message_receiver (message_id, received_by_id)
+                    INDEX idx_messagereception_message_receiver (message_id, received_by_id),
+                    INDEX idx_message_reception_relay_node (relay_node)
                 )
             """)
             db.commit()
