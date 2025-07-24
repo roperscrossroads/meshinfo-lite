@@ -40,6 +40,7 @@ def migrate(db):
             WHERE TABLE_NAME = 'message_reception'
         """)
         has_reception_table = cursor.fetchone()[0] > 0
+        logging.info(f"message_reception table exists: {has_reception_table}")
 
         if not has_reception_table:
             logging.info("Creating message_reception table...")
@@ -123,12 +124,16 @@ def migrate(db):
             
             if not has_performance_index:
                 logging.info("Adding performance index to message_reception table...")
-                cursor.execute("""
-                    CREATE INDEX idx_messagereception_message_receiver 
-                    ON message_reception(message_id, received_by_id)
-                """)
-                db.commit()
-                logging.info("Added performance index to message_reception table successfully")
+                try:
+                    cursor.execute("""
+                        CREATE INDEX idx_messagereception_message_receiver 
+                        ON message_reception(message_id, received_by_id)
+                    """)
+                    db.commit()
+                    logging.info("Added performance index to message_reception table successfully")
+                except Exception as index_error:
+                    logging.warning(f"Could not add performance index to message_reception table: {index_error}")
+                    # Don't raise the error, just log it and continue
             else:
                 logging.info("Performance index already exists on message_reception table")
 
