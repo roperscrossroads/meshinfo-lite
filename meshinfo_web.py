@@ -32,7 +32,8 @@ from io import BytesIO
 import staticmaps
 
 import utils
-import meshtastic_support
+# Remove direct import to reduce circular references
+# import meshtastic_support
 from meshdata import MeshData
 from database_cache import DatabaseCache
 from meshinfo_register import Register
@@ -453,7 +454,7 @@ app.jinja_env.globals.update(get_role_badge=get_role_badge)
 @app.template_filter('safe_hw_model')
 def safe_hw_model(value):
     try:
-        return meshtastic_support.get_hardware_model_name(value)
+        return get_hardware_model_name(value)
     except (ValueError, AttributeError):
         return f"Unknown ({value})"
 
@@ -1013,7 +1014,7 @@ def traceroute_map():
         traceroute=traceroute,
         traceroute_positions=traceroute_positions,  # <-- pass to template
         utils=utils,
-        meshtastic_support=meshtastic_support,
+        meshtastic_support=get_meshtastic_support(),
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now()
     )
@@ -1135,7 +1136,7 @@ def utilization_heatmap():
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
-        Channel=meshtastic_support.Channel  # Add Channel enum to template context
+        Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
 @app.route('/utilization-hexmap.html')
@@ -1151,7 +1152,7 @@ def utilization_hexmap():
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
-        Channel=meshtastic_support.Channel  # Add Channel enum to template context
+        Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
 @app.route('/map.html')
@@ -1167,7 +1168,7 @@ def map():
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
-        Channel=meshtastic_support.Channel  # Add Channel enum to template context
+        Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
 @app.route('/map-classic.html')
@@ -1248,7 +1249,7 @@ def map_classic():
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
-        Channel=meshtastic_support.Channel  # Add Channel enum to template context
+        Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
 @app.route('/neighbors.html')
@@ -1348,7 +1349,7 @@ def traceroutes():
         traceroutes=traceroute_data['items'],
         pagination=pagination,
         utils=utils,
-        meshtastic_support=meshtastic_support,
+        meshtastic_support=get_meshtastic_support(),
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
         meshdata=md  # Add meshdata to template context
@@ -1395,21 +1396,34 @@ def routing():
     stats = md.get_routing_stats(days=days)
     error_breakdown = md.get_routing_errors_by_type(days=days)
     
-    return render_template(
-        "routing.html.j2",
-        auth=auth(),
-        config=config,
-        routing_messages=routing_data['items'],
-        pagination=routing_data,
-        stats=stats,
-        error_breakdown=error_breakdown,
-        error_only=error_only,
-        days=days,
-        utils=utils,
-        datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
-        meshtastic_support=meshtastic_support
-    )
+    # Create template context
+    template_context = {
+        "auth": auth(),
+        "config": config,
+        "routing_messages": routing_data['items'],
+        "pagination": routing_data,
+        "stats": stats,
+        "error_breakdown": error_breakdown,
+        "error_only": error_only,
+        "days": days,
+        "utils": utils,
+        "datetime": datetime.datetime,
+        "timestamp": datetime.datetime.now(),
+        "meshtastic_support": get_meshtastic_support()
+    }
+    
+    response = render_template("routing.html.j2", **template_context)
+    
+    # Clean up large objects to help with memory management
+    del template_context
+    del routing_data
+    del stats
+    del error_breakdown
+    
+    # Force garbage collection
+    gc.collect()
+    
+    return response
 
 @app.route('/monday.html')
 def monday():
@@ -1446,8 +1460,8 @@ def mynodes():
         config=config,
         nodes=mynodes,
         show_inactive=True,
-        hardware=meshtastic_support.HardwareModel,
-        meshtastic_support=meshtastic_support,
+        hardware=get_hardware_model_enum(),
+        meshtastic_support=get_meshtastic_support(),
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
@@ -1566,8 +1580,9 @@ def serve_static(filename):
             config=config,
             node=node_page_data['node'],
             linked_nodes_details=node_page_data['linked_nodes_details'],
-            hardware=meshtastic_support.HardwareModel,
-            meshtastic_support=meshtastic_support,
+            hardware=get_hardware_model_enum(),
+            meshtastic_support=get_meshtastic_support(),
+            hardware_photos=get_hardware_photos(),
             los_profiles=node_page_data['los_profiles'],
             telemetry_graph=node_page_data['telemetry_graph'],
             node_route=node_page_data['node_route'],
@@ -1611,8 +1626,9 @@ def serve_static(filename):
             config=config,
             nodes=owner_nodes,
             show_inactive=True,
-            hardware=meshtastic_support.HardwareModel,
-            meshtastic_support=meshtastic_support,
+            hardware=get_hardware_model_enum(),
+            meshtastic_support=get_meshtastic_support(),
+            hardware_photos=get_hardware_photos(),
             utils=utils,
             datetime=datetime.datetime,
             timestamp=datetime.datetime.now(),
@@ -1627,7 +1643,7 @@ def metrics():
         "metrics.html.j2",
         auth=auth(),
         config=config,
-        Channel=meshtastic_support.Channel,
+        Channel=get_channel_enum(),
         utils=utils
     )
 
@@ -1694,7 +1710,7 @@ def chat2():
                 'long_name': node.get('long_name', ''),
                 'short_name': node.get('short_name', ''),
                 'hw_model': node.get('hw_model'),
-                'hw_model_name': meshtastic_support.get_hardware_model_name(node.get('hw_model')) if node.get('hw_model') else None,
+                'hw_model_name': get_hardware_model_name(node.get('hw_model')) if node.get('hw_model') else None,
                 'role': node.get('role'),
                 'role_name': utils.get_role_name(node.get('role')) if node.get('role') is not None else None,
                 'firmware_version': node.get('firmware_version'),
@@ -1715,7 +1731,7 @@ def chat2():
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now(),
-        meshtastic_support=meshtastic_support,
+        meshtastic_support=get_meshtastic_support(),
         debug=False,
     )
 
@@ -1761,8 +1777,9 @@ def nodes():
         latest=latest,
         hw_model_filter=hw_model_filter,
         hw_name_filter=hw_name_filter,
-        hardware=meshtastic_support.HardwareModel,
-        meshtastic_support=meshtastic_support,
+        hardware=get_hardware_model_enum(),
+        meshtastic_support=get_meshtastic_support(),
+        hardware_photos=get_hardware_photos(),
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now()
@@ -1790,8 +1807,9 @@ def allnodes():
         latest=latest,
         hw_model_filter=hw_model_filter,
         hw_name_filter=hw_name_filter,
-        hardware=meshtastic_support.HardwareModel,
-        meshtastic_support=meshtastic_support,
+        hardware=get_hardware_model_enum(),
+        meshtastic_support=get_meshtastic_support(),
+        hardware_photos=get_hardware_photos(),
         utils=utils,
         datetime=datetime.datetime,
         timestamp=datetime.datetime.now()
@@ -1854,7 +1872,7 @@ def get_cached_hardware_models():
         hardware_stats = []
         for row in results:
             hw_model_id = row['hw_model']
-            hw_model_name = meshtastic_support.get_hardware_model_name(hw_model_id)
+            hw_model_name = get_hardware_model_name(hw_model_id)
             
             # Get a sample node for icon
             sample_node = row['sample_names'].split(', ')[0] if row['sample_names'] else f"Model {hw_model_id}"
@@ -1981,6 +1999,37 @@ def og_image_node_map(node_id):
     except Exception as e:
         logging.error(f"Error generating node map OG image: {e}")
         return "Error generating image", 500
+
+# Helper functions to avoid circular references
+def get_meshtastic_support():
+    """Lazy import of meshtastic_support to avoid circular references."""
+    import meshtastic_support
+    return meshtastic_support
+
+def get_hardware_model_enum():
+    """Get HardwareModel enum without direct module reference."""
+    import meshtastic_support
+    return meshtastic_support.HardwareModel
+
+def get_channel_enum():
+    """Get Channel enum without direct module reference."""
+    import meshtastic_support
+    return meshtastic_support.Channel
+
+def get_routing_error_description(error_reason):
+    """Get routing error description without direct module reference."""
+    import meshtastic_support
+    return meshtastic_support.get_routing_error_description(error_reason)
+
+def get_hardware_model_name(hw_model):
+    """Get hardware model name without direct module reference."""
+    import meshtastic_support
+    return meshtastic_support.get_hardware_model_name(hw_model)
+
+def get_hardware_photos():
+    """Get HARDWARE_PHOTOS dict without direct module reference."""
+    import meshtastic_support
+    return meshtastic_support.HARDWARE_PHOTOS
 
 def run():
     # Enable Waitress logging

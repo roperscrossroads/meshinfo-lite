@@ -243,9 +243,9 @@
             <tr>
               <th scope="row" class="details-label">Hardware</th>
               <td class="text-left">
-                {% if node.hw_model is not none and meshtastic_support.HardwareModel(node.hw_model) in meshtastic_support.HARDWARE_PHOTOS %}
+                {% if node.hw_model is not none and hardware(node.hw_model) in hardware_photos %}
                 <img
-                  src="images/hardware/{{ meshtastic_support.HARDWARE_PHOTOS[meshtastic_support.HardwareModel(node.hw_model)] }}"
+                  src="images/hardware/{{ hardware_photos[hardware(node.hw_model)] }}"
                   alt="{{ meshtastic_support.get_hardware_model_name(node.hw_model) }}"
                   title="{{ meshtastic_support.get_hardware_model_name(node.hw_model) }}" class="rounded"
                   style="max-height: 100px;">

@@ -385,7 +385,7 @@ window.addEventListener('load', function() {
 
                                         {# Hardware Info #}
                                         {% if nodes[message.to].hw_model %}
-                                            HW: {{ meshtastic_support.get_hardware_model_name(nodes[message.to].hw_model) }}<br>
+                                            HW: {{ nodes[message.to].hw_model_name if nodes[message.to].hw_model_name else 'Unknown' }}<br>
                                         {% endif %}
                                         {% if nodes[message.to].firmware_version %}
                                             FW: {{ nodes[message.to].firmware_version }}<br>

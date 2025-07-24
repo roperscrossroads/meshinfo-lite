@@ -995,7 +995,7 @@ def get_hardware_models():
     hardware_stats = []
     for row in hw_models:
         hw_model_id = row['hw_model']
-        # Import meshtastic_support here to avoid circular imports
+        # Use lazy import to avoid circular references
         import meshtastic_support
         hw_model_name = meshtastic_support.get_hardware_model_name(hw_model_id)
         
