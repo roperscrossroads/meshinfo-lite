@@ -19,9 +19,19 @@
 // Wait for jQuery to be available before initializing popovers
 function initializePopovers() {
     if (typeof jQuery !== 'undefined') {
-        // Only initialize popovers on desktop
+        // Initialize popovers on desktop
         if (window.innerWidth > 768) {
-            $('[data-toggle="popover"]').popover({
+            // Initialize hover popovers for receiver badges and node links
+            $('[data-toggle="popover"]:not(#channelFilterBtn)').popover({
+                html: true,
+                trigger: 'hover',
+                placement: 'bottom',
+                container: 'body',
+                delay: { show: 200, hide: 100 }
+            });
+            
+            // Initialize click popover for channel filter button
+            $('#channelFilterBtn').popover({
                 html: true,
                 trigger: 'click',
                 placement: 'bottom',
@@ -29,15 +39,15 @@ function initializePopovers() {
                 delay: { show: 0, hide: 0 }
             });
             
-            // Prevent popover from closing when clicking inside it
+            // Prevent channel filter popover from closing when clicking inside it
             $(document).on('click', '.popover', function(e) {
                 e.stopPropagation();
             });
             
-            // Close popover when clicking outside
+            // Close channel filter popover when clicking outside
             $(document).on('click', function(e) {
-                if (!$(e.target).closest('.popover, [data-toggle="popover"]').length) {
-                    $('[data-toggle="popover"]').popover('hide');
+                if (!$(e.target).closest('.popover, #channelFilterBtn').length) {
+                    $('#channelFilterBtn').popover('hide');
                 }
             });
         } else {
@@ -104,42 +114,86 @@ async function loadDistancesForMessage(messageContainer) {
         
         console.log(`Loading positions for message: ${Array.from(nodeIds)}`);
         
-        // Fetch positions for all nodes in this message
-        const response = await fetch('/api/node-positions?nodes=' + Array.from(nodeIds).join(','));
+        // Fetch positions for this message's nodes
+        const nodeIdsArray = Array.from(nodeIds);
+        const response = await fetch(`/api/node-positions?nodes=${nodeIdsArray.join(',')}`);
         if (!response.ok) {
-            console.warn('Failed to fetch node positions');
+            console.warn('Failed to load node positions for distance calculation');
             return;
         }
         
-        const positions = await response.json();
+        const data = await response.json();
+        const positions = data.positions;
         
-        // Update tooltips with distances
+        // Update receiver popovers for this message only
+        let updatedCount = 0;
         receiverBadges.forEach(badge => {
-            const receiverId = badge.getAttribute('data-receiver-id');
-            const senderPos = positions[senderId];
-            const receiverPos = positions[receiverId];
-            
-            if (senderPos && receiverPos && senderPos.latitude && receiverPos.latitude) {
-                const distance = calculateDistance(
-                    senderPos.latitude, senderPos.longitude,
-                    receiverPos.latitude, receiverPos.longitude
-                );
+            try {
+                const receiverId = badge.getAttribute('data-receiver-id');
                 
-                // Update tooltip content
-                const currentTitle = badge.getAttribute('data-original-title') || badge.title;
-                const newTitle = `${currentTitle} • ${distance.toFixed(1)}km`;
-                badge.setAttribute('data-original-title', newTitle);
-                badge.title = newTitle;
-                
-                // Reinitialize tooltip if Bootstrap is available
-                if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
-                    $(badge).tooltip('dispose').tooltip();
+                if (senderId && receiverId && positions[senderId] && positions[receiverId]) {
+                    const senderPos = positions[senderId];
+                    const receiverPos = positions[receiverId];
+                    const distance = calculateDistance(
+                        senderPos.latitude, senderPos.longitude,
+                        receiverPos.latitude, receiverPos.longitude
+                    );
+                    
+                    console.log(`Distance ${senderId} -> ${receiverId}: ${distance.toFixed(2)} km`);
+                    
+                    // Update desktop popover
+                    const currentContent = badge.getAttribute('data-content');
+                    if (currentContent && !currentContent.includes('Distance:')) {
+                        const newContent = currentContent.replace('</div>', 
+                            `<br>Distance: ${distance.toFixed(2)} km</div>`);
+                        const $badge = $(badge);
+                        const popover = $badge.data('bs.popover');
+                        badge.setAttribute('data-content', newContent);
+
+                        if (popover && $badge.attr('aria-describedby')) {
+                            // If popover is visible, update its content live
+                            const popoverId = $badge.attr('aria-describedby');
+                            const popoverElem = document.getElementById(popoverId);
+                            if (popoverElem) {
+                                const popoverBody = popoverElem.querySelector('.popover-body');
+                                if (popoverBody) {
+                                    popoverBody.innerHTML = newContent;
+                                }
+                            }
+                        } else if (!popover) {
+                            // If not initialized, initialize it
+                            $badge.popover({
+                                html: true,
+                                trigger: 'hover',
+                                placement: 'bottom',
+                                container: 'body',
+                                delay: { show: 50, hide: 100 }
+                            });
+                        }
+                        updatedCount++;
+                    }
+
+                    // Update mobile view
+                    const mobileRow = messageContainer.querySelector(`.mobile-reception-row [href="/node_${receiverId}.html"]`)?.closest('.mobile-reception-row');
+                    if (mobileRow && !mobileRow.querySelector('.distance-metric')) {
+                        const metricsDiv = mobileRow.querySelector('.mobile-metrics');
+                        if (metricsDiv) {
+                            const distanceDiv = document.createElement('div');
+                            distanceDiv.className = 'metric distance-metric';
+                            distanceDiv.innerHTML = `<span>Distance: ${distance.toFixed(2)} km</span>`;
+                            metricsDiv.appendChild(distanceDiv);
+                        }
+                    }
                 }
+            } catch (error) {
+                console.warn('Error updating popover for badge:', error);
             }
         });
         
+        console.log(`Updated ${updatedCount} popovers with distance information for this message`);
+        
     } catch (error) {
-        console.error('Error loading distances:', error);
+        console.warn('Error loading distances for message:', error);
     }
 }
 
@@ -178,7 +232,8 @@ async function batchLoadDistancesForMobile() {
             return;
         }
         
-        const positions = await response.json();
+        const data = await response.json();
+        const positions = data.positions;
         
         // Update all tooltips with distances
         messageContainers.forEach(container => {
@@ -196,13 +251,16 @@ async function batchLoadDistancesForMobile() {
                         receiverPos.latitude, receiverPos.longitude
                     );
                     
-                    const currentTitle = badge.getAttribute('data-original-title') || badge.title;
-                    const newTitle = `${currentTitle} • ${distance.toFixed(1)}km`;
-                    badge.setAttribute('data-original-title', newTitle);
-                    badge.title = newTitle;
-                    
-                    if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
-                        $(badge).tooltip('dispose').tooltip();
+                    // Update mobile view
+                    const mobileRow = container.querySelector(`.mobile-reception-row [href="/node_${receiverId}.html"]`)?.closest('.mobile-reception-row');
+                    if (mobileRow && !mobileRow.querySelector('.distance-metric')) {
+                        const metricsDiv = mobileRow.querySelector('.mobile-metrics');
+                        if (metricsDiv) {
+                            const distanceDiv = document.createElement('div');
+                            distanceDiv.className = 'metric distance-metric';
+                            distanceDiv.innerHTML = `<span>Distance: ${distance.toFixed(2)} km</span>`;
+                            metricsDiv.appendChild(distanceDiv);
+                        }
                     }
                 }
             });
@@ -213,13 +271,39 @@ async function batchLoadDistancesForMobile() {
     }
 }
 
-// Setup hover prefetch for desktop
+// Set up hover-based prefetch
 function setupHoverPrefetch() {
-    const messageContainers = document.querySelectorAll('.message-container');
-    messageContainers.forEach(container => {
-        container.addEventListener('mouseenter', () => {
-            loadDistancesForMessage(container);
-        }, { once: true });
+    let hoverTimer = null;
+    const processedMessages = new Set(); // Track which messages we've already processed
+    
+    document.querySelectorAll('.message-container').forEach(container => {
+        container.addEventListener('mouseenter', function() {
+            const messageId = this.getAttribute('data-message-id') || this.querySelector('.message-content')?.textContent?.slice(0, 50);
+            
+            // Skip if we've already processed this message
+            if (processedMessages.has(messageId)) {
+                return;
+            }
+            
+            // Clear any existing timer
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+            }
+            
+            // Set a small delay to avoid triggering on accidental hovers
+            hoverTimer = setTimeout(() => {
+                loadDistancesForMessage(this);
+                processedMessages.add(messageId);
+            }, 200); // 200ms delay
+        });
+        
+        container.addEventListener('mouseleave', function() {
+            // Clear the timer if user moves away before delay
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+            }
+        });
     });
 }
 
