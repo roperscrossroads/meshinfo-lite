@@ -197,26 +197,40 @@ def convert_to_local(timestamp):
     except (ValueError, TypeError):
         return str(timestamp)
 
-def get_cached_chat_data(page=1, per_page=50):
-    """Cache the chat data with optimized query."""
+def get_cached_chat_data(page=1, per_page=50, channel=None):
+    """Cache the chat data with optimized query, with optional channel filter (supports comma-separated list)."""
     md = get_meshdata()
     if not md:
         return None
     
+    # Build channel filter SQL
+    channel_filter = ""
+    channel_params = []
+    if channel is not None and channel != 'all':
+        if isinstance(channel, str) and ',' in channel:
+            channel_list = [int(c) for c in channel.split(',') if c.strip()]
+            if channel_list:
+                placeholders = ','.join(['%s'] * len(channel_list))
+                channel_filter = f" WHERE t.channel IN ({placeholders})"
+                channel_params = channel_list
+        else:
+            channel_filter = " WHERE t.channel = %s"
+            channel_params = [int(channel)]
+    
     # Get total count first (this is fast)
     cur = md.db.cursor()
-    cur.execute("SELECT COUNT(DISTINCT t.message_id) FROM text t")
+    cur.execute(f"SELECT COUNT(DISTINCT t.message_id) FROM text t{channel_filter}", channel_params)
     total = cur.fetchone()[0]
     cur.close()
     
     # Get paginated chat messages (without reception data)
     offset = (page - 1) * per_page
     cur = md.db.cursor(dictionary=True)
-    cur.execute("""
-        SELECT t.* FROM text t
+    cur.execute(f"""
+        SELECT t.* FROM text t{channel_filter}
         ORDER BY t.ts_created DESC
         LIMIT %s OFFSET %s
-    """, (per_page, offset))
+    """, channel_params + [per_page, offset])
     messages = cur.fetchall()
     cur.close()
     

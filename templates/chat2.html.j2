@@ -16,17 +16,29 @@
   {{ super() }}
 
 <script>
-// Function to initialize popovers
+// Wait for jQuery to be available before initializing popovers
 function initializePopovers() {
     if (typeof jQuery !== 'undefined') {
         // Only initialize popovers on desktop
         if (window.innerWidth > 768) {
             $('[data-toggle="popover"]').popover({
                 html: true,
-                trigger: 'hover',
+                trigger: 'click',
                 placement: 'bottom',
                 container: 'body',
-                delay: { show: 50, hide: 100 }
+                delay: { show: 0, hide: 0 }
+            });
+            
+            // Prevent popover from closing when clicking inside it
+            $(document).on('click', '.popover', function(e) {
+                e.stopPropagation();
+            });
+            
+            // Close popover when clicking outside
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('.popover, [data-toggle="popover"]').length) {
+                    $('[data-toggle="popover"]').popover('hide');
+                }
             });
         } else {
             // Destroy any existing popovers on mobile
@@ -36,15 +48,20 @@ function initializePopovers() {
 }
 
 // Initialize on DOM content loaded
-document.addEventListener('DOMContentLoaded', initializePopovers);
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait a bit for jQuery to load
+    setTimeout(initializePopovers, 100);
+});
 
 // Re-initialize on window resize
 let resizeTimer;
 window.addEventListener('resize', function() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function() {
-        $('[data-toggle="popover"]').popover('dispose');
-        initializePopovers();
+        if (typeof jQuery !== 'undefined') {
+            $('[data-toggle="popover"]').popover('dispose');
+            initializePopovers();
+        }
     }, 250);
 });
 
@@ -87,169 +104,122 @@ async function loadDistancesForMessage(messageContainer) {
         
         console.log(`Loading positions for message: ${Array.from(nodeIds)}`);
         
-        // Fetch positions for this message's nodes
-        const nodeIdsArray = Array.from(nodeIds);
-        const response = await fetch(`/api/node-positions?nodes=${nodeIdsArray.join(',')}`);
+        // Fetch positions for all nodes in this message
+        const response = await fetch('/api/node-positions?nodes=' + Array.from(nodeIds).join(','));
         if (!response.ok) {
-            console.warn('Failed to load node positions for distance calculation');
+            console.warn('Failed to fetch node positions');
             return;
         }
         
-        const data = await response.json();
-        const positions = data.positions;
+        const positions = await response.json();
         
-        // Update receiver popovers for this message only
-        let updatedCount = 0;
+        // Update tooltips with distances
         receiverBadges.forEach(badge => {
-            try {
-                const receiverId = badge.getAttribute('data-receiver-id');
+            const receiverId = badge.getAttribute('data-receiver-id');
+            const senderPos = positions[senderId];
+            const receiverPos = positions[receiverId];
+            
+            if (senderPos && receiverPos && senderPos.latitude && receiverPos.latitude) {
+                const distance = calculateDistance(
+                    senderPos.latitude, senderPos.longitude,
+                    receiverPos.latitude, receiverPos.longitude
+                );
                 
-                if (senderId && receiverId && positions[senderId] && positions[receiverId]) {
-                    const senderPos = positions[senderId];
-                    const receiverPos = positions[receiverId];
-                    const distance = calculateDistance(
-                        senderPos.latitude, senderPos.longitude,
-                        receiverPos.latitude, receiverPos.longitude
-                    );
-                    
-                    console.log(`Distance ${senderId} -> ${receiverId}: ${distance.toFixed(2)} km`);
-                    
-                    // Update desktop popover
-                    const currentContent = badge.getAttribute('data-content');
-                    if (currentContent && !currentContent.includes('Distance:')) {
-                        const newContent = currentContent.replace('</div>', 
-                            `<br>Distance: ${distance.toFixed(2)} km</div>`);
-                        const $badge = $(badge);
-                        const popover = $badge.data('bs.popover');
-                        badge.setAttribute('data-content', newContent);
-
-                        if (popover && $badge.attr('aria-describedby')) {
-                            // If popover is visible, update its content live
-                            const popoverId = $badge.attr('aria-describedby');
-                            const popoverElem = document.getElementById(popoverId);
-                            if (popoverElem) {
-                                const popoverBody = popoverElem.querySelector('.popover-body');
-                                if (popoverBody) {
-                                    popoverBody.innerHTML = newContent;
-                                }
-                            }
-                        } else if (!popover) {
-                            // If not initialized, initialize it
-                            $badge.popover({
-                                html: true,
-                                trigger: 'hover',
-                                placement: 'bottom',
-                                container: 'body',
-                                delay: { show: 50, hide: 100 }
-                            });
-                        }
-                        updatedCount++;
-                    }
-
-                    // Update mobile view
-                    const mobileRow = messageContainer.querySelector(`.mobile-reception-row [href="/node_${receiverId}.html"]`)?.closest('.mobile-reception-row');
-                    if (mobileRow && !mobileRow.querySelector('.distance-metric')) {
-                        const metricsDiv = mobileRow.querySelector('.mobile-metrics');
-                        if (metricsDiv) {
-                            const distanceDiv = document.createElement('div');
-                            distanceDiv.className = 'metric distance-metric';
-                            distanceDiv.innerHTML = `<span>Distance: ${distance.toFixed(2)} km</span>`;
-                            metricsDiv.appendChild(distanceDiv);
-                        }
-                    }
+                // Update tooltip content
+                const currentTitle = badge.getAttribute('data-original-title') || badge.title;
+                const newTitle = `${currentTitle} • ${distance.toFixed(1)}km`;
+                badge.setAttribute('data-original-title', newTitle);
+                badge.title = newTitle;
+                
+                // Reinitialize tooltip if Bootstrap is available
+                if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+                    $(badge).tooltip('dispose').tooltip();
                 }
-            } catch (error) {
-                console.warn('Error updating popover for badge:', error);
             }
         });
         
-        console.log(`Updated ${updatedCount} popovers with distance information for this message`);
-        
     } catch (error) {
-        console.warn('Error loading distances for message:', error);
+        console.error('Error loading distances:', error);
     }
 }
 
-// Set up hover-based prefetch
-function setupHoverPrefetch() {
-    let hoverTimer = null;
-    const processedMessages = new Set(); // Track which messages we've already processed
-    
-    document.querySelectorAll('.message-container').forEach(container => {
-        container.addEventListener('mouseenter', function() {
-            const messageId = this.getAttribute('data-message-id') || this.querySelector('.message-content')?.textContent?.slice(0, 50);
-            
-            // Skip if we've already processed this message
-            if (processedMessages.has(messageId)) {
-                return;
-            }
-            
-            // Clear any existing timer
-            if (hoverTimer) {
-                clearTimeout(hoverTimer);
-            }
-            
-            // Set a small delay to avoid triggering on accidental hovers
-            hoverTimer = setTimeout(() => {
-                loadDistancesForMessage(this);
-                processedMessages.add(messageId);
-            }, 200); // 200ms delay
-        });
-        
-        container.addEventListener('mouseleave', function() {
-            // Clear the timer if user moves away before delay
-            if (hoverTimer) {
-                clearTimeout(hoverTimer);
-                hoverTimer = null;
-            }
-        });
-    });
+// Load distances for all messages on the page
+async function loadDistancesForAllMessages() {
+    const messageContainers = document.querySelectorAll('.message-container');
+    for (const container of messageContainers) {
+        await loadDistancesForMessage(container);
+    }
 }
 
-// Batch load and inject distances for mobile view
+// Batch load distances for mobile (load all at once)
 async function batchLoadDistancesForMobile() {
-    // Only run on mobile
-    if (window.innerWidth >= 768) return;
-    // Collect all unique node IDs from the current page
-    const nodeIds = new Set();
-    document.querySelectorAll('.message-container[data-sender-id]').forEach(container => {
-        const senderId = container.getAttribute('data-sender-id');
-        if (senderId) nodeIds.add(senderId);
-    });
-    document.querySelectorAll('.reception-badge[data-receiver-id]').forEach(badge => {
-        const receiverId = badge.getAttribute('data-receiver-id');
-        if (receiverId) nodeIds.add(receiverId);
-    });
-    if (nodeIds.size === 0) return;
-    const nodeIdsArray = Array.from(nodeIds);
-    const response = await fetch(`/api/node-positions?nodes=${nodeIdsArray.join(',')}`);
-    if (!response.ok) return;
-    const data = await response.json();
-    const positions = data.positions;
-    // For each message, inject distances into mobile view
-    document.querySelectorAll('.message-container').forEach(messageContainer => {
-        const senderId = messageContainer.getAttribute('data-sender-id');
-        messageContainer.querySelectorAll('.mobile-reception-row [href^="/node_"]').forEach(link => {
-            const receiverId = link.getAttribute('href').replace('/node_', '').replace('.html', '');
-            const mobileRow = link.closest('.mobile-reception-row');
-            if (mobileRow && !mobileRow.querySelector('.distance-metric')) {
-                if (senderId && receiverId && positions[senderId] && positions[receiverId]) {
-                    const senderPos = positions[senderId];
-                    const receiverPos = positions[receiverId];
+    try {
+        const messageContainers = document.querySelectorAll('.message-container');
+        const allNodeIds = new Set();
+        
+        messageContainers.forEach(container => {
+            const senderId = container.getAttribute('data-sender-id');
+            const receiverBadges = container.querySelectorAll('.reception-badge[data-receiver-id]');
+            
+            if (senderId) allNodeIds.add(senderId);
+            receiverBadges.forEach(badge => {
+                const receiverId = badge.getAttribute('data-receiver-id');
+                if (receiverId) allNodeIds.add(receiverId);
+            });
+        });
+        
+        if (allNodeIds.size === 0) return;
+        
+        console.log(`Loading positions for ${allNodeIds.size} nodes`);
+        
+        const response = await fetch('/api/node-positions?nodes=' + Array.from(allNodeIds).join(','));
+        if (!response.ok) {
+            console.warn('Failed to fetch node positions');
+            return;
+        }
+        
+        const positions = await response.json();
+        
+        // Update all tooltips with distances
+        messageContainers.forEach(container => {
+            const senderId = container.getAttribute('data-sender-id');
+            const receiverBadges = container.querySelectorAll('.reception-badge[data-receiver-id]');
+            
+            receiverBadges.forEach(badge => {
+                const receiverId = badge.getAttribute('data-receiver-id');
+                const senderPos = positions[senderId];
+                const receiverPos = positions[receiverId];
+                
+                if (senderPos && receiverPos && senderPos.latitude && receiverPos.latitude) {
                     const distance = calculateDistance(
                         senderPos.latitude, senderPos.longitude,
                         receiverPos.latitude, receiverPos.longitude
                     );
-                    const metricsDiv = mobileRow.querySelector('.mobile-metrics');
-                    if (metricsDiv) {
-                        const distanceDiv = document.createElement('div');
-                        distanceDiv.className = 'metric distance-metric';
-                        distanceDiv.innerHTML = `<span>Distance: ${distance.toFixed(2)} km</span>`;
-                        metricsDiv.appendChild(distanceDiv);
+                    
+                    const currentTitle = badge.getAttribute('data-original-title') || badge.title;
+                    const newTitle = `${currentTitle} • ${distance.toFixed(1)}km`;
+                    badge.setAttribute('data-original-title', newTitle);
+                    badge.title = newTitle;
+                    
+                    if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+                        $(badge).tooltip('dispose').tooltip();
                     }
                 }
-            }
+            });
         });
+        
+    } catch (error) {
+        console.error('Error batch loading distances:', error);
+    }
+}
+
+// Setup hover prefetch for desktop
+function setupHoverPrefetch() {
+    const messageContainers = document.querySelectorAll('.message-container');
+    messageContainers.forEach(container => {
+        container.addEventListener('mouseenter', () => {
+            loadDistancesForMessage(container);
+        }, { once: true });
     });
 }
 
@@ -262,6 +232,156 @@ window.addEventListener('load', function() {
         setTimeout(batchLoadDistancesForMobile, 200);
     }
 });
+
+// Channel filter functions
+function applyChannelFilter() {
+    const checkboxes = document.querySelectorAll('.channel-checkbox:checked');
+    const selectedChannels = [];
+    checkboxes.forEach(checkbox => {
+        if (checkbox.value !== 'all') {
+            selectedChannels.push(checkbox.value);
+        }
+    });
+    
+    // Build URL with selected channels
+    const currentUrl = new URL(window.location.href);
+    if (selectedChannels.length === 0) {
+        currentUrl.searchParams.set('channel', 'all');
+    } else {
+        currentUrl.searchParams.set('channel', selectedChannels.join(','));
+    }
+    currentUrl.searchParams.set('page', 1); // Reset to first page on filter
+    
+    // Save the filter choice to localStorage
+    const filterChoice = selectedChannels.length === 0 ? 'all' : selectedChannels.join(',');
+    localStorage.setItem('chatChannelFilter', filterChoice);
+    
+    window.location.href = currentUrl.toString();
+}
+
+// Load saved filter choice on page load
+function loadSavedChannelFilter() {
+    const savedFilter = localStorage.getItem('chatChannelFilter');
+    if (savedFilter && savedFilter !== 'all') {
+        // Check if the current URL doesn't already have a channel parameter
+        const currentUrl = new URL(window.location.href);
+        if (!currentUrl.searchParams.has('channel')) {
+            // Redirect to include the saved filter
+            currentUrl.searchParams.set('channel', savedFilter);
+            window.location.href = currentUrl.toString();
+        }
+    }
+}
+
+// Initialize saved filter when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadSavedChannelFilter();
+});
+
+// Add a mapping from channel value to short name for use in JS
+var channelShortNames = {
+    {% for channel_info in available_channels %}
+        {{ channel_info.value }}: '{{ channel_info.short_name }}'{% if not loop.last %},{% endif %}
+    {% endfor %}
+};
+
+function updateChannelFilterLabel() {
+    const checkboxes = document.querySelectorAll('.channel-checkbox:checked');
+    let selected = [];
+    checkboxes.forEach(cb => {
+        if (cb.value !== 'all') selected.push(parseInt(cb.value));
+    });
+    let label = '';
+    if (selected.length === 0 || document.getElementById('channel-all').checked) {
+        label = 'All';
+    } else {
+        // Debug: log the channelShortNames object and selected values
+        console.log('channelShortNames:', channelShortNames);
+        console.log('selected values:', selected);
+        label = selected.map(val => {
+            const shortName = channelShortNames[val] || val;
+            console.log(`Mapping ${val} to ${shortName}`);
+            return shortName;
+        }).join(', ');
+    }
+    console.log('Final label:', label);
+    document.getElementById('channelFilterLabel').textContent = label;
+}
+
+// Handle mutual exclusivity between "All" and individual channels
+function handleChannelSelection(changedCheckbox) {
+    const allCheckbox = document.getElementById('channel-all');
+    const individualCheckboxes = document.querySelectorAll('.channel-checkbox:not(#channel-all)');
+    
+    if (changedCheckbox.value === 'all') {
+        // If "All" was checked, uncheck all individual channels
+        if (changedCheckbox.checked) {
+            individualCheckboxes.forEach(cb => {
+                cb.checked = false;
+            });
+        }
+    } else {
+        // If an individual channel was checked, uncheck "All"
+        if (changedCheckbox.checked) {
+            allCheckbox.checked = false;
+        }
+        // If an individual channel was unchecked and no others are checked, check "All"
+        else {
+            const anyIndividualChecked = Array.from(individualCheckboxes).some(cb => cb.checked);
+            if (!anyIndividualChecked) {
+                allCheckbox.checked = true;
+            }
+        }
+    }
+    
+    // Update the label
+    updateChannelFilterLabel();
+}
+
+// When popover is shown, update checkboxes and label
+function initializeChannelFilter() {
+    if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+        $(document).on('shown.bs.popover', '#channelFilterBtn', function () {
+            // Update label on checkbox change
+            $('.channel-checkbox').on('change', function() {
+                handleChannelSelection(this);
+            });
+            
+            // Ensure checkboxes reflect current URL parameters
+            const currentUrl = new URL(window.location.href);
+            const currentChannel = currentUrl.searchParams.get('channel') || 'all';
+            
+            // Reset all checkboxes first
+            $('.channel-checkbox').prop('checked', false);
+            
+            if (currentChannel === 'all') {
+                $('#channel-all').prop('checked', true);
+            } else {
+                const selectedChannels = currentChannel.split(',');
+                selectedChannels.forEach(channel => {
+                    $(`#channel-${channel}`).prop('checked', true);
+                });
+            }
+            
+            updateChannelFilterLabel();
+        });
+
+        // When popover is hidden, clean up event handlers
+        $(document).on('hidden.bs.popover', '#channelFilterBtn', function () {
+            $('.channel-checkbox').off('change');
+        });
+    } else {
+        // Retry after a short delay if jQuery isn't loaded yet
+        setTimeout(initializeChannelFilter, 100);
+    }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeChannelFilter);
+} else {
+    initializeChannelFilter();
+}
 </script>
 {% endblock %}
 
@@ -271,11 +391,39 @@ window.addEventListener('load', function() {
         <h5>🗨️ Chat</h5>
         <div class="d-flex align-items-center gap-3">
             <div class="text-muted" style="margin-right: 1em;">
-                Showing {{ pagination.start_item }} to {{ pagination.end_item }} of {{ pagination.total }} messages
+                Showing {{ (pagination.page - 1) * pagination.per_page + 1 }} to {{ pagination.page * pagination.per_page if pagination.page * pagination.per_page < pagination.total else pagination.total }} of {{ pagination.total }} messages
+            </div>
+            <div class="me-3" style="margin-right: 1em;">
+                <button type="button" id="channelFilterBtn" class="btn btn-outline-secondary btn-sm" data-toggle="popover" data-html="true" data-placement="bottom" title="Select Channels" data-content="
+                    <div class='channel-filter-popover'>
+                        <div class='mb-2'>
+                            <label class='form-check'>
+                                <input type='checkbox' class='form-check-input channel-checkbox' value='all' id='channel-all' {% if request.args.get('channel', 'all') == 'all' %}checked{% endif %}>
+                                <label class='form-check-label' for='channel-all'>All Channels</label>
+                            </label>
+                        </div>
+                        <hr class='my-2'>
+                        {% for channel_info in available_channels %}
+                        <div class='mb-1'>
+                            <label class='form-check'>
+                                <input type='checkbox' class='form-check-input channel-checkbox' value='{{ channel_info.value }}' id='channel-{{ channel_info.value }}' 
+                                    {% if request.args.get('channel') and channel_info.value|string in request.args.get('channel').split(',') %}checked{% endif %}>
+                                <label class='form-check-label' for='channel-{{ channel_info.value }}'>{{ channel_info.name }} ({{ channel_info.short_name }})</label>
+                            </label>
+                        </div>
+                        {% endfor %}
+                        <hr class='my-2'>
+                        <button type='button' class='btn btn-primary btn-sm w-100' onclick='applyChannelFilter()'>Apply</button>
+                    </div>
+                ">
+                    Channels: <span id="channelFilterLabel">
+                        {{ channel_display }}
+                    </span>
+                </button>
             </div>
             <div class="btn-group">
                 {% if pagination.has_prev %}
-                <a href="?page={{ pagination.prev_num }}" class="btn btn-outline-secondary btn-sm" title="Previous page">
+                <a href="?page={{ pagination.prev_num }}{% if request.args.get('channel') %}&channel={{ request.args.get('channel') }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Previous page">
                     <i class="bi bi-arrow-left"></i>
                 </a>
                 {% else %}
@@ -285,7 +433,7 @@ window.addEventListener('load', function() {
                 {% endif %}
 
                 {% if pagination.has_next %}
-                <a href="?page={{ pagination.next_num }}" class="btn btn-outline-secondary btn-sm" title="Next page">
+                <a href="?page={{ pagination.next_num }}{% if request.args.get('channel') %}&channel={{ request.args.get('channel') }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Next page">
                     <i class="bi bi-arrow-right"></i>
                 </a>
                 {% else %}
@@ -544,7 +692,7 @@ window.addEventListener('load', function() {
 
     {% if pagination.has_next %}
     <div class="load-more">
-        <button type="button" id="loadOlderMessages" onclick="window.location.href='?page={{ pagination.next_num }}'">
+        <button type="button" id="loadOlderMessages" onclick="window.location.href='?page={{ pagination.next_num }}{% if request.args.get('channel') %}&channel={{ request.args.get('channel') }}{% endif %}'">
             Load older messages
         </button>
     </div>
@@ -563,6 +711,9 @@ window.addEventListener('load', function() {
     </div>
 </div>
 {% endblock %}
+
+<!-- Hidden element with channel data for JavaScript -->
+<span id="availableChannelsJson" style="display:none;">{{ available_channels | tojson }}</span>
 
 {% macro format_duration(seconds) %}
     {%- set s = seconds|int %}

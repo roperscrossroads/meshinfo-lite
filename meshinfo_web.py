@@ -1680,15 +1680,39 @@ def chat():
 def chat2():
     page = request.args.get('page', 1, type=int)
     per_page = 50
+    channel = request.args.get('channel', 'all')
     
     # Get cached data
     nodes = get_cached_nodes()
     if not nodes:
         abort(503, description="Database connection unavailable")
         
-    chat_data = get_cached_chat_data(page, per_page)
+    chat_data = get_cached_chat_data(page, per_page, channel)
     if not chat_data:
         abort(503, description="Database connection unavailable")
+    
+    # Get available channels from meshtastic_support
+    import meshtastic_support
+    available_channels = []
+    for channel_enum in meshtastic_support.Channel:
+        available_channels.append({
+            'value': channel_enum.value,
+            'name': meshtastic_support.get_channel_name(channel_enum.value),
+            'short_name': meshtastic_support.get_channel_name(channel_enum.value, use_short_names=True)
+        })
+    
+    # Process channel display for the template
+    channel_display = "All"
+    if channel != 'all':
+        selected_channels = channel.split(',')
+        short_names = []
+        for channel_info in available_channels:
+            if str(channel_info['value']) in selected_channels:
+                short_names.append(channel_info['short_name'])
+        if short_names:
+            channel_display = ', '.join(short_names)
+        else:
+            channel_display = channel
     
     # Pre-process nodes to reduce template complexity
     # Only include nodes that are actually used in the chat messages
@@ -1733,6 +1757,9 @@ def chat2():
         timestamp=datetime.datetime.now(),
         meshtastic_support=get_meshtastic_support(),
         debug=False,
+        channel=channel,
+        available_channels=available_channels,
+        channel_display=channel_display
     )
 
 @app.route('/')

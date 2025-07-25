@@ -107,3 +107,7 @@ chat_box_background_color=#f0f0f0
 chat_box_border_color=
 # Banner background color (e.g. for newest node welcome in nodes page)
 banner_background_color=#F9F9D7
+# Favicon background color override (optional, falls back to accent_color if not set)
+favicon_background_color=
+# Favicon logo (stroke) color override (optional, falls back to auto-contrast if not set)
+favicon_logo_color=

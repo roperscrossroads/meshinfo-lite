@@ -81,8 +81,17 @@ def main():
     theme.update(config['theme'] if 'theme' in config else {})
     accent_color = theme['accent_color']
 
-    stroke_color = '#FFFFFF' if is_dark(accent_color) else '#000000'
-    svg_content = SVG_TEMPLATE.format(accent_color=accent_color, stroke_color=stroke_color)
+    # Favicon background override
+    favicon_background_color = theme.get('favicon_background_color') or accent_color
+    # Favicon logo (stroke) color override
+    favicon_logo_color = theme.get('favicon_logo_color')
+
+    if favicon_logo_color:
+        stroke_color = favicon_logo_color
+    else:
+        stroke_color = '#FFFFFF' if is_dark(favicon_background_color) else '#000000'
+
+    svg_content = SVG_TEMPLATE.format(accent_color=favicon_background_color, stroke_color=stroke_color)
     png_images = []
 
     for size in SIZES:
