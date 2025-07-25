@@ -13,6 +13,13 @@ jobs:
           fetch-depth: 0
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-amd64-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-amd64-
       - name: Calculate version
         id: version
         run: |
@@ -41,6 +48,8 @@ jobs:
             ghcr.io/agessaman/meshinfo-lite:latest-amd64
             ghcr.io/agessaman/meshinfo-lite:${{ steps.version.outputs.version }}-amd64
             ghcr.io/agessaman/meshinfo-lite:${{ steps.version.outputs.latest_tag }}-amd64
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
 
   build-and-push-arm64:
     runs-on: ubuntu-latest
