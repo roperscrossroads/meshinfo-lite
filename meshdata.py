@@ -3074,8 +3074,11 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             for (from_node, to_node), edge in edge_map.items():
                 node_stats[from_node]['message_count'] += edge['count']
                 node_stats[to_node]['relay_count'] += edge['count']
+            
+            # Create nodes list, including placeholder nodes for missing nodes
             for node_hex in endpoint_nodes:
                 if node_hex in nodes_dict:
+                    # Real node exists in database
                     node = nodes_dict[node_hex]
                     node_name_for_icon = node.get('long_name') or node.get('short_name', '')
                     icon_url = utils.graph_icon(node_name_for_icon)
@@ -3094,8 +3097,8 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                         'relay_count': node_stats[node_hex]['relay_count'],
                         'icon_url': icon_url
                     })
-            for node_hex in endpoint_nodes:
-                if node_hex.startswith('relay_') and node_hex in virtual_nodes:
+                elif node_hex.startswith('relay_') and node_hex in virtual_nodes:
+                    # Virtual relay node
                     nodes.append({
                         'id': virtual_nodes[node_hex]['id'],
                         'short_name': virtual_nodes[node_hex]['short_name'],
@@ -3109,20 +3112,42 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                         'relay_count': node_stats[node_hex]['relay_count'],
                         'icon_url': None
                     })
+                else:
+                    # Create placeholder node for missing node (e.g., node with MQTT off)
+                    nodes.append({
+                        'id': node_hex,
+                        'long_name': f"Node {node_hex} (Offline)",
+                        'short_name': f"{node_hex[-4:]} (Off)",
+                        'hw_model': 'Unknown',
+                        'firmware_version': None,
+                        'role': None,
+                        'owner': None,
+                        'last_seen': node_last_seen.get(node_hex),
+                        'first_seen': node_first_seen.get(node_hex),
+                        'last_relay': node_last_seen.get(node_hex),
+                        'message_count': node_stats[node_hex]['message_count'],
+                        'relay_count': node_stats[node_hex]['relay_count'],
+                        'icon_url': None
+                    })
+            
+            # Filter edges to only include edges where both nodes exist in our nodes list
+            valid_node_ids = {node['id'] for node in nodes}
             edges = []
             for (from_node, to_node), edge in edge_map.items():
-                            edges.append({
-                'id': f"{from_node}-{to_node}",
-                'from_node': from_node,
-                'to_node': to_node,
-                'relay_suffix': edge['relay_suffix'],
-                'message_count': edge['count'],
-                'first_seen': edge['first_seen'],
-                'last_seen': edge['last_seen'],
-                'source_type': edge.get('source_type', 'relay'),
-                'forward_hops': edge.get('forward_hops', 0),
-                'return_hops': edge.get('return_hops', 0)
-            })
+                # Only include edge if both source and target nodes are in our nodes list
+                if from_node in valid_node_ids and to_node in valid_node_ids:
+                    edges.append({
+                        'id': f"{from_node}-{to_node}",
+                        'from_node': from_node,
+                        'to_node': to_node,
+                        'relay_suffix': edge['relay_suffix'],
+                        'message_count': edge['count'],
+                        'first_seen': edge['first_seen'],
+                        'last_seen': edge['last_seen'],
+                        'source_type': edge.get('source_type', 'relay'),
+                        'forward_hops': edge.get('forward_hops', 0),
+                        'return_hops': edge.get('return_hops', 0)
+                    })
             total_nodes = len(nodes)
             total_edges = len(edges)
             total_messages = sum(e['message_count'] for e in edges)
