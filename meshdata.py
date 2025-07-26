@@ -2979,6 +2979,16 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             edge_map = {}
             virtual_nodes = {}
             endpoint_nodes = set()
+            node_stats = {}
+            
+            # Helper function to ensure a node is included in endpoint_nodes
+            def ensure_node_included(node_id):
+                if node_id not in endpoint_nodes:
+                    endpoint_nodes.add(node_id)
+                    # Initialize stats for this node if not already present
+                    if node_id not in node_stats:
+                        node_stats[node_id] = {'message_count': 0, 'relay_count': 0}
+            
             # 4. Component-local consolidation
             for suffix, edges in relay_suffix_edges.items():
                 # Group edges by component
@@ -3018,8 +3028,8 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                                     edge_map[edge_key]['first_seen'] = rx_time
                                 if edge_map[edge_key]['last_seen'] is None or rx_time > edge_map[edge_key]['last_seen']:
                                     edge_map[edge_key]['last_seen'] = rx_time
-                            endpoint_nodes.add(edge_from)
-                            endpoint_nodes.add(edge_to)
+                            ensure_node_included(edge_from)
+                            ensure_node_included(edge_to)
                     else:
                         # Use a virtual node for this component
                         virtual_id = f"relay_{suffix}_{comp_idx+1}" if suffix is not None else None
@@ -3039,22 +3049,22 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                             edge_to = to_hex
                             edge_key = (edge_from, edge_to)
                             if edge_key not in edge_map:
-                                                            edge_map[edge_key] = {
-                                'count': 0,
-                                'relay_suffix': suffix,
-                                'first_seen': rx_time,
-                                'last_seen': rx_time,
-                                'virtual_id': virtual_id if suffix is not None else None,
-                                'source_type': zero_hop_source.get(edge_key, 'relay')
-                            }
+                                edge_map[edge_key] = {
+                                    'count': 0,
+                                    'relay_suffix': suffix,
+                                    'first_seen': rx_time,
+                                    'last_seen': rx_time,
+                                    'virtual_id': virtual_id if suffix is not None else None,
+                                    'source_type': zero_hop_source.get(edge_key, 'relay')
+                                }
                             edge_map[edge_key]['count'] += 1
                             if rx_time:
                                 if edge_map[edge_key]['first_seen'] is None or rx_time < edge_map[edge_key]['first_seen']:
                                     edge_map[edge_key]['first_seen'] = rx_time
                                 if edge_map[edge_key]['last_seen'] is None or rx_time > edge_map[edge_key]['last_seen']:
                                     edge_map[edge_key]['last_seen'] = rx_time
-                            endpoint_nodes.add(edge_from)
-                            endpoint_nodes.add(edge_to)
+                            ensure_node_included(edge_from)
+                            ensure_node_included(edge_to)
 
             node_first_seen = {}
             node_last_seen = {}
@@ -3068,9 +3078,6 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                             node_last_seen[node] = edge['last_seen']
 
             nodes = []
-            node_stats = {}
-            for node_hex in endpoint_nodes:
-                node_stats[node_hex] = {'message_count': 0, 'relay_count': 0}
             for (from_node, to_node), edge in edge_map.items():
                 node_stats[from_node]['message_count'] += edge['count']
                 node_stats[to_node]['relay_count'] += edge['count']
@@ -3130,8 +3137,10 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                         'icon_url': None
                     })
             
-            # Filter edges to only include edges where both nodes exist in our nodes list
+            # Create a set of valid node IDs for edge filtering
             valid_node_ids = {node['id'] for node in nodes}
+            
+            # Filter edges to only include edges where both nodes exist in our nodes list
             edges = []
             for (from_node, to_node), edge in edge_map.items():
                 # Only include edge if both source and target nodes are in our nodes list

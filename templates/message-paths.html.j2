@@ -181,6 +181,50 @@
       var edges = originalData.edges;
       var cy;
 
+      // Function to create a placeholder node for missing nodes
+      function createPlaceholderNode(nodeId) {
+        return {
+          data: {
+            id: nodeId,
+            short: nodeId.slice(-4) + ' (Off)',
+            long_name: nodeId + ' (Offline)',
+            hw_model: 'Unknown',
+            last_seen: null,
+            last_relay: null,
+            first_seen: null,
+            message_count: 0,
+            relay_count: 0,
+            is_placeholder: true
+          }
+        };
+      }
+
+      // Function to ensure all nodes referenced in edges exist
+      function ensureAllNodesExist(nodes, edges) {
+        const existingNodeIds = new Set(nodes.map(node => node.id));
+        const missingNodes = [];
+        
+        // Check all edges for missing source or target nodes
+        edges.forEach(edge => {
+          if (!existingNodeIds.has(edge.from_node)) {
+            console.log(`Creating placeholder node for missing source: ${edge.from_node}`);
+            missingNodes.push(createPlaceholderNode(edge.from_node));
+            existingNodeIds.add(edge.from_node);
+          }
+          if (!existingNodeIds.has(edge.to_node)) {
+            console.log(`Creating placeholder node for missing target: ${edge.to_node}`);
+            missingNodes.push(createPlaceholderNode(edge.to_node));
+            existingNodeIds.add(edge.to_node);
+          }
+        });
+        
+        if (missingNodes.length > 0) {
+          console.log(`Created ${missingNodes.length} placeholder nodes for missing nodes`);
+        }
+        
+        return nodes.concat(missingNodes);
+      }
+
       // Initialize the graph
       function initializeGraph(data) {
         // Destroy any existing tooltip
@@ -190,8 +234,11 @@
           cy.destroy();
         }
 
+        // Ensure all nodes referenced in edges exist
+        const allNodes = ensureAllNodesExist(data.nodes, data.edges);
+
         var elements = {
-          nodes: data.nodes.map(node => ({
+          nodes: allNodes.map(node => ({
             data: Object.assign({
               id: node.id,
               short: node.short_name || node.id,
@@ -201,7 +248,8 @@
               last_relay: node.last_relay || node.last_seen,
               first_seen: node.first_seen,
               message_count: node.message_count || 0,
-              relay_count: node.relay_count || 0
+              relay_count: node.relay_count || 0,
+              is_placeholder: node.is_placeholder || false
             }, node.icon_url ? { image: node.icon_url } : {})
           })),
           edges: data.edges.map(edge => ({
@@ -273,6 +321,28 @@
             },
             {
               selector: "node[long_name *= '(Offline)']",
+              style: {
+                'background-color': '#f8d7da', // light red
+                'border-color': '#dc3545',     // red border
+                'border-width': 2,
+                'border-style': 'dashed',
+                'width': '40px',
+                'height': '40px',
+                'label': 'data(short)',
+                'text-wrap': 'wrap',
+                'text-max-width': '80px',
+                'text-valign': 'bottom',
+                'text-margin-y': '8px',
+                'font-size': '11px',
+                'font-weight': '600',
+                'text-background-color': '#ffffff',
+                'text-background-opacity': 0.9,
+                'text-background-padding': '3px',
+                'opacity': 0.7
+              }
+            },
+            {
+              selector: "node[is_placeholder = true]",
               style: {
                 'background-color': '#f8d7da', // light red
                 'border-color': '#dc3545',     // red border
@@ -440,8 +510,8 @@
         cy.on('tap', 'node', function(e) {
           var nodeId = e.target.id();
           var nodeData = e.target.data();
-          // Don't redirect for relay nodes or offline nodes
-          if (!nodeId.startsWith('relay_') && !nodeData.long_name.includes('(Offline)')) {
+          // Don't redirect for relay nodes, offline nodes, or placeholder nodes
+          if (!nodeId.startsWith('relay_') && !nodeData.long_name.includes('(Offline)') && !nodeData.is_placeholder) {
             window.location.href = "node_" + nodeId.replace("!", "") + ".html";
           }
         });
@@ -507,16 +577,22 @@
           const nodeData = node.data();
           const isVirtualRelay = nodeData.id && nodeData.id.startsWith('relay_');
           const isOffline = nodeData.long_name && nodeData.long_name.includes('(Offline)');
-          const nodeNameHtml = isVirtualRelay
-            ? `<strong>${nodeData.long_name || nodeData.id}</strong>`
-            : isOffline
-            ? `<strong>${nodeData.long_name || nodeData.id}</strong>`
-            : `<strong><a href="node_${nodeData.id}.html">${nodeData.long_name || nodeData.id}</a></strong>`;
+          const isPlaceholder = nodeData.is_placeholder;
+
+          let nodeNameHtml = '';
+          if (isVirtualRelay) {
+            nodeNameHtml = `<strong>${nodeData.long_name || nodeData.id}</strong>`;
+          } else if (isOffline) {
+            nodeNameHtml = `<strong>${nodeData.long_name || nodeData.id}</strong>`;
+          } else {
+            nodeNameHtml = `<strong><a href="node_${nodeData.id}.html">${nodeData.long_name || nodeData.id}</a></strong>`;
+          }
+
           const content = `
             <div style="text-align: left; min-width: 200px;">
               ${nodeNameHtml}<br>
               <small class="text-muted">${nodeData.id}</small><br><br>
-              ${isOffline ? '<strong>Status:</strong> Offline (MQTT disabled)<br>' : ''}
+              ${isOffline || isPlaceholder ? '<strong>Status:</strong> Offline (MQTT disabled)<br>' : ''}
               <strong>Hardware:</strong> ${nodeData.hw_model_name || nodeData.hw_model || 'Unknown'}<br>
               <strong>First Relay:</strong> ${timeAgo(nodeData.first_seen)}<br>
               <strong>Last Relay:</strong> ${timeAgo(nodeData.last_relay || nodeData.last_seen)}<br>
