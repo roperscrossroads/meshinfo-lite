@@ -194,7 +194,7 @@
             first_seen: null,
             message_count: 0,
             relay_count: 0,
-            is_placeholder: true
+            is_placeholder: 'true'
           }
         };
       }
@@ -249,7 +249,7 @@
               first_seen: node.first_seen,
               message_count: node.message_count || 0,
               relay_count: node.relay_count || 0,
-              is_placeholder: node.is_placeholder || false
+              is_placeholder: node.is_placeholder || 'false'
             }, node.icon_url ? { image: node.icon_url } : {})
           })),
           edges: data.edges.map(edge => ({
@@ -342,7 +342,7 @@
               }
             },
             {
-              selector: "node[is_placeholder = true]",
+              selector: "node[is_placeholder = 'true']",
               style: {
                 'background-color': '#f8d7da', // light red
                 'border-color': '#dc3545',     // red border
@@ -511,7 +511,7 @@
           var nodeId = e.target.id();
           var nodeData = e.target.data();
           // Don't redirect for relay nodes, offline nodes, or placeholder nodes
-          if (!nodeId.startsWith('relay_') && !nodeData.long_name.includes('(Offline)') && !nodeData.is_placeholder) {
+          if (!nodeId.startsWith('relay_') && !nodeData.long_name.includes('(Offline)') && nodeData.is_placeholder !== 'true') {
             window.location.href = "node_" + nodeId.replace("!", "") + ".html";
           }
         });
@@ -577,7 +577,7 @@
           const nodeData = node.data();
           const isVirtualRelay = nodeData.id && nodeData.id.startsWith('relay_');
           const isOffline = nodeData.long_name && nodeData.long_name.includes('(Offline)');
-          const isPlaceholder = nodeData.is_placeholder;
+          const isPlaceholder = nodeData.is_placeholder === 'true';
 
           let nodeNameHtml = '';
           if (isVirtualRelay) {
