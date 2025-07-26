@@ -22,6 +22,8 @@
     <p class="text-muted">
       Visualizing inferred relay paths based on message propagation data. 
       Each edge represents a relay relationship where messages passed through intermediate nodes.
+      <br>
+      <small class="text-muted">Tip: Hold the Shift key to view detailed edge information.</small>
     </p>
 
     <div class="row mb-3">
@@ -87,6 +89,13 @@
   </div>
 
   <div id="cy" style="width: 100%; height: 80vh;"></div>
+  
+  <!-- Shift key indicator -->
+  <div id="shiftIndicator" class="position-fixed" style="top: 10px; right: 10px; z-index: 1000; display: none;">
+    <div class="alert alert-info alert-sm mb-0">
+      <i class="bi bi-shift"></i> Shift key active - Edge tooltips enabled
+    </div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
   <script src="https://unpkg.com/webcola/WebCola/cola.min.js"></script>
@@ -631,6 +640,12 @@
       // Edge tooltip handler
       cy.on('mouseover', 'edge', function(e) {
         const edge = e.target;
+        
+        // Only show tooltip if Shift key is held down
+        if (!e.originalEvent.shiftKey) {
+          return;
+        }
+        
         // Defensive: destroy any existing tooltip
         destroyCurrentTippy();
         // Defensive: check edge is still valid and visible
@@ -717,6 +732,19 @@
         button.addEventListener('click', function() {
           destroyCurrentTippy();
         });
+      });
+
+      // Show/hide Shift key indicator
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'Shift') {
+          document.getElementById('shiftIndicator').style.display = 'block';
+        }
+      });
+
+      document.addEventListener('keyup', function(event) {
+        if (event.key === 'Shift') {
+          document.getElementById('shiftIndicator').style.display = 'none';
+        }
       });
     });
   </script>
