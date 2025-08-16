@@ -81,15 +81,27 @@ COPY --chown=app:app templates ./templates
 COPY --chown=app:app migrations ./migrations
 
 # Create runtime_cache directory with proper permissions
-RUN mkdir -p /app/runtime_cache && chown -R app:app /app/runtime_cache && chmod 755 /app/runtime_cache
+RUN mkdir -p /app/runtime_cache && \
+    chown -R app:app /app/runtime_cache && \
+    chmod 777 /app/runtime_cache
 
 HEALTHCHECK NONE
 
 RUN chmod +x run.sh
 RUN chmod +x *.sh
 
-USER app
+# Ensure cache directory permissions persist
+USER root
+RUN echo '#!/bin/bash' > /app/fix_cache.sh && \
+    echo 'mkdir -p /app/runtime_cache' >> /app/fix_cache.sh && \
+    echo 'chmod 777 /app/runtime_cache' >> /app/fix_cache.sh && \
+    echo 'chown -R app:app /app/runtime_cache' >> /app/fix_cache.sh && \
+    echo 'exec su app -c "./run.sh"' >> /app/fix_cache.sh && \
+    chmod +x /app/fix_cache.sh
+
+USER root
 
 EXPOSE ${APP_PORT}
 
-CMD ["./run.sh"]
+# Run with cache fix wrapper to ensure permissions
+CMD ["/app/fix_cache.sh"]
