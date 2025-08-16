@@ -24,6 +24,9 @@ WORKDIR /app
 ARG TARGETPLATFORM
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
     libexpat1 \
     libcairo2 \
     pkg-config \
