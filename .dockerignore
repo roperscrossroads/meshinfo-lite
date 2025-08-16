@@ -1,2 +1,14 @@
 mariadb/
+mysql_data/
+mariadb_data/
+runtime_cache/
 docker-compose.yml
+docker-compose*.yml
+.git/
+.gitignore
+*.log
+*.pid
+.env
+.env.local
+config-*.ini.example
+preview_server.py
