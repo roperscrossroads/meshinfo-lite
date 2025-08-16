@@ -61,22 +61,6 @@ PIL.ImageDraw.ImageDraw.textsize = textsize
 
 app = Flask(__name__)
 
-@app.after_request
-def after_request(response):
-    """Add security and performance headers to all responses."""
-    # Remove unnecessary security headers
-    response.headers.pop('X-XSS-Protection', None)
-
-    # Add cache control for performance (if not already set)
-    if 'Cache-Control' not in response.headers:
-        if request.endpoint and any(request.endpoint.endswith(suffix) for suffix in ['.css', '.js', '.png', '.jpg', '.gif', '.ico', '.svg']):
-            response.headers['Cache-Control'] = 'public, max-age=3600'
-        elif request.path.startswith('/api/'):
-            response.headers['Cache-Control'] = 'no-cache, must-revalidate'
-        else:
-            response.headers['Cache-Control'] = 'no-cache'
-
-    return response
 
 # --- OG image generation for message_map ---
 OG_IMAGE_DIR = "/tmp/og_images"
@@ -505,12 +489,26 @@ def before_request():
 
 @app.after_request
 def after_request(response):
-    """Clean up request context."""
+    """Clean up request context and add security/performance headers."""
+    # Clean up request context
     with request_lock:
         active_requests.discard(id(request))
     # Enhanced memory logging for high-activity periods
     if len(active_requests) > 5:  # If more than 5 concurrent requests
         log_memory_usage(force=True)
+
+    # Add security and performance headers
+    response.headers.pop('X-XSS-Protection', None)
+
+    # Add cache control for performance (if not already set)
+    if 'Cache-Control' not in response.headers:
+        if request.endpoint and any(request.endpoint.endswith(suffix) for suffix in ['.css', '.js', '.png', '.jpg', '.gif', '.ico', '.svg']):
+            response.headers['Cache-Control'] = 'public, max-age=3600'
+        elif request.path.startswith('/api/'):
+            response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+        else:
+            response.headers['Cache-Control'] = 'no-cache'
+
     return response
 
 
