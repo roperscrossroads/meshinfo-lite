@@ -39,7 +39,7 @@ def safe_timestamp_convert(dt_obj):
             dt_obj = dt_obj.replace(tzinfo=pytz.UTC)
         return int(dt_obj.timestamp())
     return dt_obj  # Already a timestamp or other value
-    
+
 class MeshData:
     def __init__(self):
         config = configparser.ConfigParser()
@@ -85,7 +85,7 @@ class MeshData:
     def connect_db(self):
         max_retries = 5
         retry_delay = 10  # seconds
-        
+
         for attempt in range(max_retries):
             try:
                 # Ensure any existing connection is closed before creating a new one
@@ -162,9 +162,14 @@ class MeshData:
 
     def get_telemetry(self, id):
         telemetry = {}
-        sql = """SELECT * FROM telemetry WHERE id = %s
-AND battery_level IS NOT NULL
-ORDER BY telemetry_time DESC LIMIT 1"""
+        sql = """SELECT id, air_util_tx, battery_level, channel_utilization,
+                        uptime_seconds, voltage, temperature, relative_humidity,
+                        barometric_pressure, gas_resistance, current,
+                        UNIX_TIMESTAMP(telemetry_time) as telemetry_time,
+                        telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM telemetry WHERE id = %s
+                 AND battery_level IS NOT NULL
+                 ORDER BY telemetry_time DESC LIMIT 1"""
         params = (id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
@@ -172,17 +177,19 @@ ORDER BY telemetry_time DESC LIMIT 1"""
         if row:
             column_names = [desc[0] for desc in cur.description]
             for i in range(1, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    telemetry[column_names[i]] = row[i].timestamp()
-                else:
-                    telemetry[column_names[i]] = row[i]
+                telemetry[column_names[i]] = row[i]
         cur.close()
         return telemetry
 
     def get_telemetry_all(self):
         telemetry = []
-        sql = """SELECT * FROM telemetry
-ORDER BY ts_created DESC LIMIT 1000"""
+        sql = """SELECT id, air_util_tx, battery_level, channel_utilization,
+                        uptime_seconds, voltage, temperature, relative_humidity,
+                        barometric_pressure, gas_resistance, current,
+                        UNIX_TIMESTAMP(telemetry_time) as telemetry_time,
+                        telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM telemetry
+                 ORDER BY ts_created DESC LIMIT 1000"""
         cur = self.db.cursor()
         cur.execute(sql)
         rows = cur.fetchall()
@@ -190,17 +197,14 @@ ORDER BY ts_created DESC LIMIT 1000"""
             record = {}
             column_names = [desc[0] for desc in cur.description]
             for i in range(0, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    record[column_names[i]] = row[i].timestamp()
-                else:
-                    record[column_names[i]] = row[i]
+                record[column_names[i]] = row[i]
             telemetry.append(record)
         cur.close()
         return telemetry
 
     def get_node_telemetry(self, node_id):
         telemetry = []
-        sql = """SELECT id, air_util_tx, battery_level, channel_utilization, 
+        sql = """SELECT id, air_util_tx, battery_level, channel_utilization,
                         UNIX_TIMESTAMP(ts_created) as ts_created
                  FROM telemetry
                  WHERE ts_created >= NOW() - INTERVAL 1 DAY
@@ -221,7 +225,11 @@ ORDER BY ts_created DESC LIMIT 1000"""
 
     def get_position(self, id):
         position = {}
-        sql = "SELECT * FROM position WHERE id = %s"
+        sql = """SELECT id, altitude, ground_speed, ground_track, latitude_i,
+                        longitude_i, location_source, precision_bits,
+                        UNIX_TIMESTAMP(position_time) as position_time,
+                        geocoded, UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM position WHERE id = %s"""
         params = (id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
@@ -229,10 +237,7 @@ ORDER BY ts_created DESC LIMIT 1000"""
         if row:
             column_names = [desc[0] for desc in cur.description]
             for i in range(1, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    position[column_names[i]] = row[i].timestamp()
-                else:
-                    position[column_names[i]] = row[i]
+                position[column_names[i]] = row[i]
         cur.close()
         return position
 
@@ -294,10 +299,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         for row in rows:
             record = {}
             for i in range(1, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    record[column_names[i]] = row[i].timestamp()
-                else:
-                    record[column_names[i]] = row[i]
+                record[column_names[i]] = row[i]
 
             if record["lat1_i"] and record["lon1_i"] and \
                     record["lat2_i"] and record["lon2_i"]:
@@ -324,7 +326,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         cur = self.db.cursor()
         cur.execute("SELECT COUNT(DISTINCT request_id) FROM traceroute")
         total = cur.fetchone()[0]
-        
+
         # Get paginated request_ids
         cur.execute("""
             SELECT request_id
@@ -334,7 +336,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             LIMIT %s OFFSET %s
         """, (per_page, (page - 1) * per_page))
         request_ids = [row[0] for row in cur.fetchall()]
-        
+
         # Fetch all traceroute rows for these request_ids
         if not request_ids:
             return {
@@ -350,7 +352,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             }
         format_strings = ','.join(['%s'] * len(request_ids))
         sql = f"""
-            SELECT 
+            SELECT
                 t.request_id,
                 t.from_id,
                 t.to_id,
@@ -372,7 +374,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         """
         cur.execute(sql, tuple(request_ids))
         rows = cur.fetchall()
-        
+
         # Group by request_id
         from collections import defaultdict
         grouped = defaultdict(list)
@@ -467,11 +469,11 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         active_threshold = int(
             self.config["server"]["node_activity_prune_threshold"]
         )
-        
+
         # Combined query to get all node data in one go
         sql = """
         WITH latest_telemetry AS (
-            SELECT id as telemetry_id, 
+            SELECT id as telemetry_id,
                    air_util_tx,
                    battery_level,
                    channel_utilization,
@@ -520,7 +522,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             ) ranked
             WHERE rn = 1
         )
-        SELECT 
+        SELECT
             n.id,
             n.long_name,
             n.short_name,
@@ -550,7 +552,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             t.barometric_pressure,
             t.gas_resistance,
             t.current,
-            t.telemetry_time,
+            UNIX_TIMESTAMP(t.telemetry_time) as telemetry_time,
             t.telemetry_channel,
             -- Position fields
             p.altitude,
@@ -560,7 +562,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             p.longitude_i,
             p.location_source,
             p.precision_bits,
-            p.position_time,
+            UNIX_TIMESTAMP(p.position_time) as position_time,
             p.geocoded,
             -- Channel
             c.channel
@@ -571,11 +573,11 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         LEFT OUTER JOIN latest_channel c ON n.id = c.channel_id
         WHERE n.id IS NOT NULL
         """
-        
+
         # Use database-level caching for the main query
         timeout = time.time() - active_threshold
         rows = self.db_cache.execute_cached_query(sql, (timeout,), cache_key="nodes_main", timeout=60)
-        
+
         # print("Fetched rows:", len(rows))
         skipped = 0
         for row in rows:
@@ -584,15 +586,12 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 continue
             if not row or row.get('id') is None:
                 continue  # Skip rows with no ID
-                
+
             record = {}
-            # Convert datetime fields to timestamps
+            # All timestamp fields are now Unix timestamps from SQL
             for key, value in row.items():
-                if isinstance(value, datetime.datetime):
-                    record[key] = value.timestamp()
-                else:
-                    record[key] = value
-            
+                record[key] = value
+
             # Process telemetry data
             telemetry = {}  # Use plain dict instead of SimpleNamespace
             telemetry_fields = [
@@ -609,7 +608,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 if field in row and row[field] is not None:
                     telemetry[field] = row[field]
             record['telemetry'] = telemetry
-            
+
             # Process position data
             position = {}  # Use plain dict instead of SimpleNamespace
             position_fields = [
@@ -624,22 +623,22 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             for field in position_fields:
                 if field in row and row[field] is not None:
                     position[field] = row[field]
-            
+
             # Always set latitude and longitude attributes
             position['latitude'] = position['latitude_i'] / 10000000 if position['latitude_i'] else None
             position['longitude'] = position['longitude_i'] / 10000000 if position['longitude_i'] else None
             record['position'] = position
-            
+
             # Get neighbors data
             # record['neighbors'] = self.get_neighbors(row['id'])
             record['neighbors'] = [] # This will be populated later
-            
+
             # Set other fields
             record['role'] = record.get('role', 0)
             record['active'] = bool(record.get('is_active', 0))
             record['last_seen'] = utils.time_since(record['ts_seen'])
             record['channel'] = row.get('channel')
-            
+
             try:
                 # Convert node ID to hex string and ensure it's properly formatted
                 node_id_hex = utils.convert_node_id_from_int_to_hex(row['id'])
@@ -648,7 +647,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             except (TypeError, ValueError) as e:
                 logging.error(f"Error converting node ID {row['id']} to hex: {e}")
                 continue
-        
+
         # print("Skipped rows due to missing id:", skipped)
         # print("Final nodes count:", len(nodes))
 
@@ -660,9 +659,9 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 FROM neighborinfo
                 WHERE id IN (%s)
             """ % ','.join(['%s'] * len(all_node_ids))
-            
+
             all_neighbors = self.db_cache.execute_cached_query(neighbor_sql, all_node_ids, cache_key="nodes_neighbors", timeout=60)
-            
+
             # Create a dictionary to map nodes to their neighbors
             neighbors_map = {node_id: [] for node_id in all_node_ids}
             for neighbor_row in all_neighbors:
@@ -671,7 +670,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                     'snr': neighbor_row['snr'],
                     'distance': None # Distance calculation is complex, defer if not essential here
                 })
-            
+
             # Assign neighbors to each node
             for node_hex, node_data in nodes.items():
                 if node_data['id'] in neighbors_map:
@@ -682,27 +681,27 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
     def get_nodes_cached(self, active=False):
         """Get nodes with application-level caching to prevent duplicates."""
         cache_key = f"nodes_cache_{active}"
-        
+
         # Check if we have a cached version
         if hasattr(self, '_nodes_cache') and cache_key in self._nodes_cache:
             cached_data = self._nodes_cache[cache_key]
             if time.time() - cached_data['timestamp'] < 60:  # 60 second cache
                 logging.debug(f"Returning cached nodes data for {cache_key}")
                 return cached_data['data']
-        
+
         # Fetch fresh data
         logging.info("Fetching fresh nodes data from database")
         nodes_data = self.get_nodes(active)
-        
+
         # Cache the result
         if not hasattr(self, '_nodes_cache'):
             self._nodes_cache = {}
-        
+
         self._nodes_cache[cache_key] = {
             'data': nodes_data,
             'timestamp': time.time()
         }
-        
+
         return nodes_data
 
     def clear_nodes_cache(self):
@@ -720,10 +719,11 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         cur = self.db.cursor()
         cur.execute("SELECT COUNT(DISTINCT t.message_id) FROM text t")
         total = cur.fetchone()[0]
-        
+
         # Get paginated results with reception data
         sql = """
-        SELECT t.*,
+        SELECT t.message_id, t.from_id, t.to_id, t.text, t.channel,
+               UNIX_TIMESTAMP(t.ts_created) as ts_created,
             GROUP_CONCAT(
                 CONCAT_WS(':', r.received_by_id, r.rx_snr, r.rx_rssi, r.hop_limit, r.hop_start)
                 SEPARATOR '|'
@@ -734,24 +734,21 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         ORDER BY t.ts_created DESC
         LIMIT %s OFFSET %s
         """
-        
+
         offset = (page - 1) * per_page
         cur = self.db.cursor()
         cur.execute(sql, (per_page, offset))
         rows = cur.fetchall()
         column_names = [desc[0] for desc in cur.description]
-        
+
         chats = []
         prev_key = ""
         for row in rows:
             record = {}
             for i in range(len(row)):
                 col = column_names[i]
-                if isinstance(row[i], datetime.datetime):
-                    record[col] = row[i].timestamp()
-                else:
-                    record[col] = row[i]
-            
+                record[col] = row[i]
+
             # Parse reception information
             record["receptions"] = []
             receptions_str = record.get("reception_data")
@@ -765,7 +762,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                             rssi = parts[2]
                             hop_limit = parts[3] if len(parts) > 3 else None
                             hop_start = parts[4] if len(parts) > 4 else None
-                            
+
                             reception_data = {
                                 "node_id": int(node_id),
                                 "rx_snr": float(snr),
@@ -776,16 +773,16 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                             record["receptions"].append(reception_data)
                         except (ValueError, TypeError):
                             continue
-                            
+
             record["from"] = self.hex_id(record["from_id"])
             record["to"] = self.hex_id(record["to_id"])
             msg_key = f"{record['from']}{record['to']}{record['text']}{record['message_id']}"
             if msg_key != prev_key:
                 chats.append(record)
                 prev_key = msg_key
-        
+
         cur.close()
-        
+
         return {
             "items": chats,
             "total": total,
@@ -817,7 +814,8 @@ ORDER BY ts_created DESC"""
 
     def get_logs(self):
         logs = []
-        sql = "SELECT * FROM meshlog ORDER BY ts_created DESC"
+        sql = """SELECT id, message, UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM meshlog ORDER BY ts_created DESC"""
         cur = self.db.cursor()
         cur.execute(sql)
         rows = cur.fetchall()
@@ -826,10 +824,7 @@ ORDER BY ts_created DESC"""
             record = {}
             for i in range(len(row)):
                 col = column_names[i]
-                if isinstance(row[i], datetime.datetime):
-                    record[col] = row[i].timestamp()
-                else:
-                    record[col] = row[i]
+                record[col] = row[i]
             logs.append(record)
         return logs
 
@@ -849,7 +844,10 @@ where id <> 4294967295 order by ts_created desc limit 1"""
         return latest
 
     def get_user(self, username):
-        sql = "SELECT * FROM meshuser WHERE username=%s"
+        sql = """SELECT username, password_hash, email, is_active, is_verified,
+                        UNIX_TIMESTAMP(created_at) as created_at,
+                        UNIX_TIMESTAMP(last_login) as last_login
+                 FROM meshuser WHERE username=%s"""
         params = (username, )
         cur = self.db.cursor()
         cur.execute(sql, params)
@@ -859,10 +857,7 @@ where id <> 4294967295 order by ts_created desc limit 1"""
         if row:
             for i in range(len(row)):
                 col = column_names[i]
-                if isinstance(row[i], datetime.datetime):
-                    record[col] = row[i].timestamp()
-                else:
-                    record[col] = row[i]
+                record[col] = row[i]
         cur.close()
         return record
 
@@ -979,14 +974,14 @@ WHERE id = %s
         if not data:
             return
         payload = dict(data["decoded"]["json_payload"])
-        
+
         # Determine packet type based on available fields
         is_mapreport = "firmware_version" in payload
         is_nodeinfo = "role" in payload and "firmware_version" not in payload
-        
+
         if self.debug:
             logging.info(f"store_node: Processing node {data['from']} - is_mapreport={is_mapreport}, is_nodeinfo={is_nodeinfo}")
-        
+
         # Set up fields based on packet type
         if is_mapreport:
             # Mapreport: update firmware_version, hw_model, role, and mapreport-specific fields
@@ -1037,27 +1032,27 @@ ON DUPLICATE KEY UPDATE
 long_name = VALUES(long_name),
 short_name = VALUES(short_name),
 hw_model = COALESCE(VALUES(hw_model), hw_model),
-role = CASE 
+role = CASE
     WHEN VALUES(role) IS NOT NULL THEN VALUES(role)
     ELSE role
 END,
-firmware_version = CASE 
+firmware_version = CASE
     WHEN VALUES(firmware_version) IS NOT NULL THEN VALUES(firmware_version)
     ELSE firmware_version
 END,
-has_default_channel = CASE 
+has_default_channel = CASE
     WHEN VALUES(has_default_channel) IS NOT NULL THEN VALUES(has_default_channel)
     ELSE has_default_channel
 END,
-num_online_local_nodes = CASE 
+num_online_local_nodes = CASE
     WHEN VALUES(num_online_local_nodes) IS NOT NULL THEN VALUES(num_online_local_nodes)
     ELSE num_online_local_nodes
 END,
-region = CASE 
+region = CASE
     WHEN VALUES(region) IS NOT NULL THEN VALUES(region)
     ELSE region
 END,
-modem_preset = CASE 
+modem_preset = CASE
     WHEN VALUES(modem_preset) IS NOT NULL THEN VALUES(modem_preset)
     ELSE modem_preset
 END,
@@ -1074,7 +1069,7 @@ ts_updated = VALUES(ts_updated)"""
             payload["region"],
             payload["modem_preset"]
         )
-        
+
         try:
             cur = self.db.cursor()
             cur.execute(sql, values)
@@ -1262,7 +1257,7 @@ ts_updated = VALUES(ts_updated)"""
         hop_limit = data.get("hop_limit", None)
         traceroute_time = payload.get("time", None)
         sql = """INSERT INTO traceroute
-        (from_id, to_id, channel, hop_limit, success, request_id, route, route_back, 
+        (from_id, to_id, channel, hop_limit, success, request_id, route, route_back,
         snr_towards, snr_back, time, ts_created, is_reply, error_reason, attempt_number)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FROM_UNIXTIME(%s), NOW(), %s, %s, %s)"""
         params = (
@@ -1310,7 +1305,7 @@ ts_updated = VALUES(ts_updated)"""
 
     def get_successful_traceroutes(self):
         sql = """
-        SELECT 
+        SELECT
             t.traceroute_id,
             t.from_id,
             t.to_id,
@@ -1318,7 +1313,7 @@ ts_updated = VALUES(ts_updated)"""
             t.route_back,
             t.snr_towards,
             t.snr_back,
-            t.ts_created,
+            UNIX_TIMESTAMP(t.ts_created) as ts_created,
             n1.short_name as from_name,
             n2.short_name as to_name
         FROM traceroute t
@@ -1329,14 +1324,11 @@ ts_updated = VALUES(ts_updated)"""
         """
         cur = self.db.cursor()
         cur.execute(sql)
-        
+
         results = []
         column_names = [desc[0] for desc in cur.description]
         for row in cur.fetchall():
             result = dict(zip(column_names, row))
-            # Convert timestamp to Unix timestamp if needed
-            if isinstance(result['ts_created'], datetime.datetime):
-                result['ts_created'] = result['ts_created'].timestamp()
             # Parse route and SNR data
             if result['route']:
                 result['route'] = [int(a) for a in result['route'].split(";")]
@@ -1347,36 +1339,36 @@ ts_updated = VALUES(ts_updated)"""
             if result['snr_back']:
                 result['snr_back'] = [float(s) for s in result['snr_back'].split(";")]
             results.append(result)
-        
+
         cur.close()
         return results
 
     def store_telemetry(self, data):
         # Use class-level config that's already loaded
         retention_days = self.config.getint("server", "telemetry_retention_days", fallback=None) if self.config else None
-        
+
         # Use a simple counter to reduce cleanup frequency while still honoring retention
         if not hasattr(self, '_telemetry_insert_count'):
             self._telemetry_insert_count = 0
         self._telemetry_insert_count += 1
-        
+
         # Check for cleanup - run retention policy every 50 inserts or if retention_days is set
         should_cleanup = (retention_days is not None) or (self._telemetry_insert_count % 50 == 0)
-        
+
         if should_cleanup:
             cur = self.db.cursor()
             if retention_days:
                 # Always honor retention_days policy
-                cur.execute("""DELETE FROM telemetry 
-                    WHERE ts_created < DATE_SUB(NOW(), INTERVAL %s DAY)""", 
+                cur.execute("""DELETE FROM telemetry
+                    WHERE ts_created < DATE_SUB(NOW(), INTERVAL %s DAY)""",
                     (retention_days,))
             else:
                 # Fallback to count-based cleanup only if no retention_days set
                 cur.execute("SELECT COUNT(*) FROM telemetry WHERE ts_created > DATE_SUB(NOW(), INTERVAL 1 HOUR)")
                 recent_count = cur.fetchone()[0]
                 if recent_count > 200:  # Only run count-based cleanup if we have enough recent activity
-                    cur.execute("""DELETE FROM telemetry WHERE ts_created <= 
-                        (SELECT ts_created FROM 
+                    cur.execute("""DELETE FROM telemetry WHERE ts_created <=
+                        (SELECT ts_created FROM
                             (SELECT ts_created FROM telemetry ORDER BY ts_created DESC LIMIT 1 OFFSET 20000) t)""")
             cur.close()
             self.db.commit()
@@ -1406,7 +1398,7 @@ ts_updated = VALUES(ts_updated)"""
                 float_val = float(value)
                 if float_val == float('inf') or float_val == float('-inf') or str(float_val).lower() == 'nan':
                     return None
-                
+
                 # Apply field-specific validation
                 if field_name:
                     if field_name == 'battery_level':
@@ -1454,7 +1446,7 @@ ts_updated = VALUES(ts_updated)"""
                         # Allow wider range for various power monitoring setups
                         if not -50 <= float_val <= 50:
                             return None
-                
+
                 return float_val
             except (ValueError, TypeError):
                 return None
@@ -1528,7 +1520,7 @@ ON DUPLICATE KEY UPDATE
             return
         if "json_payload" not in data["decoded"] or "text" not in data["decoded"]["json_payload"]:
             return
-                
+
         from_id = data["from"]
         to_id = data["to"]
         text = data["decoded"]["json_payload"]["text"]
@@ -1557,7 +1549,7 @@ ON DUPLICATE KEY UPDATE
 
         # Reception information is now handled by the main store() method
         # No need to duplicate that code here
-        
+
         # Check for meshinfo command
         if isinstance(text, bytes):
             text = text.decode()
@@ -1628,10 +1620,10 @@ ts_seen = NOW(), updated_via = %s WHERE id = %s"""
         cur = self.db.cursor()
         cur.execute(f"SELECT COUNT(*) FROM meshlog")
         count = cur.fetchone()[0]
-        
+
         # Get configurable retention count, default to 1000 if not set
         retention_count = self.config.getint("server", "log_retention_count", fallback=1000)
-        
+
         if count >= retention_count:
             if self.debug:
                 logging.debug(f"Log retention limit reached ({count} >= {retention_count}), removing oldest log entry")
@@ -1689,20 +1681,20 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             frm = data["from"]
             via = self.int_id(topic.split("/")[-1])
             self.verify_node(frm, via)
-        
+
         # Extract common hop information before processing specific message types
         message_id = data.get("id")
         hop_limit = data.get("hop_limit")
         hop_start = data.get("hop_start")
         rx_snr = data.get("rx_snr")
         rx_rssi = data.get("rx_rssi")
-        
+
         # Process relay_node if present (firmware 2.5.x+)
         relay_node = None
         if "relay_node" in data and data["relay_node"] is not None:
             # Convert relay_node to hex format (last 2 bytes of node ID)
             relay_node = f"{data['relay_node']:04x}"  # Convert to 4-char hex string (last 2 bytes)
-        
+
         # Store reception information if this is a received message with SNR/RSSI data
         if message_id and rx_snr is not None and rx_rssi is not None:
             received_by = None
@@ -1710,16 +1702,16 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
             topic_parts = topic.split("/")
             if len(topic_parts) > 1:
                 received_by = self.int_id(topic_parts[-1])
-                
+
             if received_by and received_by != data.get("from"):  # Don't store reception by sender
-                self.store_reception(message_id, data["from"], received_by, rx_snr, rx_rssi, 
+                self.store_reception(message_id, data["from"], received_by, rx_snr, rx_rssi,
                                     data.get("rx_time"), hop_limit, hop_start, relay_node)
-        
+
         # Continue with the regular message type processing
         tp = data["type"]
         if self.debug:
             logging.info(f"store: Processing message type '{tp}' from node {data.get('from')}")
-        
+
         if tp == "nodeinfo":
             if self.debug:
                 logging.info(f"store: Calling store_node for nodeinfo message from {data.get('from')}")
@@ -2061,27 +2053,27 @@ ON DUPLICATE KEY UPDATE
 long_name = VALUES(long_name),
 short_name = VALUES(short_name),
 hw_model = COALESCE(VALUES(hw_model), hw_model),
-role = CASE 
+role = CASE
     WHEN VALUES(role) IS NOT NULL THEN VALUES(role)
     ELSE role
 END,
-firmware_version = CASE 
+firmware_version = CASE
     WHEN VALUES(firmware_version) IS NOT NULL THEN VALUES(firmware_version)
     ELSE firmware_version
 END,
-has_default_channel = CASE 
+has_default_channel = CASE
     WHEN VALUES(has_default_channel) IS NOT NULL THEN VALUES(has_default_channel)
     ELSE has_default_channel
 END,
-num_online_local_nodes = CASE 
+num_online_local_nodes = CASE
     WHEN VALUES(num_online_local_nodes) IS NOT NULL THEN VALUES(num_online_local_nodes)
     ELSE num_online_local_nodes
 END,
-region = CASE 
+region = CASE
     WHEN VALUES(region) IS NOT NULL THEN VALUES(region)
     ELSE region
 END,
-modem_preset = CASE 
+modem_preset = CASE
     WHEN VALUES(modem_preset) IS NOT NULL THEN VALUES(modem_preset)
     ELSE modem_preset
 END,
@@ -2147,15 +2139,15 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
     def get_neighbor_info_links(self, days=1):
         """
         Fetch neighbor info links from the database.
-        
+
         Args:
             days: Number of days to look back for neighbor info data
-            
+
         Returns:
             Dictionary with node_id_int as keys and neighbor info data as values
         """
         neighbor_info_links = {}  # {node_id_int: {'heard': {neighbor_id_int: {data}}, ...}}
-        
+
         cursor = self.db.cursor(dictionary=True)
         # Fetch links from the specified days, adjust interval as needed
         cursor.execute("""
@@ -2168,7 +2160,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             LEFT OUTER JOIN position p2 ON p2.id = ni.neighbor_id
             WHERE ni.ts_created >= NOW() - INTERVAL %s DAY
         """, (days,))
-        
+
         for row in cursor.fetchall():
             node_id_int = row['id']
             neighbor_id_int = row['neighbor_id']
@@ -2180,25 +2172,25 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 ), 2)
 
             link_data = {
-                'snr': row['snr'], 
-                'distance': distance, 
-                'neighbor_id': neighbor_id_int, 
+                'snr': row['snr'],
+                'distance': distance,
+                'neighbor_id': neighbor_id_int,
                 'source_type': 'neighbor_info'
             }
 
             if node_id_int not in neighbor_info_links:
                 neighbor_info_links[node_id_int] = {'heard': {}, 'heard_by': {}}
-            
+
             # Add to node_id's 'heard' list
             neighbor_info_links[node_id_int]['heard'][neighbor_id_int] = link_data
-            
+
             # Add to neighbor_id's 'heard_by' list
             if neighbor_id_int not in neighbor_info_links:
                 neighbor_info_links[neighbor_id_int] = {'heard': {}, 'heard_by': {}}
-            
+
             heard_by_data = {
-                'snr': row['snr'], 
-                'distance': distance, 
+                'snr': row['snr'],
+                'distance': distance,
                 'neighbor_id': node_id_int,
                 'source_type': 'neighbor_info'
             }
@@ -2210,16 +2202,16 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
     def get_zero_hop_links(self, cutoff_time):
         """
         Fetch zero-hop links from the database.
-        
+
         Args:
             cutoff_time: Unix timestamp for the cutoff time
-            
+
         Returns:
             Dictionary with node_id_int as keys and zero-hop data as values
         """
         zero_hop_links = {}  # {node_id_int: {'heard': {neighbor_id_int: {data}}, 'heard_by': {neighbor_id_int: {data}}}}
         zero_hop_last_heard = {}  # Keep track of last heard time for sorting
-        
+
         cursor = self.db.cursor(dictionary=True)
         cursor.execute("""
             SELECT
@@ -2271,7 +2263,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 'neighbor_id': sender_id,  # For receiver, neighbor is sender
                 'source_type': 'zero_hop'
             }
-            
+
             heard_by_data = {
                 'snr': row['snr'],
                 'message_count': row['message_count'],
@@ -2297,16 +2289,16 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
     def get_zero_hop_links_from_traceroute(self, cutoff_time):
         """
         Fetch zero-hop links from traceroute data, which is more accurate than message_reception.
-        
+
         Args:
             cutoff_time: Unix timestamp for the cutoff time
-            
+
         Returns:
             Dictionary with node_id_int as keys and zero-hop data as values
         """
         zero_hop_links = {}  # {node_id_int: {'heard': {neighbor_id_int: {data}}, 'heard_by': {neighbor_id_int: {data}}}}
         zero_hop_last_heard = {}  # Keep track of last heard time for sorting
-        
+
         cursor = self.db.cursor(dictionary=True)
         cursor.execute("""
             SELECT
@@ -2334,11 +2326,11 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             from_id = row['from_id']
             to_id = row['to_id']
             ts_created = row['ts_created']
-            
+
             # Parse route data to determine if this is a zero-hop connection
             route = row['route']
             route_back = row['route_back']
-            
+
             # Check if this is a zero-hop connection (empty routes or no intermediate nodes)
             is_zero_hop = False
             if route is None or route == '' or route == 'null':
@@ -2348,7 +2340,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     forward_hops = len([x for x in route.split(';') if x.strip()])
                 except (ValueError, AttributeError):
                     forward_hops = 0
-                    
+
             if route_back is None or route_back == '' or route_back == 'null':
                 return_hops = 0
             else:
@@ -2356,18 +2348,18 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     return_hops = len([x for x in route_back.split(';') if x.strip()])
                 except (ValueError, AttributeError):
                     return_hops = 0
-            
+
             # This is a zero-hop connection if both routes are empty (direct connection)
             is_zero_hop = (forward_hops == 0 and return_hops == 0)
-            
+
             # Skip if this is not a zero-hop connection
             if not is_zero_hop:
                 continue
-                
+
             # Log zero-hop detection for debugging
             if self.debug:
                 logging.debug(f"Found zero-hop traceroute: {from_id} -> {to_id} (forward_hops={forward_hops}, return_hops={return_hops})")
-            
+
             # Convert timestamp to datetime if needed
             if isinstance(ts_created, datetime.datetime):
                 last_heard_dt = ts_created
@@ -2418,7 +2410,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 'forward_hops': forward_hops,
                 'return_hops': return_hops
             }
-            
+
             heard_by_data = {
                 'snr': best_snr,
                 'message_count': 1,  # Each traceroute is one "message"
@@ -2448,12 +2440,12 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
     def get_graph_data(self, view_type='merged', days=1, zero_hop_timeout=43200):
         """
         Get graph data for visualization.
-        
+
         Args:
             view_type: 'neighbor_info', 'zero_hop', or 'merged'
             days: Number of days to look back for neighbor info data
             zero_hop_timeout: Timeout in seconds for zero-hop data
-            
+
         Returns:
             Dictionary with nodes and edges for graph visualization
         """
@@ -2461,52 +2453,52 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         nodes_for_graph = []
         edges_for_graph = []
         active_node_ids_hex = set()  # Keep track of nodes to include in the graph
-        
+
         # Get neighbor info links
         neighbor_info_links = {}
         if view_type in ['neighbor_info', 'merged']:
             neighbor_info_links = self.get_neighbor_info_links(days)
-            
+
             # Add involved nodes to the active set if they exist in our main nodes list
             for node_id_int, links in neighbor_info_links.items():
                 node_id_hex = utils.convert_node_id_from_int_to_hex(node_id_int)
                 if node_id_hex in nodes and nodes[node_id_hex].get("active"):
                     active_node_ids_hex.add(node_id_hex)
-                
+
                 for neighbor_id_int in links.get('heard', {}):
                     neighbor_id_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
                     if neighbor_id_hex in nodes and nodes[neighbor_id_hex].get("active"):
                         active_node_ids_hex.add(neighbor_id_hex)
-        
+
         # Get zero-hop links
         zero_hop_links = {}
         if view_type in ['zero_hop', 'merged']:
             cutoff_time = int(time.time()) - zero_hop_timeout
             zero_hop_links, _ = self.get_zero_hop_links(cutoff_time)
-            
+
             # Add involved nodes to the active set if they exist
             for node_id_int, links in zero_hop_links.items():
                 node_id_hex = utils.convert_node_id_from_int_to_hex(node_id_int)
                 if node_id_hex in nodes and nodes[node_id_hex].get("active"):
                     active_node_ids_hex.add(node_id_hex)
-                
+
                 for neighbor_id_int in links.get('heard', {}):
                     neighbor_id_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
                     if neighbor_id_hex in nodes and nodes[neighbor_id_hex].get("active"):
                         active_node_ids_hex.add(neighbor_id_hex)
-        
+
         # Build nodes for graph
         for node_id_hex in active_node_ids_hex:
             node_data = nodes[node_id_hex]
-            
+
             # Get HW Model Name safely
             hw_model = node_data.get('hw_model')
             hw_model_name = get_hardware_model_name(hw_model)
-            
+
             # Get Icon URL
             node_name_for_icon = node_data.get('long_name', node_data.get('short_name', ''))
             icon_url = utils.graph_icon(node_name_for_icon)
-            
+
             nodes_for_graph.append({
                 'id': node_id_hex,
                 'short': node_data.get('short_name', 'UNK'),
@@ -2517,17 +2509,17 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     'last_seen': time_ago(node_data.get('ts_seen')) if node_data.get('ts_seen') else 'Never'
                 }
             })
-        
+
         # Build edges for graph
         added_node_pairs = set()
-        
+
         # Add Neighbor Info Edges
         if view_type in ['neighbor_info', 'merged']:
             for node_id_int, links in neighbor_info_links.items():
                 for neighbor_id_int, data in links.get('heard', {}).items():
                     from_node_hex = utils.convert_node_id_from_int_to_hex(node_id_int)
                     to_node_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
-                    
+
                     # Ensure both nodes are active and in our graph node list
                     if from_node_hex in active_node_ids_hex and to_node_hex in active_node_ids_hex:
                         node_pair = tuple(sorted((from_node_hex, to_node_hex)))
@@ -2539,7 +2531,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                                 'edge_data': data  # Contains snr, distance, source_type='neighbor_info'
                             })
                             added_node_pairs.add(node_pair)  # Mark pair as added
-        
+
         # Add Zero Hop Edges (only if not already added via Neighbor Info)
         if view_type in ['zero_hop', 'merged']:
             for receiver_id_int, links in zero_hop_links.items():
@@ -2547,7 +2539,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     # For zero hop, 'from' is sender, 'to' is receiver
                     from_node_hex = utils.convert_node_id_from_int_to_hex(sender_id_int)
                     to_node_hex = utils.convert_node_id_from_int_to_hex(receiver_id_int)
-                    
+
                     # Ensure both nodes are active and in our graph node list
                     if from_node_hex in active_node_ids_hex and to_node_hex in active_node_ids_hex:
                         node_pair = tuple(sorted((from_node_hex, to_node_hex)))
@@ -2559,53 +2551,53 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                                 'edge_data': data  # Contains snr, distance, source_type='zero_hop'
                             })
                             added_node_pairs.add(node_pair)  # Mark pair as added
-        
+
         # Combine nodes and edges
         graph_data = {
             'nodes': nodes_for_graph,
             'edges': edges_for_graph
         }
-        
+
         return graph_data
 
     def get_neighbors_data(self, view_type='neighbor_info', days=1, zero_hop_timeout=43200):
         """
         Get neighbors data for the neighbors page.
-        
+
         Args:
             view_type: 'neighbor_info', 'zero_hop', or 'merged'
             days: Number of days to look back for neighbor info data
             zero_hop_timeout: Timeout in seconds for zero-hop data
-            
+
         Returns:
             Dictionary with node_id_hex as keys and neighbor data as values
         """
         nodes = self.get_nodes()
         if not nodes:
             return {}
-            
+
         # Get neighbor info links
         neighbor_info_links = {}
         if view_type in ['neighbor_info', 'merged']:
             neighbor_info_links = self.get_neighbor_info_links(days)
-        
+
         # Get zero-hop links
         zero_hop_links = {}
         zero_hop_last_heard = {}
         if view_type in ['zero_hop', 'merged']:
             cutoff_time = int(time.time()) - zero_hop_timeout
             zero_hop_links, zero_hop_last_heard = self.get_zero_hop_links(cutoff_time)
-        
+
         # Dictionary to hold the final data for active nodes
         active_nodes_data = {}
-        
+
         # Combine data for active nodes based on view type
         for node_id_hex, node_base_data in nodes.items():
             if not node_base_data.get("active"):
                 continue  # Skip inactive nodes
-                
+
             node_id_int = utils.convert_node_id_from_hex_to_int(node_id_hex)
-            
+
             # Only copy the fields we need instead of the entire dict
             final_node_data = {
                 'id': node_base_data.get('id'),
@@ -2624,28 +2616,28 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 'position': node_base_data.get('position'),
                 'telemetry': node_base_data.get('telemetry')
             }
-            
+
             # Initialize lists
             final_node_data['neighbors'] = []
             final_node_data['heard_by_neighbors'] = []
             final_node_data['zero_hop_neighbors'] = []
             final_node_data['heard_by_zero_hop'] = []
-            
+
             has_neighbor_info = node_id_int in neighbor_info_links
             has_zero_hop_info = node_id_int in zero_hop_links
-            
+
             # Determine overall last heard time for sorting
             last_heard_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
             last_heard_by_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard_by'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
-            
+
             node_ts_seen = datetime.datetime.fromtimestamp(node_base_data['ts_seen']) if node_base_data.get('ts_seen') else datetime.datetime.min
-            
+
             final_node_data['last_heard'] = max(
                 node_ts_seen,
                 zero_hop_last_heard.get(node_id_int, datetime.datetime.min)  # Use precalculated zero hop time
                 # We don't need to include neighbor info times here as they aren't distinct per-link
             )
-            
+
             include_node = False
             if view_type in ['neighbor_info', 'merged']:
                 if has_neighbor_info:
@@ -2653,24 +2645,24 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     final_node_data['heard_by_neighbors'] = list(neighbor_info_links[node_id_int]['heard_by'].values())
                     if final_node_data['neighbors'] or final_node_data['heard_by_neighbors']:
                         include_node = True
-            
+
             if view_type in ['zero_hop', 'merged']:
                 if has_zero_hop_info:
                     final_node_data['zero_hop_neighbors'] = list(zero_hop_links[node_id_int]['heard'].values())
                     final_node_data['heard_by_zero_hop'] = list(zero_hop_links[node_id_int]['heard_by'].values())
                     if final_node_data['zero_hop_neighbors'] or final_node_data['heard_by_zero_hop']:
                         include_node = True
-            
+
             if include_node:
                 active_nodes_data[node_id_hex] = final_node_data
-        
+
         # Sort final results by last heard time
         active_nodes_data = dict(sorted(
             active_nodes_data.items(),
             key=lambda item: item[1].get('last_heard', datetime.datetime.min),
             reverse=True
         ))
-        
+
         return active_nodes_data
 
     def is_position_fresh(self, position, prune_threshold, now=None):
@@ -2687,8 +2679,14 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             position_time = getattr(position, 'position_time', None)
         if not position_time:
             return False
+        # Convert to timestamp if needed (should already be Unix timestamp from SQL)
         if isinstance(position_time, datetime.datetime):
+            # This should not happen anymore with UNIX_TIMESTAMP() in SQL queries
+            import logging
+            logging.warning("position_is_fresh received datetime object, converting to timestamp")
             position_time = position_time.timestamp()
+        elif not isinstance(position_time, (int, float)):
+            return False
         if now is None:
             now = time.time()
         return (now - position_time) <= prune_threshold
@@ -2701,7 +2699,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         telemetry = []
         sql = """
             SELECT
-                DATE_FORMAT(ts_created, '%Y-%m-%d %H:%i:00') as interval_start,
+                UNIX_TIMESTAMP(DATE_FORMAT(ts_created, '%Y-%m-%d %H:%i:00')) as interval_start,
                 FLOOR(MINUTE(ts_created) / 10) as ten_minute_block,
                 AVG(air_util_tx) as air_util_tx,
                 AVG(battery_level) as battery_level,
@@ -2721,10 +2719,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             record = {}
             for i in range(len(row)):
                 value = row[i]
-                if isinstance(value, datetime.datetime):
-                    record[column_names[i]] = int(value.timestamp())
-                else:
-                    record[column_names[i]] = value
+                record[column_names[i]] = value
             telemetry.append(record)
         cur.close()
         return telemetry
@@ -2733,7 +2728,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         """
         Return environmental telemetry for the given node, ordered by timestamp ascending.
         Each record is a dict with keys: temperature, barometric_pressure, relative_humidity, gas_resistance, voltage, current, ts_created.
-        
+
         Args:
             node_id: The node ID to get telemetry for
             days: Number of days to look back (default 1 for 24 hours)
@@ -2761,10 +2756,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             record = {}
             for i in range(len(row)):
                 value = row[i]
-                if isinstance(value, datetime.datetime):
-                    record[column_names[i]] = int(value.timestamp())
-                else:
-                    record[column_names[i]] = value
+                record[column_names[i]] = value
             telemetry.append(record)
         cur.close()
         return telemetry
@@ -2820,7 +2812,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         """Get reception details for multiple receivers in one query"""
         if not receiver_ids:
             return {}
-        
+
         # Handle single receiver case
         if len(receiver_ids) == 1:
             query = """
@@ -2893,14 +2885,14 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             # 1. Build zero-hop (direct) network - prefer traceroute data when available
             zero_hop_edges = []
             zero_hop_source = {}  # Track source of zero-hop detection
-            
+
             # First, try to get zero-hop data from traceroute (more accurate)
             cutoff_time = int(time.time()) - (days * 86400 if days > 0 else 86400)
             traceroute_zero_hop_links, _ = self.get_zero_hop_links_from_traceroute(cutoff_time)
-            
+
             if self.debug:
                 logging.debug(f"Found {len(traceroute_zero_hop_links)} nodes with traceroute-based zero-hop connections")
-            
+
             # Add traceroute-based zero-hop edges
             for node_id_int, links in traceroute_zero_hop_links.items():
                 for neighbor_id_int, data in links.get('heard', {}).items():
@@ -2909,12 +2901,12 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     zero_hop_edges.append((sender_hex, receiver_hex))
                     zero_hop_source[(sender_hex, receiver_hex)] = 'traceroute_zero_hop'
                     zero_hop_source[(receiver_hex, sender_hex)] = 'traceroute_zero_hop'
-                    
+
                     # Store hop information for later use in edge creation
                     if 'forward_hops' in data and 'return_hops' in data:
                         zero_hop_source[(sender_hex, receiver_hex) + ('_hops',)] = (data['forward_hops'], data['return_hops'])
                         zero_hop_source[(receiver_hex, sender_hex) + ('_hops',)] = (data['forward_hops'], data['return_hops'])
-            
+
             # Fallback to message_reception data for nodes not covered by traceroute
             for rec in receptions:
                 hop_limit = rec['hop_limit']
@@ -2925,7 +2917,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 receiver_hex = format(receiver, '08x')
                 edge_key = (sender_hex, receiver_hex)
                 reverse_edge_key = (receiver_hex, sender_hex)
-                
+
                 if (hop_limit is None and hop_start is None) or (hop_start is not None and hop_limit is not None and hop_start - hop_limit == 0):
                     # Only add if not already covered by traceroute data
                     if edge_key not in zero_hop_source and reverse_edge_key not in zero_hop_source:
@@ -2991,7 +2983,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             virtual_nodes = {}
             endpoint_nodes = set()
             node_stats = {}
-            
+
             # Helper function to ensure a node is included in endpoint_nodes
             def ensure_node_included(node_id):
                 if node_id not in endpoint_nodes:
@@ -2999,7 +2991,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     # Initialize stats for this node if not already present
                     if node_id not in node_stats:
                         node_stats[node_id] = {'message_count': 0, 'relay_count': 0}
-            
+
             # 4. Component-local consolidation
             for suffix, edges in relay_suffix_edges.items():
                 # Group edges by component
@@ -3022,7 +3014,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                                 # Get hop information if available from traceroute data
                                 hop_info = zero_hop_source.get(edge_key + ('_hops',), (0, 0))
                                 forward_hops, return_hops = hop_info if isinstance(hop_info, tuple) else (0, 0)
-                                
+
                                 edge_map[edge_key] = {
                                     'count': 0,
                                     'relay_suffix': suffix,
@@ -3092,7 +3084,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             for (from_node, to_node), edge in edge_map.items():
                 node_stats[from_node]['message_count'] += edge['count']
                 node_stats[to_node]['relay_count'] += edge['count']
-            
+
             # Create nodes list, including placeholder nodes for missing nodes
             for node_hex in endpoint_nodes:
                 if node_hex in nodes_dict:
@@ -3147,10 +3139,10 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                         'relay_count': node_stats[node_hex]['relay_count'],
                         'icon_url': None
                     })
-            
+
             # Create a set of valid node IDs for edge filtering
             valid_node_ids = {node['id'] for node in nodes}
-            
+
             # Filter edges to only include edges where both nodes exist in our nodes list
             edges = []
             for (from_node, to_node), edge in edge_map.items():
@@ -3208,7 +3200,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         from_id = self.verify_node(data["from"])
         to_id = self.verify_node(data["to"]) if "to" in data else None
         payload = dict(data["decoded"]["json_payload"])
-        
+
         # Extract routing data
         routing_data = payload.get("routing_data", {})
         error_reason = payload.get("error_reason")
@@ -3222,11 +3214,11 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         is_error = payload.get("is_error", False)
         success = payload.get("success", False)
         error_description = payload.get("error_description")
-        
+
         # Convert relay_node to hex format if it's a number
         if relay_node and isinstance(relay_node, int):
             relay_node = f"{relay_node:04x}"
-        
+
         # Extract uplink node from topic if available
         uplink_node = None
         if topic:
@@ -3238,16 +3230,16 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     uplink_node = self.int_id(uplink_hex)
                 except:
                     uplink_node = None
-        
+
         # Get message metadata
         message_id = data.get("id")
         channel = data.get("channel")
         rx_snr = data.get("rx_snr")
         rx_rssi = data.get("rx_rssi")
         rx_time = data.get("rx_time")
-        
+
         sql = """INSERT INTO routing_messages
-        (from_id, to_id, message_id, request_id, relay_node, hop_limit, hop_start, 
+        (from_id, to_id, message_id, request_id, relay_node, hop_limit, hop_start,
         hops_taken, error_reason, error_description, is_error, success, channel,
         rx_snr, rx_rssi, rx_time, routing_data, uplink_node, ts_created)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
@@ -3265,7 +3257,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         rx_time = VALUES(rx_time),
         routing_data = VALUES(routing_data),
         uplink_node = VALUES(uplink_node)"""
-        
+
         params = (
             from_id,
             to_id,
@@ -3286,36 +3278,36 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             json.dumps(routing_data, cls=CustomJSONEncoder),
             uplink_node
         )
-        
+
         cur = self.db.cursor()
         cur.execute(sql, params)
         self.db.commit()
         cur.close()
-        
+
         if self.debug:
             logging.info(f"Stored routing message: from={from_id}, to={to_id}, error={error_description}, success={success}")
 
     def get_routing_messages(self, page=1, per_page=50, error_only=False, days=7):
         """Get routing messages with optional filtering."""
         offset = (page - 1) * per_page
-        
+
         # Build WHERE clause
         where_conditions = ["rm.ts_created >= NOW() - INTERVAL %s DAY"]
         params = [days]
-        
+
         if error_only:
             where_conditions.append("rm.is_error = TRUE")
-        
+
         where_clause = " AND ".join(where_conditions)
-        
+
         # Get total count
         count_sql = f"SELECT COUNT(*) FROM routing_messages rm WHERE {where_clause}"
         cur = self.db.cursor()
         cur.execute(count_sql, params)
         total_count = cur.fetchone()[0]
-        
+
         # Get paginated results
-        sql = f"""SELECT rm.*, 
+        sql = f"""SELECT rm.*,
                   n1.long_name as from_name, n1.short_name as from_short,
                   n2.long_name as to_name, n2.short_name as to_short,
                   n3.long_name as uplink_name, n3.short_name as uplink_short
@@ -3326,7 +3318,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                   WHERE {where_clause}
                   ORDER BY rm.ts_created DESC
                   LIMIT %s OFFSET %s"""
-        
+
         cur.execute(sql, params + [per_page, offset])
         rows = cur.fetchall()
         columns = [desc[0] for desc in cur.description] if cur.description else []
@@ -3348,7 +3340,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             if message.get('uplink_node'):
                 message['uplink_node_hex'] = self.hex_id(message['uplink_node'])
             messages.append(message)
-        
+
         return {
             'items': messages,
             'total': total_count,
@@ -3359,7 +3351,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
 
     def get_routing_stats(self, days=7):
         """Get routing statistics for the specified time period."""
-        sql = """SELECT 
+        sql = """SELECT
                     COUNT(*) as total_messages,
                     SUM(CASE WHEN is_error = TRUE THEN 1 ELSE 0 END) as error_count,
                     SUM(CASE WHEN success = TRUE THEN 1 ELSE 0 END) as success_count,
@@ -3367,14 +3359,14 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                     COUNT(DISTINCT from_id) as unique_senders,
                     COUNT(DISTINCT to_id) as unique_receivers,
                     COUNT(DISTINCT relay_node) as unique_relays
-                  FROM routing_messages 
+                  FROM routing_messages
                   WHERE ts_created >= NOW() - INTERVAL %s DAY"""
-        
+
         cur = self.db.cursor()
         cur.execute(sql, [days])
         row = cur.fetchone()
         cur.close()
-        
+
         if row:
             return {
                 'total_messages': row[0] or 0,
@@ -3390,21 +3382,21 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
 
     def get_routing_errors_by_type(self, days=7):
         """Get routing error breakdown by error type."""
-        sql = """SELECT 
+        sql = """SELECT
                     error_reason,
                     error_description,
                     COUNT(*) as count
-                  FROM routing_messages 
+                  FROM routing_messages
                   WHERE ts_created >= NOW() - INTERVAL %s DAY
                     AND is_error = TRUE
                   GROUP BY error_reason, error_description
                   ORDER BY count DESC"""
-        
+
         cur = self.db.cursor()
         cur.execute(sql, [days])
         rows = cur.fetchall()
         cur.close()
-        
+
         return [{'error_reason': row[0], 'error_description': row[1], 'count': row[2]} for row in rows]
 
 
@@ -3419,44 +3411,44 @@ def create_database():
         user="root",
         password=config.get("database", "root_password", fallback="passw0rd"),
     )
-    
+
     try:
         # Create database
         cur = db.cursor()
         cur.execute(f"""CREATE DATABASE IF NOT EXISTS {config["database"]["database"]}
 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci""")
         cur.close()
-        
+
         # Create user if it doesn't exist
         cur = db.cursor()
         cur.execute(f"""CREATE USER IF NOT EXISTS '{config["database"]["username"]}'@'%'
 IDENTIFIED BY '{config["database"]["password"]}'""")
         cur.close()
-        
+
         # Grant all privileges on the specific database
         cur = db.cursor()
         cur.execute(f"""GRANT ALL PRIVILEGES ON {config["database"]["database"]}.*
 TO '{config["database"]["username"]}'@'%'""")
         cur.close()
-        
+
         # Grant RELOAD privilege for query cache operations
         cur = db.cursor()
         cur.execute(f"""GRANT RELOAD ON *.* TO '{config["database"]["username"]}'@'%'""")
         cur.close()
-        
+
         # Grant additional useful privileges
         cur = db.cursor()
         cur.execute(f"""GRANT PROCESS ON *.* TO '{config["database"]["username"]}'@'%'""")
         cur.close()
-        
+
         # Flush privileges to apply changes
         cur = db.cursor()
         cur.execute("FLUSH PRIVILEGES")
         cur.close()
-        
+
         db.commit()
         logging.info(f"Database '{config['database']['database']}' and user '{config['database']['username']}' created with proper privileges")
-        
+
     except mysql.connector.Error as e:
         logging.error(f"Error creating database: {e}")
         raise

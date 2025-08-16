@@ -1,0 +1,31 @@
+# Docker Compose Override Sample
+# Copy this to docker-compose.override.yml and customize for your deployment
+# This file allows you to add deployment-specific configurations without modifying the main docker-compose.yml
+
+services:
+  mariadb:
+    labels:
+      # Add your custom labels here (Traefik, Watchtower, etc.)
+      # Example:
+      # - traefik.enable=false
+      # - com.centurylinklabs.watchtower.enable=false
+
+  meshinfo:
+    labels:
+      # Add your custom labels here (Traefik, Watchtower, etc.)
+      # Example Traefik configuration:
+      # - traefik.enable=true
+      # - traefik.http.routers.meshinfo.rule=Host(yourdomain.com)
+      # - traefik.http.routers.meshinfo.tls=true
+      # - traefik.http.routers.meshinfo.tls.certresolver=letsencrypt
+      # - traefik.http.services.meshinfo.loadbalancer.server.port=8000
+      # - traefik.docker.network=traefik
+      # - com.centurylinklabs.watchtower.enable=false
+    networks:
+      # Add additional networks if needed (e.g., traefik network)
+      # - traefik
+
+# Add additional networks if needed
+# networks:
+#   traefik:
+#     external: true

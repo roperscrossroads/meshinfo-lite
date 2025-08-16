@@ -40,3 +40,4 @@ config.ini
 www/*.html
 srtm_data/
 mysql_data
+docker-compose.override.yml
