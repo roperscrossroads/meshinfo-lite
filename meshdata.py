@@ -814,7 +814,7 @@ ORDER BY ts_created DESC"""
 
     def get_logs(self):
         logs = []
-        sql = """SELECT id, message, UNIX_TIMESTAMP(ts_created) as ts_created
+        sql = """SELECT topic, message, UNIX_TIMESTAMP(ts_created) as ts_created, channel
                  FROM meshlog ORDER BY ts_created DESC"""
         cur = self.db.cursor()
         cur.execute(sql)
