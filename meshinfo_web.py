@@ -333,8 +333,8 @@ def initialize_cache():
         'CACHE_THRESHOLD': int(config.get('server', 'app_cache_max_entries', fallback=100)),
         'CACHE_DEFAULT_TIMEOUT': int(config.get('server', 'app_cache_timeout_seconds', fallback=60)),
         'CACHE_OPTIONS': {
-            'mode': 0o600,
-            'max_size': 50 * 1024 * 1024  # 50MB max size per item
+            'mode': 0o600
+            # max_size not supported in newer Flask-Caching versions
         }
     }
     
