@@ -1,0 +1,32 @@
+/*
+ * Compatibility fixes for modern browsers
+ * Fixes deprecated CSS properties that cause console warnings
+ *
+ * Note: AnyChart CDN serves JS with application/javascript MIME type which is
+ * technically correct per RFC but some tools prefer text/javascript.
+ * This is a CDN issue, not a code issue.
+ */
+
+/* Fix Bootstrap's deprecated -ms-text-size-adjust property */
+html {
+    text-size-adjust: 100%; /* Modern standard property */
+    -webkit-text-size-adjust: 100%; /* Webkit support */
+    -ms-text-size-adjust: 100%; /* Keep for legacy IE support */
+}
+
+/* Fix deprecated -webkit-text-decoration-skip property */
+a {
+    /* Remove the deprecated property - modern browsers handle this automatically */
+    -webkit-text-decoration-skip: unset;
+    /* Use modern text-decoration-skip-ink property instead */
+    text-decoration-skip-ink: auto;
+}
+
+/* Fix any other deprecated -ms- properties if found */
+.table-responsive-sm,
+.table-responsive-md,
+.table-responsive-lg,
+.table-responsive-xl,
+.table-responsive {
+    -ms-overflow-style: auto; /* Use 'auto' instead of '-ms-autohiding-scrollbar' */
+}

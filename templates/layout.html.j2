@@ -38,6 +38,7 @@
   <meta charset="utf-8">
   <link rel="icon" type="image/x-icon" href="/images/icons/favicon.ico">
   <link href="/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/css/compatibility-fixes.css" rel="stylesheet">
   <link href="/css/meshinfo.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
@@ -45,19 +46,19 @@
     .bi::before {
       font-family: "bootstrap-icons" !important;
     }
-    
+
     /* Ensure experimental features flask icon is visible in mobile */
     #experimentalDropdown .bi-flask {
       display: inline-block !important;
       margin-right: 0.175rem !important;
     }
-    
+
     /* Additional debugging for flask icon */
     .d-lg-none .bi-flask {
       display: inline-block !important;
       visibility: visible !important;
     }
-  </style>  
+  </style>
 
   {% block head %}
     <meta property="og:title" content="{% block og_title %}{{ config['mesh']['name'] }}{% endblock %}" />
