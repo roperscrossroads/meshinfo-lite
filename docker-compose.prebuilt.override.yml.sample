@@ -1,0 +1,33 @@
+# Docker Compose Override for Prebuilt Image - Production Configuration
+# This file contains deployment-specific customizations
+# Copy to docker-compose.prebuilt.override.yml and customize for your setup
+# Use with: docker compose -f docker-compose.prebuilt.yml -f docker-compose.prebuilt.override.yml up -d
+
+services:
+  mariadb:
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  meshinfo:
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+      - "traefik.enable=true"
+      - "traefik.docker.network=YOUR_TRAEFIK_NETWORK"
+      - "traefik.http.routers.meshinfo-insecure.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.meshinfo-insecure.entrypoints=web"
+      - "traefik.http.routers.meshinfo-insecure.middlewares=meshinfo-redirect"
+      - "traefik.http.routers.meshinfo-insecure.service=meshinfo"
+      - "traefik.http.routers.meshinfo.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.meshinfo.entrypoints=websecure"
+      - "traefik.http.routers.meshinfo.service=meshinfo"
+      - "traefik.http.routers.meshinfo.tls.certresolver=myresolver"
+      - "traefik.http.services.meshinfo.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.meshinfo-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.meshinfo-redirect.redirectscheme.permanent=true"
+    networks:
+      - backend
+      - YOUR_TRAEFIK_NETWORK
+
+networks:
+  YOUR_TRAEFIK_NETWORK:
+    external: true
