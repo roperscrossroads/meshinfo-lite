@@ -68,9 +68,11 @@ RUN pip install --upgrade pip setuptools wheel
 # Install requirements with platform-specific optimizations
 # Detect ARM64 by checking uname since TARGETPLATFORM may not be set
 RUN if [ "$(uname -m)" = "aarch64" ]; then \
-    echo "ARM64 detected, using conda rasterio and piwheels"; \
-    # Use piwheels for faster ARM64 builds and exclude rasterio (installed via conda) \
-    grep -v "^rasterio" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt; \
+    echo "ARM64 detected, using conda for heavy packages and piwheels for others"; \
+    # Install heavy packages via conda for faster ARM64 builds \
+    /opt/conda/bin/mamba install -c conda-forge matplotlib scipy pandas Pillow shapely cryptography -y; \
+    # Filter out conda-installed packages from requirements for pip \
+    grep -v -E "^(rasterio|matplotlib|scipy|pandas|Pillow|shapely|cryptography)" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt; \
     su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements_filtered.txt"; \
     else \
     echo "Non-ARM64 detected, using standard pip install"; \
