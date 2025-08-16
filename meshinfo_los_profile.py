@@ -300,6 +300,11 @@ class LOSProfile():
                 lat = node["position"]["latitude"]
                 lon = node["position"]["longitude"]
                 alt = node["position"]["altitude"]
+
+                # Skip nodes with invalid coordinates (0,0) or None values
+                if not lat or not lon or (lat == 0 and lon == 0):
+                    continue
+
                 dist = self.calculate_distance_between_coords(
                     (mylat, mylon),
                     (lat, lon)
