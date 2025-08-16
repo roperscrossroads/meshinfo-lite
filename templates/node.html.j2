@@ -274,7 +274,7 @@
                 {% else %}
                 <span class="text-secondary">Unknown</span>
                 {% endif %}
-                
+
                 {% if node.has_default_channel is not none %}
                   {% if node.has_default_channel %}
                     <span class="badge bg-success ms-2" title="Node is using the default channel configuration">Default</span>
@@ -284,7 +284,7 @@
                 {% else %}
                   <span class="badge bg-secondary ms-2" title="Default channel status unknown">Unknown</span>
                 {% endif %}
-                
+
                 <a href="https://meshtastic.org/docs/configuration/radio/channels/" target="_blank" title="Channel configuration information">
                   <i class="bi bi-question-circle text-muted" style="font-size: 0.9em;"></i>
                 </a>
@@ -397,8 +397,8 @@
               <td class="text-left">
                 {% if node.position and node.position.latitude_i and node.position.longitude_i %}
                 {{ node.position.longitude_i / 1e7 }}, {{ node.position.latitude_i / 1e7 }}
-                <a href="/map.html?node={{ utils.convert_node_id_from_int_to_hex(node.id) }}" 
-                   class="btn btn-link btn-sm btn-mini ms-2" 
+                <a href="/map.html?node={{ utils.convert_node_id_from_int_to_hex(node.id) }}"
+                   class="btn btn-link btn-sm btn-mini ms-2"
                    title="View this node on the map">
                   <i class="bi bi-map"></i> View on Map
                 </a>
@@ -507,7 +507,7 @@
               </td>
             </tr>
             {% endif %}
-            
+
           </tbody>
         </table>
         <table class="table table-striped table-sm heard-table">
@@ -524,7 +524,7 @@
           </thead>
           <tbody>
             {% set processed_nodes = [] %}
-            
+
             <!-- Process neighbor data first -->
             {% for neighbor in node.neighbors %}
               {% set nid = utils.convert_node_id_from_int_to_hex(neighbor.neighbor_id) %}
@@ -548,8 +548,8 @@
                         {% if linked_nodes_details[nid].position.latitude_i is not none and linked_nodes_details[nid].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
                           {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
                           {% if dist %}
-                            <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
-                              target="_blank" 
+                            <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}"
+                              target="_blank"
                               title="View elevation profile">
                               {{ dist|round(2) }} km 🏔️
                             </a>
@@ -562,7 +562,7 @@
                 </tr>
               {% endif %}
             {% endfor %}
-            
+
             <!-- Process message reception data -->
             {% if zero_hop_heard %}
               {% for heard in zero_hop_heard %}
@@ -585,8 +585,8 @@
                       {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
                       {% if dist %}
                         {% if linked_nodes_details[nid].position and linked_nodes_details[nid].position.latitude_i and linked_nodes_details[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
-                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
-                            target="_blank" 
+                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}"
+                            target="_blank"
                             title="View elevation profile">
                             {{ dist|round(2) }} km 🏔️
                           </a>
@@ -618,7 +618,7 @@
           </thead>
           <tbody>
             {% set processed_nodes = [] %}
-            
+
             <!-- Process neighbor data first -->
             {% for neighbor in neighbor_heard_by %}
               {% set nid = utils.convert_node_id_from_int_to_hex(neighbor.id) %}
@@ -641,8 +641,8 @@
                         {% if linked_nodes_details[nid].position.latitude_i is not none and linked_nodes_details[nid].position.longitude_i is not none and node.position.latitude_i is not none and node.position.longitude_i is not none %}
                           {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
                           {% if dist %}
-                            <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
-                              target="_blank" 
+                            <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}"
+                              target="_blank"
                               title="View elevation profile">
                               {{ dist|round(2) }} km 🏔️
                             </a>
@@ -655,7 +655,7 @@
                 </tr>
               {% endif %}
             {% endfor %}
-            
+
             <!-- Process message reception data -->
             {% if zero_hop_heard_by %}
               {% for heard in zero_hop_heard_by %}
@@ -678,8 +678,8 @@
                       {% set dist = utils.calculate_distance_between_nodes(linked_nodes_details[nid], node) %}
                       {% if dist %}
                         {% if linked_nodes_details[nid].position and linked_nodes_details[nid].position.latitude_i and linked_nodes_details[nid].position.longitude_i and node.position and node.position.latitude_i and node.position.longitude_i %}
-                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}" 
-                            target="_blank" 
+                          <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ linked_nodes_details[nid].position.latitude_i / 1e7 }},{{ linked_nodes_details[nid].position.longitude_i / 1e7 }}"
+                            target="_blank"
                             title="View elevation profile">
                           {{ dist|round(2) }} km 🏔️
                         </a>
@@ -699,6 +699,65 @@
       </div>
     </div>
   </div>
+
+  <!-- Line of Sight Terrain Analysis Section -->
+  {% if los_profiles and los_profiles|length > 0 %}
+  <div class="row mt-4">
+    <div class="col-12">
+      <h6 class="mb-3">🏔️ Line of Sight Terrain Analysis</h6>
+      <div class="row">
+        {% for target_node_id, profile_data in los_profiles.items() %}
+          {% set target_node = linked_nodes_details[target_node_id] if target_node_id in linked_nodes_details else None %}
+          <div class="col-12 col-md-6 col-lg-4 mb-3">
+            <div class="card los-card h-100">
+              <div class="card-body">
+                <h6 class="card-title">
+                  {% if target_node %}
+                    <a href="node_{{ target_node_id }}.html" class="text-decoration-none">
+                      {{ target_node.short_name }}
+                    </a>
+                    <small class="text-muted">{{ target_node.long_name }}</small>
+                  {% else %}
+                    {{ target_node_id }}
+                  {% endif %}
+                </h6>
+                <p class="text-muted small mb-2">
+                  <i class="bi bi-arrow-left-right"></i> Distance: {{ profile_data.distance|round(2) }} km
+                </p>
+                <div class="text-center">
+                  <img src="data:image/png;base64,{{ profile_data.image }}"
+                       class="img-fluid rounded los-profile-image"
+                       alt="Terrain profile to {{ target_node.short_name if target_node else target_node_id }}"
+                       style="max-height: 200px; width: 100%;">
+                </div>
+                {% if target_node and target_node.position %}
+                  <div class="mt-2">
+                    <a href="https://heywhatsthat.com/profiler.html?show_grade=0&show_rise=0&include_grade=1&decimal_places=0&elev_source=0&ll1={{ node.position.latitude_i / 1e7 }},{{ node.position.longitude_i / 1e7 }}&ll2={{ target_node.position.latitude_i / 1e7 }},{{ target_node.position.longitude_i / 1e7 }}"
+                       target="_blank"
+                       class="btn btn-sm btn-outline-primary">
+                      <i class="bi bi-graph-up"></i> External Analysis
+                    </a>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% elif config['los']['enabled'] %}
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i>
+        <strong>Terrain Analysis:</strong> No elevation profiles available.
+        Terrain analysis requires positioned nodes within {{ max_distance_km }}km with SRTM elevation data.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Environmental Telemetry Section at the Bottom, Full Width -->
   {% if node.telemetry %}
   <div class="row mt-4">
@@ -903,12 +962,12 @@
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
-                legend: { 
+                legend: {
                   display: true,
                   position: 'top'
                 },
-                title: { 
-                  display: true, 
+                title: {
+                  display: true,
                   text: `${config.label} - ${selectedDays === 1 ? '24hr' : '7 Day'} Data`,
                   font: { size: 14 }
                 }
@@ -947,8 +1006,8 @@
                   min: yMin,
                   max: yMax,
                   ticks: {
-                    callback: function(value) { 
-                      return value.toFixed(2); 
+                    callback: function(value) {
+                      return value.toFixed(2);
                     }
                   }
                 }
@@ -1100,6 +1159,37 @@ const map = new Map({
   #map {
     height: 300px;
     width: 100%;
+  }
+
+  /* LOS Terrain Analysis Styling */
+  .los-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid #dee2e6;
+  }
+
+  .los-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  }
+
+  .los-profile-image {
+    border: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    object-fit: contain;
+  }
+
+  .los-profile-image:hover {
+    border-color: #007bff;
+  }
+
+  @media (max-width: 768px) {
+    .los-card {
+      margin-bottom: 1rem;
+    }
+
+    .los-profile-image {
+      max-height: 150px;
+    }
   }
 </style>
 </div>
