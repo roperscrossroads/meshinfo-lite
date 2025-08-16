@@ -87,6 +87,7 @@ COPY --chown=app:app *.sh ./
 COPY --chown=app:app www  ./www
 COPY --chown=app:app templates ./templates
 COPY --chown=app:app migrations ./migrations
+COPY --chown=app:app scripts ./scripts
 
 # Create runtime_cache directory with proper permissions
 RUN mkdir -p /app/runtime_cache && \
