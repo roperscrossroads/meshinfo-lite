@@ -299,10 +299,29 @@ def get_node_page_data(node_hex, all_nodes=None):
     cutoff_time = int(time.time()) - zero_hop_timeout
 
     # --- Fetch all raw data ---
-    node_telemetry = md.get_node_telemetry(node_id)
-    node_route = md.get_route_coordinates(node_id)
-    telemetry_graph = draw_graph(node_telemetry)
-    neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
+    try:
+        node_telemetry = md.get_node_telemetry(node_id)
+    except Exception as e:
+        logging.error(f"Error getting telemetry for node {node_hex}: {e}")
+        node_telemetry = []
+    
+    try:
+        node_route = md.get_route_coordinates(node_id)
+    except Exception as e:
+        logging.error(f"Error getting route coordinates for node {node_hex}: {e}")
+        node_route = []
+    
+    try:
+        telemetry_graph = draw_graph(node_telemetry)
+    except Exception as e:
+        logging.error(f"Error drawing telemetry graph for node {node_hex}: {e}")
+        telemetry_graph = ""
+    
+    try:
+        neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
+    except Exception as e:
+        logging.error(f"Error getting neighbors for node {node_hex}: {e}")
+        neighbor_heard_by = []
     
     # Only process LOS if enabled
     los_profiles = {}
