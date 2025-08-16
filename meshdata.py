@@ -200,10 +200,12 @@ ORDER BY ts_created DESC LIMIT 1000"""
 
     def get_node_telemetry(self, node_id):
         telemetry = []
-        sql = """SELECT * FROM telemetry
-WHERE ts_created >= NOW() - INTERVAL 1 DAY
-AND id = %s AND battery_level IS NOT NULL
-ORDER BY ts_created"""
+        sql = """SELECT id, air_util_tx, battery_level, channel_utilization, 
+                        UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM telemetry
+                 WHERE ts_created >= NOW() - INTERVAL 1 DAY
+                 AND id = %s AND battery_level IS NOT NULL
+                 ORDER BY ts_created"""
         params = (node_id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
@@ -212,10 +214,7 @@ ORDER BY ts_created"""
             record = {}
             column_names = [desc[0] for desc in cur.description]
             for i in range(0, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    record[column_names[i]] = row[i].timestamp()
-                else:
-                    record[column_names[i]] = row[i]
+                record[column_names[i]] = row[i]
             telemetry.append(record)
         cur.close()
         return telemetry
