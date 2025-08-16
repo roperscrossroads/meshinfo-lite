@@ -78,6 +78,9 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
     su app -c "pip install --no-cache-dir --user -r requirements.txt"; \
     fi
 
+# Ensure pytz is installed for timezone support (critical for time display)
+RUN su app -c "pip install --no-cache-dir --user pytz==2025.2"
+
 COPY --chown=app:app banner run.sh ./
 COPY --chown=app:app *.py ./
 COPY --chown=app:app *.sh ./

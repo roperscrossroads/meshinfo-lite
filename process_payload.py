@@ -7,11 +7,36 @@ from meshdata import MeshData
 import configparser
 import json
 import logging
+import time
 
 config = configparser.ConfigParser()
 config.read("config.ini")
 
 DEFAULT_KEY = config["mesh"]["channel_key"]
+
+# Rate limiting for message logging (30 second intervals per node)
+_last_log_times = {}
+
+def _rate_limited_log(msg_type, node_id, message, rate_limit_seconds=30):
+    """
+    Log a message with rate limiting per node.
+    
+    Args:
+        msg_type: Message type (e.g., 'mapreport', 'text')
+        node_id: Node ID for rate limiting
+        message: Log message
+        rate_limit_seconds: Seconds between INFO logs for same node (default 30)
+    """
+    current_time = time.time()
+    log_key = f"{msg_type}_{node_id}"
+    
+    # Check if we should log at INFO level (first time or after rate limit period)
+    if log_key not in _last_log_times or current_time - _last_log_times[log_key] >= rate_limit_seconds:
+        logging.info(message)
+        _last_log_times[log_key] = current_time
+    else:
+        # Rate limited - log at DEBUG level to reduce spam
+        logging.debug(f"[RATE LIMITED] {message}")
 
 
 def decrypt_packet(mp):
@@ -259,7 +284,7 @@ def get_data(msg):
                 hop_count = j["hop_start"] - j["hop_limit"]
                 logging.info(f"Received {msg_type} from {msg_from} with {hop_count} hops ({j['hop_limit']}/{j['hop_start']})")
             else:
-                logging.info(f"Received {msg_type} from {msg_from}")
+                _rate_limited_log(msg_type, msg_from, f"Received {msg_type} from {msg_from}")
         else:
             logging.warning(f"Received message with unknown portnum: {portnum}")
             

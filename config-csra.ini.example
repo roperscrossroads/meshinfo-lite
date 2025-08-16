@@ -1,10 +1,12 @@
 [mesh]
-name=CSRA MSH
-short_name=CSRA
+name=CSRA Mesh
+short_name=CSRA Mesh
 region=Central Savannah River Area
 description=Serving Meshtastic to the CSRA
 contact=https://www.csramesh.org
 url=https://www.csramesh.org
+# URL for this MeshInfo instance (used for verification emails, etc.)
+meshinfo_url=https://csramesh.duckdns.org
 # Optional: link to your mesh's configuration guide
 config_url=https://www.csramesh.org/faqs
 # Optional: link to your mesh's Discord or community chat
@@ -30,7 +32,7 @@ password=large4cats
 [database]
 host=mariadb
 username=meshdata
-password=passw0rd
+password=YOUR_DATABASE_PASSWORD
 database=meshdata
 
 [webserver]
@@ -76,6 +78,15 @@ port=SMTP_PORT
 enabled=true
 max_distance=10000
 cache_duration=43200
+
+[srtm]
+# SRTM elevation data download settings for LOS (Line of Sight) terrain analysis
+# Set coordinates for your mesh region to download appropriate elevation data
+# CSRA region (Central Savannah River Area) covers parts of Georgia and South Carolina
+min_latitude=32
+max_latitude=35
+min_longitude=-84
+max_longitude=-80
 
 [features]
 # Show or hide the #MeshtasticMonday page
@@ -134,8 +145,8 @@ tool11=https://view.mtnme.sh/map
 tool11_label=Mountain Mesh View
 
 # Node-specific external links (shown on individual node pages)
-node_link1=https://www.csramesh.org/map?node_id={{ node.id }}
-node_link1_label=CSRA Mesh Map
+node_link1=https://csramesh.duckdns.org/map.html?node={{ node.id }}
+node_link1_label=CSRA MeshInfo Map
 node_link2=https://meshmap.net/#{{ node.id }}
 node_link2_label=MeshMap
 

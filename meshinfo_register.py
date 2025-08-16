@@ -67,7 +67,8 @@ VALUES (%s, %s, %s, %s)"""
            utils.hash_password(password),
            code
         )
-        base_url = self.config["mesh"]["url"]
+        # Use meshinfo_url if specified, otherwise fall back to url
+        base_url = self.config["mesh"].get("meshinfo_url", self.config["mesh"]["url"])
         utils.send_email(
             email,
             "MeshInfo Verify Account",

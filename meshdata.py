@@ -7,6 +7,7 @@ import utils
 import logging
 import re
 from timezone_utils import time_ago  # Import time_ago from timezone_utils
+import pytz
 from meshtastic_support import get_hardware_model_name, get_modem_preset_name  # Import functions from meshtastic_support
 from database_cache import DatabaseCache  # Import DatabaseCache from its own file
 import types
@@ -27,6 +28,17 @@ class CustomJSONEncoder(json.JSONEncoder):
             return list(obj)  # Convert set to list
         # Use default serialization for other types
         return super().default(obj)
+
+def safe_timestamp_convert(dt_obj):
+    """Safely convert datetime object to Unix timestamp, treating as UTC"""
+    if dt_obj is None:
+        return None
+    if isinstance(dt_obj, datetime.datetime):
+        # Treat datetime as UTC (MySQL stores UTC) and convert properly
+        if dt_obj.tzinfo is None:
+            dt_obj = dt_obj.replace(tzinfo=pytz.UTC)
+        return int(dt_obj.timestamp())
+    return dt_obj  # Already a timestamp or other value
     
 class MeshData:
     def __init__(self):
@@ -234,7 +246,7 @@ ORDER BY ts_created"""
             close_cur = True
         try:
             target_dt = datetime.datetime.fromtimestamp(target_timestamp)
-            sql = """SELECT latitude_i, longitude_i, ts_created
+            sql = """SELECT latitude_i, longitude_i, UNIX_TIMESTAMP(ts_created) as ts_created
                      FROM positionlog
                      WHERE id = %s
                      ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
@@ -246,7 +258,7 @@ ORDER BY ts_created"""
                 position = {
                     "latitude_i": row["latitude_i"],
                     "longitude_i": row["longitude_i"],
-                    "position_time": row["ts_created"].timestamp() if isinstance(row["ts_created"], datetime.datetime) else row["ts_created"],
+                    "position_time": row["ts_created"],
                     "latitude": row["latitude_i"] / 10000000 if row["latitude_i"] else None,
                     "longitude": row["longitude_i"] / 10000000 if row["longitude_i"] else None
                 }
@@ -350,7 +362,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 t.success,
                 t.channel,
                 t.hop_limit,
-                t.ts_created,
+                UNIX_TIMESTAMP(t.ts_created) as ts_created,
                 t.is_reply,
                 t.error_reason,
                 t.attempt_number,
@@ -384,7 +396,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 "success": row[7],
                 "channel": row[8],
                 "hop_limit": row[9],
-                "ts_created": row[10].timestamp(),
+                "ts_created": row[10],
                 "is_reply": row[11],
                 "error_reason": row[12],
                 "attempt_number": row[13],
@@ -522,9 +534,9 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             n.modem_preset,
             n.owner,
             n.updated_via,
-            n.ts_seen,
-            n.ts_created,
-            n.ts_updated,
+            UNIX_TIMESTAMP(n.ts_seen) as ts_seen,
+            UNIX_TIMESTAMP(n.ts_created) as ts_created,
+            UNIX_TIMESTAMP(n.ts_updated) as ts_updated,
             u.username as owner_username,
             CASE WHEN n.ts_seen > FROM_UNIXTIME(%s) THEN 1 ELSE 0 END as is_active,
             UNIX_TIMESTAMP(n.ts_uplink) as ts_uplink,
@@ -823,7 +835,7 @@ ORDER BY ts_created DESC"""
         return logs
 
     def get_latest_node(self):
-        sql = """select id, ts_created from nodeinfo
+        sql = """select id, UNIX_TIMESTAMP(ts_created) as ts_created from nodeinfo
 where id <> 4294967295 order by ts_created desc limit 1"""
         cur = self.db.cursor()
         cur.execute(sql)
@@ -832,7 +844,7 @@ where id <> 4294967295 order by ts_created desc limit 1"""
         if row:
             latest = {
                 "id": row[0],
-                "ts_created": row[1].timestamp()
+                "ts_created": row[1]
             }
         cur.close()
         return latest
@@ -2780,7 +2792,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             close_cur = True
         try:
             target_dt = datetime.datetime.fromtimestamp(target_timestamp)
-            sql = """SELECT latitude_i, longitude_i, ts_created
+            sql = """SELECT latitude_i, longitude_i, UNIX_TIMESTAMP(ts_created) as ts_created
                      FROM positionlog
                      WHERE id = %s
                      ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
@@ -2792,7 +2804,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 position = {
                     "latitude_i": row["latitude_i"],
                     "longitude_i": row["longitude_i"],
-                    "position_time": row["ts_created"].timestamp() if isinstance(row["ts_created"], datetime.datetime) else row["ts_created"],
+                    "position_time": row["ts_created"],
                     "latitude": row["latitude_i"] / 10000000 if row["latitude_i"] else None,
                     "longitude": row["longitude_i"] / 10000000 if row["longitude_i"] else None
                 }

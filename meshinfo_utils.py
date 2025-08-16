@@ -165,27 +165,7 @@ def format_timestamp(timestamp):
     except (ValueError, TypeError):
         return str(timestamp)
 
-def time_ago(timestamp):
-    """Get human-readable time ago string."""
-    if timestamp is None:
-        return "Unknown"
-    try:
-        dt = datetime.fromtimestamp(timestamp)
-        now = datetime.now()
-        diff = now - dt
-        
-        if diff.days > 0:
-            return f"{diff.days} days ago"
-        elif diff.seconds > 3600:
-            hours = diff.seconds // 3600
-            return f"{hours} hours ago"
-        elif diff.seconds > 60:
-            minutes = diff.seconds // 60
-            return f"{minutes} minutes ago"
-        else:
-            return "Just now"
-    except (ValueError, TypeError):
-        return "Unknown"
+# time_ago function removed - use the timezone-aware version from timezone_utils.py instead
 
 def convert_to_local(timestamp):
     """Convert timestamp to local timezone."""
@@ -227,7 +207,9 @@ def get_cached_chat_data(page=1, per_page=50, channel=None):
     offset = (page - 1) * per_page
     cur = md.db.cursor(dictionary=True)
     cur.execute(f"""
-        SELECT t.* FROM text t{channel_filter}
+        SELECT t.message_id, t.from_id, t.to_id, t.text, t.channel, 
+               UNIX_TIMESTAMP(t.ts_created) as ts_created
+        FROM text t{channel_filter}
         ORDER BY t.ts_created DESC
         LIMIT %s OFFSET %s
     """, channel_params + [per_page, offset])
@@ -240,7 +222,8 @@ def get_cached_chat_data(page=1, per_page=50, channel=None):
         placeholders = ','.join(['%s'] * len(message_ids))
         cur = md.db.cursor(dictionary=True)
         cur.execute(f"""
-            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start, rx_time
+            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start, 
+                   UNIX_TIMESTAMP(rx_time) as rx_time
             FROM message_reception
             WHERE message_id IN ({placeholders})
         """, message_ids)
@@ -259,7 +242,7 @@ def get_cached_chat_data(page=1, per_page=50, channel=None):
                 "rx_rssi": int(reception['rx_rssi']) if reception['rx_rssi'] is not None else 0,
                 "hop_limit": int(reception['hop_limit']) if reception['hop_limit'] is not None else None,
                 "hop_start": int(reception['hop_start']) if reception['hop_start'] is not None else None,
-                "rx_time": reception['rx_time'].timestamp() if isinstance(reception['rx_time'], datetime) else reception['rx_time']
+                "rx_time": reception['rx_time']
             })
     else:
         receptions_by_message = {}
@@ -268,12 +251,7 @@ def get_cached_chat_data(page=1, per_page=50, channel=None):
     chats = []
     prev_key = ""
     for row in messages:
-        record = {}
-        for key, value in row.items():
-            if isinstance(value, datetime):
-                record[key] = value.timestamp()
-            else:
-                record[key] = value
+        record = dict(row)  # All timestamps are already Unix timestamps from SQL
         
         # Add reception data
         record["receptions"] = receptions_by_message.get(record['message_id'], [])

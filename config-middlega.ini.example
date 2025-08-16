@@ -5,6 +5,8 @@ region=Middle Georgia
 description=Serving Meshtastic to Middle Georgia
 contact=https://middlegeorgiamesh.org
 url=https://middlegeorgiamesh.org
+# URL for this MeshInfo instance (used for verification emails, etc.)
+meshinfo_url=https://middlega.duckdns.org
 # Optional: link to your mesh's configuration guide
 config_url=https://middlegeorgiamesh.org/setup
 # Optional: link to your mesh's Discord or community chat
@@ -78,6 +80,15 @@ enabled=true
 max_distance=10000
 cache_duration=43200
 
+[srtm]
+# SRTM elevation data download settings for LOS (Line of Sight) terrain analysis
+# Set coordinates for your mesh region to download appropriate elevation data
+# Middle Georgia region
+min_latitude=31
+max_latitude=34
+min_longitude=-85
+max_longitude=-82
+
 [features]
 # Show or hide the #MeshtasticMonday page
 show_meshtastic_monday=true
@@ -127,7 +138,7 @@ tool5=https://discord.com/invite/mgzj2PmhKf
 tool5_label=CSRA Mesh Discord
 
 # Node-specific external links (shown on individual node pages)
-node_link1=https://middlega.duckdns.org/map?node_id={{ node.id }}
+node_link1=https://middlega.duckdns.org/map.html?node={{ node.id }}
 node_link1_label=Middle GA Mesh Map
 node_link2=https://meshmap.net/#{{ node.id }}
 node_link2_label=MeshMap

@@ -865,12 +865,15 @@
 
             // Add elsewhere section
             {% set node_links = [] %}
-            {% for key, value in config.get('tools', {}).items() if key.startswith('node_link') and not key.endswith('_label') %}
-              {% if value %}
-                {% set label = config['tools'].get(key + '_label', 'External Link') %}
-                {% set _ = node_links.append({'url': value, 'label': label}) %}
-              {% endif %}
-            {% endfor %}
+            {% if 'tools' in config %}
+              {% for key, value in config['tools'].items() if key.startswith('node_link') and not key.endswith('_label') %}
+                {% if value %}
+                  {% set label_key = key + '_label' %}
+                  {% set label = config['tools'][label_key] if label_key in config['tools'] else 'External Link' %}
+                  {% set _ = node_links.append({'url': value, 'label': label}) %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
             {% if node_links %}
             panel += '<br/><b>Elsewhere</b><br/>';
             var node_id = parseInt(node.id, 16);

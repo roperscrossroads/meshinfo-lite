@@ -36,6 +36,7 @@ lib/
 lib64/
 pyenv.cfg
 config.ini
+*.backup.*
 www/*.html
 srtm_data/
 mysql_data
