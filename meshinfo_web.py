@@ -706,6 +706,14 @@ def not_found(e):
         config=config
     ), 404
 
+@app.errorhandler(500)
+def internal_error(error):
+    logging.error(f"Internal server error: {error}")
+    logging.error(f"Exception: {error.original_exception if hasattr(error, 'original_exception') else 'No exception info'}")
+    import traceback
+    logging.error(f"Traceback: {traceback.format_exc()}")
+    return "Internal Server Error - Check logs for details", 500
+
 # Data caching functions
 def cache_key_prefix():
     """Generate a cache key prefix based on current time bucket."""
@@ -1567,7 +1575,13 @@ def serve_static(filename):
             abort(404)
 
         # Get all node page data directly, bypassing the leaky application cache
-        node_page_data = get_node_page_data(node_hex, nodes)
+        try:
+            node_page_data = get_node_page_data(node_hex, nodes)
+        except Exception as e:
+            logging.error(f"Error getting node page data for {node_hex}: {e}")
+            import traceback
+            logging.error(f"Traceback: {traceback.format_exc()}")
+            abort(503, description=f"Failed to retrieve node data: {str(e)}")
 
         # If data fetching fails, handle gracefully
         if not node_page_data:
