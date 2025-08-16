@@ -20,7 +20,7 @@ _last_log_times = {}
 def _rate_limited_log(msg_type, node_id, message, rate_limit_seconds=30):
     """
     Log a message with rate limiting per node.
-    
+
     Args:
         msg_type: Message type (e.g., 'mapreport', 'text')
         node_id: Node ID for rate limiting
@@ -29,7 +29,7 @@ def _rate_limited_log(msg_type, node_id, message, rate_limit_seconds=30):
     """
     current_time = time.time()
     log_key = f"{msg_type}_{node_id}"
-    
+
     # Check if we should log at INFO level (first time or after rate limit period)
     if log_key not in _last_log_times or current_time - _last_log_times[log_key] >= rate_limit_seconds:
         logging.info(message)
@@ -65,25 +65,25 @@ def get_packet(payload):
         se = mqtt_pb2.ServiceEnvelope()
         se.ParseFromString(payload)
         mp = se.packet
-        
+
         # Extract hop information if available
         try:
             if hasattr(mp, 'hop_limit'):
                 mp.hop_limit = getattr(mp, 'hop_limit', 0)
             else:
                 mp.hop_limit = None
-                
+
             if hasattr(mp, 'hop_start'):
                 mp.hop_start = getattr(mp, 'hop_start', 0)
             else:
                 mp.hop_start = None
-                
+
         except Exception as e:
             if config.get("server", "debug") == "true":
                 logging.debug(f"Hop information extraction failed: {e}")
             mp.hop_limit = None
             mp.hop_start = None
-            
+
         if mp.HasField("encrypted") and not mp.HasField("decoded"):
             return decrypt_packet(mp)
     except Exception as e:
@@ -110,18 +110,23 @@ def get_data(msg):
         if "decoded" not in j:
             logging.debug("Message has no decoded payload")
             return None
-        
+
         # Add hop information to the JSON data
         if hasattr(msg, 'hop_limit'):
             j["hop_limit"] = msg.hop_limit
         if hasattr(msg, 'hop_start'):
             j["hop_start"] = msg.hop_start
-        
+
         portnum = j["decoded"]["portnum"]
-        
+
+        # Filter out ATAK plugin messages (portnum 72) - these are not needed
+        if portnum == portnums_pb2.ATAK_PLUGIN:
+            logging.debug(f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
+            return None
+
         # Initialize type before the portnum checks
         j["type"] = None
-        
+
         if portnum == portnums_pb2.NODEINFO_APP:
             j["type"] = "nodeinfo"
             j["decoded"]["json_payload"] = to_json(
@@ -144,11 +149,11 @@ def get_data(msg):
             )
         elif portnum == portnums_pb2.ROUTING_APP:
             j["type"] = "routing"
-            
+
             # Parse the routing message
             routing_msg = mesh_pb2.Routing().FromString(msg.decoded.payload)
             routing_data = to_json(routing_msg)
-            
+
             # Extract routing information based on actual packet structure
             routing_info = {
                 "routing_data": routing_data,
@@ -161,7 +166,7 @@ def get_data(msg):
                 "is_error": routing_data.get("error_reason") is not None and routing_data.get("error_reason") > 0,
                 "success": routing_data.get("error_reason") is None or routing_data.get("error_reason") == 0
             }
-            
+
             # Add error reason descriptions
             error_reason = routing_data.get("error_reason")
             if error_reason is not None:
@@ -181,31 +186,31 @@ def get_data(msg):
                     12: "Timeout"
                 }
                 routing_info["error_description"] = error_descriptions.get(error_reason, f"Unknown Error {error_reason}")
-            
+
             j["decoded"]["json_payload"] = routing_info
         elif portnum == portnums_pb2.TRACEROUTE_APP:
             j["type"] = "traceroute"
-                        
+
             route_discovery = mesh_pb2.RouteDiscovery().FromString(msg.decoded.payload)
-            
+
             route_data = to_json(route_discovery)
-            
+
             # Ensure we have all required fields with proper defaults
             route_data.setdefault("route", [])
             route_data.setdefault("route_back", [])
             route_data.setdefault("snr_towards", [])
             route_data.setdefault("snr_back", [])
             route_data.setdefault("time", None)
-            
+
             # A traceroute is successful if we have SNR data in either direction,
             # even for direct (zero-hop) connections
             route_data["success"] = (
                 (len(route_data["snr_towards"]) > 0 or len(route_data["route"]) == 0) and
                 (len(route_data["snr_back"]) > 0 or len(route_data["route_back"]) == 0)
             )
-            
+
             j["decoded"]["json_payload"] = route_data
-            
+
             # Log the final data that will be stored
             #logging.info(f"Final traceroute data to be stored: {json.dumps(j['decoded']['json_payload'], indent=2)}")
 
@@ -262,11 +267,11 @@ def get_data(msg):
                 "message": "Reticulum tunnel message"
             }
             logging.debug(f"Received Reticulum Tunnel message from {j['from']}")
-        
+
         if j["type"]:  # Only log if we successfully determined the type
             msg_type = j["type"]
             msg_from = j["from"]
-            
+
             if msg_type == "traceroute":
                 route_info = j["decoded"]["json_payload"]
                 forward_hops = len(route_info.get("route", []))
@@ -287,7 +292,7 @@ def get_data(msg):
                 _rate_limited_log(msg_type, msg_from, f"Received {msg_type} from {msg_from}")
         else:
             logging.warning(f"Received message with unknown portnum: {portnum}")
-            
+
         return j
     except Exception as e:
         logging.error(f"Error processing message data: {str(e)}")
@@ -298,7 +303,7 @@ def process_payload(payload, topic, md: MeshData):
     # --- Add log at the start ---
     logger = logging.getLogger(__name__) # Get logger instance
     logger.debug(f"process_payload: Entered function for topic: {topic}")
-    
+
     # Check if this is an ignored channel
     if "/2/e/" in topic:
         channel_name = topic.split("/")[-2]  # Get channel name from topic
@@ -306,7 +311,7 @@ def process_payload(payload, topic, md: MeshData):
         if channel_name in ignored_channels:
             logger.debug(f"Ignoring message from channel: {channel_name}")
             return
-    
+
     # --- End log ---
     mp = get_packet(payload)
     if mp:
