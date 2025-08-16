@@ -166,13 +166,13 @@ cd meshinfo-lite
 ```
 
 ```sh
-docker compose pull && docker compose down && docker compose up -d && docker compose ps && docker compose logs -f meshinfo
+docker compose down && docker compose up --build -d && docker compose ps && docker compose logs -f meshinfo
 ```
 
 #### To Update
 
 ```sh
-git fetch && git pull && docker compose pull && docker compose down && docker compose up -d && docker compose ps && docker compose logs -f meshinfo
+git fetch && git pull && docker compose down && docker compose up --build -d && docker compose ps && docker compose logs -f meshinfo
 ```
 
 ### Directly (without Docker)
