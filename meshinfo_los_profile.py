@@ -49,7 +49,7 @@ class LOSProfile():
     def calculate_distance_between_coords(self, coord1, coord2):
         lat1, lon1 = coord1
         lat2, lon2 = coord2
-        return geodesic((lat1, lon1), (lat2, lon2)).meters
+        return geodesic((lat1, lon1), (lat2, lon2)).kilometers
 
     def read_elevation_from_tifb(self, lat, lon):
         """
@@ -167,9 +167,9 @@ class LOSProfile():
              logging.warning(f"Could not retrieve enough elevation points between {coord1[:2]} and {coord2[:2]}. Skipping profile.")
              return None, None # Indicate failure
 
-        # Compute accurate geodesic distances from start point
+        # Compute accurate geodesic distances from start point in kilometers
         distances = [
-            geodesic((lat1, lon1), (lat, lon)).meters for lat, lon in
+            geodesic((lat1, lon1), (lat, lon)).kilometers for lat, lon in
             zip(latitudes, longitudes)
         ]
 
@@ -215,9 +215,9 @@ class LOSProfile():
             logging.warning("Error loading font from specified path, even if found. Symbols/Emojis may not render correctly.")
             symbol_font = None  # Fallback to default
 
-        fig = plt.figure(figsize=(10, 6))
+        fig = plt.figure(figsize=(12, 8), dpi=100)
         ax = fig.gca()
-        ax.set_facecolor("cyan")
+        ax.set_facecolor("lightcyan")
         plt.margins(x=0, y=0, tight=True)
 
         # Check if profile has valid data
@@ -247,14 +247,14 @@ class LOSProfile():
             plt.plot(distances, direct_line, color="green", linestyle="dashed", linewidth=2, label="Direct LOS Line")
 
         # --- Apply FontProperties (using symbol_font) ---
-        plt.xlabel("Distance (meters)", fontproperties=symbol_font)
+        plt.xlabel("Distance (kilometers)", fontproperties=symbol_font)
         plt.ylabel("Elevation + Altitude (meters)", fontproperties=symbol_font)
         plt.title(f"{label}", fontproperties=symbol_font)
         plt.legend(prop=symbol_font)
 
         buffer = io.BytesIO()
         try:
-            plt.savefig(buffer, format="png", bbox_inches="tight")
+            plt.savefig(buffer, format="png", bbox_inches="tight", dpi=100, facecolor='white')
             buffer.seek(0)
             img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 

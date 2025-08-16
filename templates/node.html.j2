@@ -728,7 +728,9 @@
                   <img src="data:image/png;base64,{{ profile_data.image }}"
                        class="img-fluid rounded los-profile-image"
                        alt="Terrain profile to {{ target_node.short_name if target_node else target_node_id }}"
-                       style="max-height: 200px; width: 100%;">
+                       style="max-height: 300px; width: 100%; cursor: pointer;"
+                       onclick="this.style.maxHeight = this.style.maxHeight === '600px' ? '300px' : '600px';"
+                       title="Click to enlarge">
                 </div>
                 {% if target_node and target_node.position %}
                   <div class="mt-2">
