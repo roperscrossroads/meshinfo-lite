@@ -193,9 +193,15 @@ class LOSProfile():
         cache_key = f"los_profile_{label}_{hash(tuple(distances))}_{hash(tuple(profile))}"
 
         # Check if the image is already cached
-        cached_image = self.cache.get(cache_key)  # Use self.cache
-        if cached_image:
-            return cached_image  # Return the cached image if it exists
+        cached_image = None
+        if self.cache:
+            try:
+                cached_image = self.cache.get(cache_key)
+                if cached_image:
+                    return cached_image  # Return the cached image if it exists
+            except Exception as e:
+                logging.warning(f"Cache access failed for LOS profile: {e}")
+                # Continue without cache
 
         # --- Font Setup ---
         # Attempt to load Symbola font
@@ -253,7 +259,12 @@ class LOSProfile():
             img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
             # Cache the rendered image for 12 hours (43,200 seconds)
-            self.cache.set(cache_key, img_base64, timeout=self.cache_duration)
+            if self.cache:
+                try:
+                    self.cache.set(cache_key, img_base64, timeout=self.cache_duration)
+                except Exception as e:
+                    logging.warning(f"Cache storage failed for LOS profile: {e}")
+                    # Continue without caching
 
         except Exception as e:
             logging.error(f"Error saving plot to buffer for label {label}: {e}")
@@ -262,7 +273,7 @@ class LOSProfile():
             plt.close(fig)
 
         return img_base64
-    
+
     def get_profiles(self):
         profiles = {}
         hexid = utils.convert_node_id_from_int_to_hex(self.node)
