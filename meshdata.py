@@ -1516,9 +1516,12 @@ ON DUPLICATE KEY UPDATE
 
     def store_text(self, data, topic):
         """Store text message."""
+        logging.info(f"store_text: Processing text message from {data.get('from')}")
         if "from" not in data or "to" not in data or "decoded" not in data:
+            logging.warning(f"store_text: Missing required fields in data: {data}")
             return
         if "json_payload" not in data["decoded"] or "text" not in data["decoded"]["json_payload"]:
+            logging.warning(f"store_text: Missing json_payload or text field in decoded data: {data.get('decoded', {})}")
             return
 
         from_id = data["from"]
@@ -1546,6 +1549,9 @@ ON DUPLICATE KEY UPDATE
             cur.execute(sql, params)
             cur.close()
             self.db.commit()
+            logging.info(f"store_text: Successfully stored text message from {from_id}: '{text[:50]}{'...' if len(text) > 50 else ''}'")
+        else:
+            logging.debug(f"store_text: Text message {message_id} from {from_id} already exists, skipping")
 
         # Reception information is now handled by the main store() method
         # No need to duplicate that code here
