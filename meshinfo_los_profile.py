@@ -237,14 +237,14 @@ class LOSProfile():
 
         # Plot the terrain profile
         if not np.isnan(profile).all():
-            plt.fill_between(distances, profile, color="brown", alpha=1.0, label="Terrain Profile")
-            plt.plot(distances, profile, color="brown", label="Profile Outline")
+            plt.fill_between(distances, profile, color="#8B4513", alpha=0.6, label="Terrain Profile")
+            plt.plot(distances, profile, color="#2F4F4F", linewidth=1.5, label="Ground Level")
         else:
             logging.warning(f"Terrain profile contains only NaN values for label: {label}")
 
         # Plot the direct LOS line
         if not np.isnan(direct_line).all():
-            plt.plot(distances, direct_line, color="green", linestyle="dashed", linewidth=2, label="Direct LOS Line")
+            plt.plot(distances, direct_line, color="#FF4500", linestyle="dashed", linewidth=2, label="Line of Sight")
 
         # --- Apply FontProperties (using symbol_font) ---
         plt.xlabel("Distance (kilometers)", fontproperties=symbol_font)
