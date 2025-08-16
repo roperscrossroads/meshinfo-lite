@@ -39,7 +39,7 @@ RUN apt-get update && \
     libproj-dev \
     proj-bin \
     default-mysql-client \
-    $([ "$TARGETPLATFORM" = "linux/arm64" ] && echo "curl") \
+    $([ "$(uname -m)" = "aarch64" ] && echo "curl") \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -49,7 +49,8 @@ RUN fc-cache -fv
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 
 # For ARM64: Install conda/mamba and use conda-forge for rasterio
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+    echo "Installing conda and rasterio for ARM64"; \
     curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh && \
     bash Miniforge3-Linux-aarch64.sh -b -p /opt/conda && \
     rm Miniforge3-Linux-aarch64.sh && \
@@ -65,11 +66,14 @@ COPY requirements.txt banner run.sh ./
 RUN pip install --upgrade pip setuptools wheel
 
 # Install requirements with platform-specific optimizations
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+# Detect ARM64 by checking uname since TARGETPLATFORM may not be set
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+    echo "ARM64 detected, using conda rasterio and piwheels"; \
     # Use piwheels for faster ARM64 builds and exclude rasterio (installed via conda) \
     grep -v "^rasterio" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt; \
     su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements_filtered.txt"; \
     else \
+    echo "Non-ARM64 detected, using standard pip install"; \
     # Standard install for non-ARM64 \
     su app -c "pip install --no-cache-dir --user -r requirements.txt"; \
     fi
