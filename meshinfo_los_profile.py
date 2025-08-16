@@ -29,11 +29,48 @@ class LOSProfile():
 
         directory = "srtm_data"
         try:
-            for filename in os.listdir(directory):
-                if filename.endswith(".tif"):
-                    filepath = os.path.join(directory, filename)
-                    dataset = rasterio.open(filepath)
-                    self.datasets.append(dataset)
+            # Only load SRTM files that cover the configured region
+            if config and 'srtm' in config:
+                try:
+                    min_lat = int(config['srtm']['min_latitude'])
+                    max_lat = int(config['srtm']['max_latitude'])
+                    min_lon = int(config['srtm']['min_longitude'])
+                    max_lon = int(config['srtm']['max_longitude'])
+
+                    # Only load files that intersect with our region
+                    for filename in os.listdir(directory):
+                        if filename.endswith(".tif"):
+                            # Parse tile coordinates from filename (e.g., N33W082.tif)
+                            if len(filename) >= 10:
+                                try:
+                                    lat_str = filename[1:3]
+                                    lon_str = filename[4:7]
+                                    file_lat = int(lat_str) if filename[0] == 'N' else -int(lat_str)
+                                    file_lon = int(lon_str) if filename[3] == 'E' else -int(lon_str)
+
+                                    # Only load if tile intersects our region
+                                    if (min_lat <= file_lat <= max_lat and
+                                        min_lon <= file_lon <= max_lon):
+                                        filepath = os.path.join(directory, filename)
+                                        dataset = rasterio.open(filepath)
+                                        self.datasets.append(dataset)
+                                        logging.info(f"Loaded SRTM tile: {filename}")
+                                except ValueError:
+                                    continue
+                except (KeyError, ValueError):
+                    # Fallback to loading all files if config is invalid
+                    for filename in os.listdir(directory):
+                        if filename.endswith(".tif"):
+                            filepath = os.path.join(directory, filename)
+                            dataset = rasterio.open(filepath)
+                            self.datasets.append(dataset)
+            else:
+                # Fallback to loading all files if no config
+                for filename in os.listdir(directory):
+                    if filename.endswith(".tif"):
+                        filepath = os.path.join(directory, filename)
+                        dataset = rasterio.open(filepath)
+                        self.datasets.append(dataset)
         except FileNotFoundError as e:
             logging.warning("No SRTM data found in directory: %s", directory)
             pass
