@@ -166,7 +166,7 @@ class MeshData:
                         uptime_seconds, voltage, temperature, relative_humidity,
                         barometric_pressure, gas_resistance, current,
                         UNIX_TIMESTAMP(telemetry_time) as telemetry_time,
-                        telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
+                        channel as telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
                  FROM telemetry WHERE id = %s
                  AND battery_level IS NOT NULL
                  ORDER BY telemetry_time DESC LIMIT 1"""
@@ -187,7 +187,7 @@ class MeshData:
                         uptime_seconds, voltage, temperature, relative_humidity,
                         barometric_pressure, gas_resistance, current,
                         UNIX_TIMESTAMP(telemetry_time) as telemetry_time,
-                        telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
+                        channel as telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
                  FROM telemetry
                  ORDER BY ts_created DESC LIMIT 1000"""
         cur = self.db.cursor()
