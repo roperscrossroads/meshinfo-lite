@@ -139,8 +139,22 @@ def get_data(msg):
             )
         elif portnum == portnums_pb2.TEXT_MESSAGE_APP:
             j["type"] = "text"
+            # Decode bytes payload to string for text messages
+            text_payload = msg.decoded.payload
+            if isinstance(text_payload, bytes):
+                text_payload = text_payload.decode('utf-8', errors='replace')
             j["decoded"]["json_payload"] = {
-                "text": msg.decoded.payload
+                "text": text_payload
+            }
+        elif portnum == portnums_pb2.TEXT_MESSAGE_COMPRESSED_APP:
+            j["type"] = "text"
+            # Handle compressed text messages (portnum 7)
+            # Note: Compression handling may need additional logic
+            text_payload = msg.decoded.payload
+            if isinstance(text_payload, bytes):
+                text_payload = text_payload.decode('utf-8', errors='replace')
+            j["decoded"]["json_payload"] = {
+                "text": text_payload
             }
         elif portnum == portnums_pb2.NEIGHBORINFO_APP:
             j["type"] = "neighborinfo"
