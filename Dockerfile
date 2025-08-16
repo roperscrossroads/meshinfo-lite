@@ -80,6 +80,9 @@ COPY --chown=app:app www  ./www
 COPY --chown=app:app templates ./templates
 COPY --chown=app:app migrations ./migrations
 
+# Create runtime_cache directory with proper permissions
+RUN mkdir -p /app/runtime_cache && chown -R app:app /app/runtime_cache && chmod 755 /app/runtime_cache
+
 HEALTHCHECK NONE
 
 RUN chmod +x run.sh

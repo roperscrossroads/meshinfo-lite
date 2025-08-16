@@ -107,7 +107,7 @@ link10=https://baymesh.net
 link10_label=BayMesh (SF Bay Area, CA)
 
 [tools]
-# CSRA-specific tools and resources in navigation dropdown
+# CSRA-specific tools and resources
 tool1=https://csramesh.duckdns.org/
 tool1_label=CSRA Mesh Network Map
 tool2=https://csramon.duckdns.org/status/all
@@ -118,6 +118,20 @@ tool4=https://www.csramesh.org/
 tool4_label=CSRA Mesh Website
 tool5=https://discord.com/invite/mgzj2PmhKf
 tool5_label=CSRA Mesh Discord
+# Georgia mesh networks
+tool6=https://middlega.duckdns.org
+tool6_label=Middle GA Mesh Network Map
+tool7=https://discord.gg/6cSJ738Prp
+tool7_label=Middle GA Mesh Discord
+tool8=https://middlegeorgiamesh.org
+tool8_label=Middle GA Mesh Website
+# Mountain Mesh (TN/GA)
+tool9=https://mtnme.sh/
+tool9_label=Mountain Mesh
+tool10=https://discord.gg/4WN32RHGSs
+tool10_label=Mountain Mesh Discord
+tool11=https://view.mtnme.sh/map
+tool11_label=Mountain Mesh View
 
 # Node-specific external links (shown on individual node pages)
 node_link1=https://www.csramesh.org/map?node_id={{ node.id }}
