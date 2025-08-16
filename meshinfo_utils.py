@@ -665,18 +665,15 @@ def get_elsewhere_links(node_id, node_hex_id):
         # Default icon for external links
         return '🔗'
     
-    # Process keys ending with _node_link
+    # Process keys starting with node_link
     for key, value in config.items('tools'):
-        if key.endswith('_node_link'):
-            # Extract the base key (remove _node_link suffix)
-            base_key = key[:-10]  # Remove '_node_link'
-            
+        if key.startswith('node_link') and not key.endswith('_label'):
             # Get the label from the corresponding _label key
-            label_key = base_key + '_label'
+            label_key = key + '_label'
             label = config.get('tools', label_key, fallback=None)
             if not label:
                 # Fallback to a generated label if no _label is found
-                label = base_key.replace('_', ' ').title()
+                label = 'External Link'
             
             # Replace placeholders in URL and strip any extra quotes
             url = value.replace('{{ node.id }}', str(node_id)).replace('{{ node.hex_id }}', node_hex_id).strip('"')

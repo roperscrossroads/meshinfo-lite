@@ -15,7 +15,9 @@
 <div class="container pt-3">
   <div class="row">
     <div class="col-md-12 text-center mb-4">
-      <img src="/images/logos/logo.webp" alt="logo" style="height: 250px">
+      {% if config['mesh'].get('logo_path') %}
+      <img src="{{ config['mesh']['logo_path'] }}" alt="logo" style="height: 250px">
+      {% endif %}
       <h2>{{ mesh_name }}</h2>
       <p>
         This site provides information on <a href="nodes.html"><span class="font-weight-bold">{{ active_nodes|length }}</span> active nodes</a> in the {{ mesh_region }} region ({{ mesh_short_name }}) network.
@@ -76,13 +78,13 @@
           
           <ul class="list-group mb-4">
             <li class="list-group-item">
-              <strong>Address:</strong> <code>{{ config['mqtt']['broker'] }}</code>
+              <strong>Address:</strong> <code>{{ config['mesh'].get('mqtt_server_display', config['mqtt']['broker']) }}</code>
             </li>
             <li class="list-group-item">
-              <strong>Username:</strong> <code>{{ config['mqtt']['username'] }}</code>
+              <strong>Username:</strong> <code>{{ config['mesh'].get('mqtt_username_display', config['mqtt']['username']) }}</code>
             </li>
             <li class="list-group-item">
-              <strong>Password:</strong> <code>{{ config['mqtt']['password'] }}</code>
+              <strong>Password:</strong> <code>{{ config['mesh'].get('mqtt_password_display', config['mqtt']['password']) }}</code>
             </li>
             <li class="list-group-item">
               <strong>Encryption Enabled:</strong> Yes
@@ -94,7 +96,7 @@
               <strong>TLS Enabled:</strong> No
             </li>
             <li class="list-group-item">
-              <strong>Root topic:</strong> <code>{{ config['mqtt']['topic'].rstrip('/#') }}</code>
+              <strong>Root topic:</strong> <code>{{ config['mesh'].get('mqtt_root_topic_display', config['mqtt']['topic'].rstrip('/#')) }}</code>
             </li>
           </ul>
 
@@ -154,5 +156,55 @@
       </div>
     </div>
   </div>
+
+  {% if 'community_links' in config %}
+  {% set community_links = [] %}
+  {% for key, value in config['community_links'].items() if key.startswith('link') and not key.endswith('_label') %}
+    {% if value %}
+      {% set label = config['community_links'].get(key + '_label', 'Fellow Network') %}
+      {% set _ = community_links.append({'url': value, 'label': label}) %}
+    {% endif %}
+  {% endfor %}
+  {% if community_links %}
+  <div class="row mt-3">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header bg-info text-white">
+          <h3 class="mb-0">Fellow Mesh Networks</h3>
+        </div>
+        <div class="card-body">
+          <p>
+            Connect with our fellow mesh network communities across the Southeast and beyond. Join their Discord servers, explore their maps, and help grow the mesh network movement!
+          </p>
+          <div class="row">
+            {% for link in community_links %}
+            <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+              <a href="{{ link.url }}" target="_blank" class="btn btn-info btn-sm btn-block text-white" style="min-height: 40px; display: flex; align-items: center; justify-content: flex-start; text-decoration: none; padding-left: 12px;">
+                {% if 'Discord' in link.label %}
+                  <i class="bi bi-discord"></i>&nbsp;
+                {% elif 'Map' in link.label or 'View' in link.label %}
+                  <i class="bi bi-map"></i>&nbsp;
+                {% else %}
+                  <i class="bi bi-globe"></i>&nbsp;
+                {% endif %}
+                {{ link.label }}
+              </a>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="mt-3 text-muted small">
+            <i class="bi bi-info-circle"></i> Want your mesh network listed here? 
+            {% if config['mesh'].get('discord_url') %}
+            <a href="{{ config['mesh']['discord_url'] }}" target="_blank">Reach out on our Discord!</a>
+            {% else %}
+            Reach out on Discord!
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
 </div>
 {% endblock %}

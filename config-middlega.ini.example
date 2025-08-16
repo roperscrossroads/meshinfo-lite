@@ -1,29 +1,30 @@
 [mesh]
-name=Your Mesh Name
-short_name=YourMesh
-region=Your Mesh Region
-description=Serving Meshtastic to your region.
-contact=https://yourmesh.org
-url=https://yourmesh.org
+name=Middle GA Mesh
+short_name=MiddleGA
+region=Middle Georgia
+description=Serving Meshtastic to Middle Georgia
+contact=https://middlegeorgiamesh.org
+url=https://middlegeorgiamesh.org
 # Optional: link to your mesh's configuration guide
-config_url=https://yourmesh.org/config-instructions
+config_url=https://middlegeorgiamesh.org/setup
 # Optional: link to your mesh's Discord or community chat
-discord_url=https://discord.gg/yourdiscord
-latitude=0.0
-longitude=0.0
+discord_url=https://discord.gg/6cSJ738Prp
+latitude=32.8407
+longitude=-83.6324
 channel_key=1PG7OiApB1nwvP+rz05pAQ==
 # Optional: path to logo image (leave blank for text-only)
-logo_path=/images/logos/logo.webp
+logo_path=
 # MQTT display settings for user instructions
-mqtt_server_display=mqtt.yourmesh.org
+mqtt_server_display=middlegamesh.duckdns.org
 mqtt_username_display=meshdev
 mqtt_password_display=large4cats
-mqtt_root_topic_display=msh/US
+mqtt_root_topic_display=msh/US/GA/middlega
 
 [mqtt]
-broker=mqtt.yourmesh.org
+# Middle GA MQTT Server
+broker=middlegamesh.duckdns.org
 port=1883
-topic=msh/US/#
+topic=msh/US/GA/middlega/#
 username=meshdev
 password=large4cats
 
@@ -41,9 +42,9 @@ node_activity_prune_threshold=7200
 node_location_prune_threshold=86400
 render_interval=15
 debug=true
-timezone=America/Los_Angeles
+timezone=America/New_York
 zero_hop_timeout=43200
-telemetry_retention_days = 30
+telemetry_retention_days=30
 metrics_average_interval=7200
 
 [channels]
@@ -62,7 +63,7 @@ jwt_secret=YOUR_JWT_SECRET
 [smtp]
 # Required for user registration - configure when enabling registrations
 # Gmail example (recommended):
-#email=your-mesh-email@gmail.com
+#email=middlegamesh.noreply@gmail.com
 #password=your-gmail-app-password
 #server=smtp.gmail.com
 #port=587
@@ -82,32 +83,54 @@ cache_duration=43200
 show_meshtastic_monday=true
 
 [community_links]
-# Links to fellow mesh networks
-# Format: linkN=URL and linkN_label=Display Name
-link1=https://pugetmesh.org
-link1_label=PugetMesh (WA)
-link2=https://yourmesh.org
-link2_label=Fellow Mesh Network
-# Add more links as needed (link3, link4, etc.)
+# Fellow mesh networks - Georgia
+link1=https://csramesh.duckdns.org/
+link1_label=CSRA Mesh
+link2=https://discord.com/invite/mgzj2PmhKf
+link2_label=CSRA Mesh Discord
+# Fellow mesh networks - Southeast
+link3=https://ncmesh.net/
+link3_label=NC Mesh
+link4=https://discord.gg/AUjz5RGGVu
+link4_label=NC Mesh Discord
+link5=https://birminghammesh.org/
+link5_label=Birmingham Mesh (AL)
+link6=https://mtnme.sh/
+link6_label=Mountain Mesh
+link7=https://discord.gg/4WN32RHGSs
+link7_label=Mountain Mesh Discord
+link8=https://view.mtnme.sh/map
+link8_label=Mountain Mesh View
+# Fellow mesh networks - Original meshbros
+link9=https://pugetmesh.org
+link9_label=PugetMesh (Seattle, WA)
+link10=https://baymesh.net
+link10_label=BayMesh (SF Bay Area, CA)
+# Fellow mesh networks - International
+link11=https://za.localmesh.org/
+link11_label=ZA Mesh (South Africa)
+link12=https://bit.ly/buildthemesh
+link12_label=Build the Mesh (ZA)
 
 [tools]
-# External tools shown in the navigation dropdown
-# Format: toolN=URL and toolN_label=Display Name
-# Leave empty or comment out to hide the tools dropdown entirely
-tool1=https://meshmap.net/
-tool1_label=MeshMap
-tool2=https://yourmesh.org/status
-tool2_label=Server Status
-tool3=https://yourmesh.org
-tool3_label=Community Website
-# Add more tools as needed (tool4, tool5, etc.)
+# Middle GA specific tools and resources in navigation dropdown
+tool1=https://middlega.duckdns.org
+tool1_label=Middle GA Mesh Map
+tool2=https://discord.gg/6cSJ738Prp
+tool2_label=Middle GA Mesh Discord
+tool3=https://middlegeorgiamesh.org
+tool3_label=Middle GA Mesh Website
+# Georgia mesh networks
+tool4=https://csramesh.duckdns.org/
+tool4_label=CSRA Mesh
+tool5=https://discord.com/invite/mgzj2PmhKf
+tool5_label=CSRA Mesh Discord
 
 # Node-specific external links (shown on individual node pages)
-# Use {{ node.id }} for node ID substitution
-node_link1=https://meshmap.net/#{{ node.id }}
-node_link1_label=MeshMap
-node_link2=https://yourmesh.org/map?node_id={{ node.id }}
-node_link2_label=Regional Map
+node_link1=https://middlega.duckdns.org/map?node_id={{ node.id }}
+node_link1_label=Middle GA Mesh Map
+node_link2=https://meshmap.net/#{{ node.id }}
+node_link2_label=MeshMap
 
 [theme]
 # Header background color (navbar)

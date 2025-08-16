@@ -1405,10 +1405,20 @@
       panel += buildConnectionsTable(node, 'Heard By (zero hop)', node.zero_hop_data.heard_by);
 
       // Add elsewhere links
+      {% set node_links = [] %}
+      {% for key, value in config.get('tools', {}).items() if key.startswith('node_link') and not key.endswith('_label') %}
+        {% if value %}
+          {% set label = config['tools'].get(key + '_label', 'External Link') %}
+          {% set _ = node_links.append({'url': value, 'label': label}) %}
+        {% endif %}
+      {% endfor %}
+      {% if node_links %}
       panel += '<br/><b>Elsewhere</b><br/>';
       const node_id = parseInt(node.id, 16);
-      panel += '<a href="https://meshtastic.davekeogh.com/?node_id=' + node_id + '" target="_blank">PugetMesh Map</a><br/>';
-      panel += '<a href="https://meshmap.net/#' + node_id + '" target="_blank">MeshMap</a><br/>';
+      {% for link in node_links %}
+      panel += '<a href="{{ link.url|replace('{{ node.id }}', "' + node_id + '") }}" target="_blank">{{ link.label }}</a><br/>';
+      {% endfor %}
+      {% endif %}
 
       return panel;
     }
