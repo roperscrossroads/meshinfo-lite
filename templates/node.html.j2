@@ -700,19 +700,6 @@
     </div>
   </div>
 
-  <!-- LOS Debug Section -->
-  <div class="row mt-4">
-    <div class="col-12">
-      <div class="alert alert-warning">
-        <strong>LOS Debug:</strong>
-        los_profiles type: {{ los_profiles.__class__.__name__ if los_profiles else "None" }}<br>
-        los_profiles length: {{ los_profiles|length if los_profiles else "0" }}<br>
-        los_profiles keys: {{ los_profiles.keys()|list if los_profiles else "[]" }}<br>
-        config.los.enabled: {{ config['los']['enabled'] if config and 'los' in config else "Not found" }}
-      </div>
-    </div>
-  </div>
-
   <!-- Line of Sight Terrain Analysis Section -->
   {% if los_profiles and los_profiles|length > 0 %}
   <div class="row mt-4">
