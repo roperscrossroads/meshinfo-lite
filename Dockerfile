@@ -64,14 +64,15 @@ COPY requirements.txt banner run.sh ./
 # Upgrade pip and install packages
 RUN pip install --upgrade pip setuptools wheel
 
-# Install requirements, excluding rasterio for ARM64 (already installed via conda)
+# Install requirements with platform-specific optimizations
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+    # Use piwheels for faster ARM64 builds and exclude rasterio (installed via conda) \
     grep -v "^rasterio" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt; \
+    su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements_filtered.txt"; \
     else \
-    cp requirements.txt requirements_filtered.txt; \
+    # Standard install for non-ARM64 \
+    su app -c "pip install --no-cache-dir --user -r requirements.txt"; \
     fi
-
-RUN su app -c "pip install --no-cache-dir --user -r requirements_filtered.txt"
 
 COPY --chown=app:app banner run.sh ./
 COPY --chown=app:app *.py ./
