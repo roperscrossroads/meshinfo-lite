@@ -99,33 +99,41 @@ def extract_message_info(payload):
         se.ParseFromString(payload)
         mp = se.packet
 
-        if mp and mp.HasField("decoded"):
-            portnum = mp.decoded.portnum
+        if mp:
+            # Extract node_id from packet (works for both encrypted and decoded)
+            node_id_int = getattr(mp, 'from', None)
+            node_id = f"!{node_id_int:08x}" if node_id_int else None
 
-            # Map portnum to friendly name
-            portnum_names = {
-                portnums_pb2.TEXT_MESSAGE_APP: "Text Message",
-                portnums_pb2.TEXT_MESSAGE_COMPRESSED_APP: "Text (Compressed)",
-                portnums_pb2.POSITION_APP: "Position",
-                portnums_pb2.NODEINFO_APP: "Node Info",
-                portnums_pb2.ROUTING_APP: "Routing",
-                portnums_pb2.TELEMETRY_APP: "Telemetry",
-                portnums_pb2.NEIGHBORINFO_APP: "Neighbor Info",
-                portnums_pb2.TRACEROUTE_APP: "Traceroute",
-                portnums_pb2.MAP_REPORT_APP: "Map Report",
-                portnums_pb2.ATAK_PLUGIN: "ATAK Plugin",
-                portnums_pb2.STORE_FORWARD_APP: "Store & Forward",
-                portnums_pb2.RANGE_TEST_APP: "Range Test",
-                portnums_pb2.SIMULATOR_APP: "Simulator",
-                portnums_pb2.ZPS_APP: "ZPS",
-                portnums_pb2.POWERSTRESS_APP: "Power Stress",
-                72: "ATAK Plugin"  # Explicitly include portnum 72
-            }
+            if mp.HasField("decoded"):
+                # Decoded message - we can get the portnum
+                portnum = mp.decoded.portnum
 
-            message_type = portnum_names.get(portnum, f"Unknown ({portnum})")
-            # Also extract node_id from packet
-            node_id = getattr(mp, 'from', None) if mp else None
-            return portnum, message_type, node_id
+                # Map portnum to friendly name
+                portnum_names = {
+                    portnums_pb2.TEXT_MESSAGE_APP: "Text Message",
+                    portnums_pb2.TEXT_MESSAGE_COMPRESSED_APP: "Text (Compressed)",
+                    portnums_pb2.POSITION_APP: "Position",
+                    portnums_pb2.NODEINFO_APP: "Node Info",
+                    portnums_pb2.ROUTING_APP: "Routing",
+                    portnums_pb2.TELEMETRY_APP: "Telemetry",
+                    portnums_pb2.NEIGHBORINFO_APP: "Neighbor Info",
+                    portnums_pb2.TRACEROUTE_APP: "Traceroute",
+                    portnums_pb2.MAP_REPORT_APP: "Map Report",
+                    portnums_pb2.ATAK_PLUGIN: "ATAK Plugin",
+                    portnums_pb2.STORE_FORWARD_APP: "Store & Forward",
+                    portnums_pb2.RANGE_TEST_APP: "Range Test",
+                    portnums_pb2.SIMULATOR_APP: "Simulator",
+                    portnums_pb2.ZPS_APP: "ZPS",
+                    portnums_pb2.POWERSTRESS_APP: "Power Stress",
+                    72: "ATAK Plugin"  # Explicitly include portnum 72
+                }
+
+                message_type = portnum_names.get(portnum, f"Unknown ({portnum})")
+                return portnum, message_type, node_id
+            elif mp.HasField("encrypted"):
+                # Encrypted message - we can't determine portnum but we have node_id
+                return None, "Encrypted", node_id
+
     except Exception as e:
         logger.debug(f"Could not extract message info: {e}")
     return None, None, None

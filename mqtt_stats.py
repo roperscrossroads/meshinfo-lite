@@ -67,6 +67,12 @@ class MQTTStats:
         # Enhanced flood detection - per-node problem tracking
         self.node_problem_counts = {}  # node_id -> problem_type -> count
 
+        # High-volume node detection (1000+ messages/minute)
+        self.high_volume_threshold = 1000  # messages per minute to be considered high-volume
+        self.node_message_rates = {}  # node_id -> deque of per-minute message counts (last 5 minutes)
+        self.node_current_minute_counts = {}  # node_id -> current minute message count
+        self.node_minute_start = int(time.time() / 60)  # current minute for node tracking
+
         # Start background thread for periodic database writes
         self._db_writer_thread = None
         self._stop_db_writer = threading.Event()
@@ -174,6 +180,7 @@ class MQTTStats:
             # Track raw messages per node for high volume detection
             if node_id:
                 self.track_node_problem(node_id, 'raw_messages')
+                self._track_node_message_rate(node_id)
 
     def on_message_dropped(self, reason: str = "unknown", node_id=None):
         """Called when a message is dropped (ATAK, failed parsing, etc.)"""
@@ -219,6 +226,100 @@ class MQTTStats:
 
         self.node_problem_counts[node_id][problem_type] += count
         self.node_problem_counts[node_id]['last_seen'] = time.time()
+
+    def _track_node_message_rate(self, node_id):
+        """Track per-node message rates for high-volume detection"""
+        current_minute = int(time.time() / 60)
+
+        # Initialize node tracking if needed
+        if node_id not in self.node_message_rates:
+            self.node_message_rates[node_id] = deque(maxlen=5)  # Last 5 minutes
+            self.node_current_minute_counts[node_id] = 0
+
+        # Check if we've moved to a new minute
+        if current_minute != self.node_minute_start:
+            # Save previous minute's counts for all nodes
+            for nid in self.node_current_minute_counts:
+                if self.node_current_minute_counts[nid] > 0:
+                    self.node_message_rates[nid].append(self.node_current_minute_counts[nid])
+
+                    # Check for high-volume activity
+                    if self.node_current_minute_counts[nid] >= self.high_volume_threshold:
+                        logger.warning(f"High-volume node detected: {nid} sent {self.node_current_minute_counts[nid]} messages in last minute")
+
+            # Reset all node counters for new minute
+            for nid in self.node_current_minute_counts:
+                self.node_current_minute_counts[nid] = 0
+
+            self.node_minute_start = current_minute
+
+        # Increment current minute counter for this node
+        self.node_current_minute_counts[node_id] += 1
+
+    def get_problem_nodes(self):
+        """Get list of problematic nodes (high-volume and high-problem counts)"""
+        with self.lock:
+            problem_nodes = []
+            current_time = time.time()
+
+            # Check all nodes that have been tracked
+            all_node_ids = set(self.node_problem_counts.keys()) | set(self.node_message_rates.keys())
+
+            for node_id in all_node_ids:
+                node_info = {
+                    'node_id': node_id,
+                    'problems': {},
+                    'message_rates': [],
+                    'current_minute_rate': 0,
+                    'avg_message_rate': 0,
+                    'is_high_volume': False,
+                    'total_problems': 0,
+                    'last_seen': None
+                }
+
+                # Get problem counts
+                if node_id in self.node_problem_counts:
+                    problems = self.node_problem_counts[node_id].copy()
+                    node_info['last_seen'] = problems.pop('last_seen', None)
+                    node_info['problems'] = problems
+                    node_info['total_problems'] = sum(problems.values())
+
+                # Get message rate data
+                if node_id in self.node_message_rates:
+                    rates = list(self.node_message_rates[node_id])
+                    node_info['message_rates'] = rates
+                    node_info['avg_message_rate'] = sum(rates) / len(rates) if rates else 0
+
+                # Get current minute rate
+                if node_id in self.node_current_minute_counts:
+                    node_info['current_minute_rate'] = self.node_current_minute_counts[node_id]
+
+                # Determine if high-volume (current minute or recent average)
+                max_recent_rate = max(node_info['message_rates']) if node_info['message_rates'] else 0
+                node_info['is_high_volume'] = (
+                    node_info['current_minute_rate'] >= self.high_volume_threshold or
+                    max_recent_rate >= self.high_volume_threshold or
+                    node_info['avg_message_rate'] >= self.high_volume_threshold
+                )
+
+                # Include nodes that are problematic (high-volume OR high problem counts)
+                is_problematic = (
+                    node_info['is_high_volume'] or
+                    node_info['total_problems'] >= 50 or  # 50+ problems of any type
+                    node_info['problems'].get('atak_drops', 0) >= 10  # 10+ ATAK drops
+                )
+
+                if is_problematic:
+                    problem_nodes.append(node_info)
+
+            # Sort by severity (high-volume first, then by total problems)
+            problem_nodes.sort(key=lambda x: (
+                -int(x['is_high_volume']),  # High-volume first
+                -x['current_minute_rate'],  # Then by current activity
+                -x['total_problems']        # Then by total problems
+            ))
+
+            return problem_nodes
 
     def get_stats(self) -> Dict:
         """Get current statistics"""

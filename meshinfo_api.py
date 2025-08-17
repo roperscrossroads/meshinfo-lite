@@ -1319,65 +1319,63 @@ def get_mqtt_diagnostics():
 
 @api.route('/flood-status')
 def flood_status():
-    """Enhanced flood detection API - identifies problematic nodes"""
+    """Enhanced flood detection API - identifies problematic and high-volume nodes"""
     try:
+        # Use the new comprehensive problem node detection
+        problem_nodes_data = mqtt_stats.get_problem_nodes()
+
+        # Convert to API format
         problem_nodes = []
+        for node_data in problem_nodes_data:
+            # Determine primary issue type
+            if node_data['is_high_volume']:
+                primary_issue = 'HIGH VOLUME'
+            elif node_data['problems'].get('atak_drops', 0) >= 10:
+                primary_issue = 'ATAK FLOODING'
+            elif node_data['problems'].get('parse_failures', 0) >= 20:
+                primary_issue = 'PARSE ERRORS'
+            elif node_data['problems'].get('processing_errors', 0) >= 20:
+                primary_issue = 'PROCESSING ERRORS'
+            else:
+                primary_issue = 'MULTIPLE ISSUES'
 
-        # Access node problem tracking data
-        with mqtt_stats.lock:
-            for node_id, problems in mqtt_stats.node_problem_counts.items():
-                # Calculate total problems (excluding metadata)
-                total_problems = sum(problems[k] for k in problems if k != 'last_seen')
+            # Get node name if available
+            node_name = "Unknown"
+            try:
+                md = get_meshdata()
+                if md:
+                    node_id = node_data['node_id']
+                    # Convert int node_id to hex for lookup
+                    if isinstance(node_id, int):
+                        node_id_hex = utils.convert_node_id_from_int_to_hex(node_id)
+                    else:
+                        node_id_hex = node_id
 
-                if total_problems > 50:  # Threshold for "problem node"
-                    # Determine primary issue type
-                    problem_counts = {k: v for k, v in problems.items() if k != 'last_seen'}
-                    primary_issue = max(problem_counts, key=lambda k: problem_counts[k])
+                    nodes = md.get_nodes_cached()
+                    if nodes and node_id_hex in nodes:
+                        node_data_db = nodes[node_id_hex]
+                        node_name = node_data_db.get('long_name') or node_data_db.get('short_name') or "Unknown"
+            except Exception as e:
+                logging.debug(f"Could not get node name for {node_data['node_id']}: {e}")
 
-                    # Map to user-friendly categories
-                    issue_map = {
-                        'atak_drops': 'ATAK FLOODING',
-                        'parse_failures': 'PARSE ERRORS',
-                        'unsupported_types': 'UNKNOWN TYPES',
-                        'ignored_channels': 'CHANNEL ISSUES',
-                        'processing_errors': 'PROCESSING ERRORS',
-                        'raw_messages': 'HIGH VOLUME'
-                    }
-
-                    # Get node name if available
-                    node_name = "Unknown"
-                    try:
-                        md = get_meshdata()
-                        if md:
-                            # Convert int node_id to hex for lookup
-                            if isinstance(node_id, int):
-                                node_id_hex = utils.convert_node_id_from_int_to_hex(node_id)
-                            else:
-                                node_id_hex = node_id
-
-                            nodes = md.get_nodes_cached()
-                            if nodes and node_id_hex in nodes:
-                                node_data = nodes[node_id_hex]
-                                node_name = node_data.get('long_name') or node_data.get('short_name') or "Unknown"
-                    except Exception as e:
-                        logging.debug(f"Could not get node name for {node_id}: {e}")
-
-                    problem_nodes.append({
-                        "node_id": str(node_id),
-                        "name": node_name,
-                        "problems": problem_counts,
-                        "primary_issue": issue_map.get(primary_issue, 'UNKNOWN'),
-                        "total_problem_count": total_problems,
-                        "last_seen": problems.get('last_seen', time.time())
-                    })
-
-        # Sort by total problem count descending
-        problem_nodes.sort(key=lambda x: x['total_problem_count'], reverse=True)
+            problem_nodes.append({
+                "node_id": str(node_data['node_id']),
+                "name": node_name,
+                "is_high_volume": node_data['is_high_volume'],
+                "current_minute_rate": node_data['current_minute_rate'],
+                "avg_message_rate": round(node_data['avg_message_rate'], 1),
+                "message_rates_last_5min": node_data['message_rates'],
+                "problems": node_data['problems'],
+                "primary_issue": primary_issue,
+                "total_problem_count": node_data['total_problems'],
+                "last_seen": node_data['last_seen'] or time.time()
+            })
 
         return jsonify({
             "is_flooding": len(problem_nodes) > 0,
-            "problem_nodes": problem_nodes[:10],  # Limit to top 10
+            "problem_nodes": problem_nodes[:15],  # Show top 15 problematic nodes
             "total_problem_nodes": len(problem_nodes),
+            "high_volume_threshold": mqtt_stats.high_volume_threshold,
             "timestamp": time.time()
         })
 
