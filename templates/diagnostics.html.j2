@@ -180,6 +180,46 @@
         </div>
     </div>
 
+    <!-- ATAK Flood Statistics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">⚠️ ATAK Flood Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="metric">
+                                <div class="metric-label">Current Minute ATAK Messages</div>
+                                <div id="atak-current-minute" class="metric-value text-warning">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="metric">
+                                <div class="metric-label">Total ATAK Messages Since Start</div>
+                                <div id="atak-total-count" class="metric-value">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="metric">
+                                <div class="metric-label">Flood Status</div>
+                                <div id="atak-flood-status" class="metric-value">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="atak-flood-history">
+                        <h6>Recent ATAK Flood Events (Last 24 Hours)</h6>
+                        <div id="atak-history-table">
+                            <p class="text-muted">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Recent Disconnections -->
     <div class="row mb-4">
         <div class="col-12">
@@ -334,6 +374,60 @@ function updateDiagnostics() {
             document.getElementById('system-database').className =
                 database.connected ? 'metric-value status-connected' : 'metric-value status-disconnected';
             document.getElementById('system-uptime').textContent = formatDuration(system.uptime_seconds);
+
+            // Update ATAK flood statistics
+            const atakFlood = data.atak_flood || {};
+            document.getElementById('atak-current-minute').textContent = atakFlood.current_minute_count || 0;
+            document.getElementById('atak-total-count').textContent = (atakFlood.total_count || 0).toLocaleString();
+
+            // Determine flood status
+            const currentMinuteCount = atakFlood.current_minute_count || 0;
+            const floodStatusElement = document.getElementById('atak-flood-status');
+            if (currentMinuteCount > 1000) {
+                floodStatusElement.textContent = 'SEVERE FLOOD';
+                floodStatusElement.className = 'metric-value text-danger';
+            } else if (currentMinuteCount > 100) {
+                floodStatusElement.textContent = 'FLOOD DETECTED';
+                floodStatusElement.className = 'metric-value text-warning';
+            } else if (currentMinuteCount > 0) {
+                floodStatusElement.textContent = 'Low Activity';
+                floodStatusElement.className = 'metric-value text-info';
+            } else {
+                floodStatusElement.textContent = 'No ATAK Messages';
+                floodStatusElement.className = 'metric-value text-success';
+            }
+
+            // Update ATAK flood history table
+            const atakHistoryDiv = document.getElementById('atak-history-table');
+            if (atakFlood.history && atakFlood.history.length > 0) {
+                let html = '<div class="table-responsive"><table class="table table-sm table-striped">';
+                html += '<thead class="thead-light"><tr>';
+                html += '<th>Time Period</th>';
+                html += '<th class="text-right">ATAK Count</th>';
+                html += '<th class="text-right">Total Messages</th>';
+                html += '<th class="text-right">Flood %</th>';
+                html += '<th>Severity</th>';
+                html += '</tr></thead><tbody>';
+
+                atakFlood.history.slice(0, 10).forEach(event => {
+                    const percentage = parseFloat(event.flood_percentage);
+                    const severityClass = percentage > 50 ? 'table-danger' : percentage > 20 ? 'table-warning' : 'table-info';
+                    const severityText = percentage > 50 ? 'SEVERE' : percentage > 20 ? 'HIGH' : 'MODERATE';
+
+                    html += `<tr class="${severityClass}">
+                        <td>${new Date(event.minute_period).toLocaleString()}</td>
+                        <td class="text-right">${event.atak_message_count.toLocaleString()}</td>
+                        <td class="text-right">${event.total_message_count.toLocaleString()}</td>
+                        <td class="text-right">${percentage.toFixed(1)}%</td>
+                        <td>${severityText}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+                atakHistoryDiv.innerHTML = html;
+            } else {
+                atakHistoryDiv.innerHTML = '<p class="text-muted">No ATAK flood events in the last 24 hours</p>';
+            }
 
             // Update message type statistics
             const messageTypesDiv = document.getElementById('message-types-table');

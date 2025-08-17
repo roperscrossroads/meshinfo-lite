@@ -49,6 +49,16 @@ class MQTTStats:
         self.current_minute_messages = 0
         self.current_minute_start = int(time.time() / 60)
 
+        # ATAK flood tracking
+        self.atak_messages_current_minute = 0
+        self.atak_messages_total = 0
+        self.last_db_write_minute = int(time.time() / 60)
+
+        # Start background thread for periodic database writes
+        self._db_writer_thread = None
+        self._stop_db_writer = threading.Event()
+        self._start_db_writer_thread()
+
     def on_connect(self, return_code: int):
         """Called when MQTT connects"""
         with self.lock:
@@ -106,6 +116,11 @@ class MQTTStats:
                 if message_type:
                     self.message_type_names[portnum] = message_type
 
+                # Track ATAK messages specifically (portnum 72)
+                if portnum == 72:  # ATAK_PLUGIN portnum
+                    self.atak_messages_current_minute += 1
+                    self.atak_messages_total += 1
+
                 # Track per-minute type stats
                 current_minute = int(time.time() / 60)
                 if current_minute != self.current_minute_start:
@@ -121,7 +136,9 @@ class MQTTStats:
             if current_minute != self.current_minute_start:
                 # New minute, save the previous minute's count
                 self.message_rates.append(self.current_minute_messages)
+                # Reset counters for new minute
                 self.current_minute_messages = 1
+                self.atak_messages_current_minute = 1 if portnum == 72 else 0
                 self.current_minute_start = current_minute
             else:
                 self.current_minute_messages += 1
@@ -206,7 +223,9 @@ class MQTTStats:
                 'recent_disconnects': list(self.recent_disconnects),
                 'connection_history': list(self.connection_history),
                 'top_message_types': top_message_types,
-                'message_type_count': len(self.message_types)
+                'message_type_count': len(self.message_types),
+                'atak_messages_current_minute': self.atak_messages_current_minute,
+                'atak_messages_total': self.atak_messages_total
             }
 
     def get_health_status(self) -> Dict:
@@ -251,6 +270,74 @@ class MQTTStats:
             'issues': issues,
             'last_updated': time.time()
         }
+
+    def _start_db_writer_thread(self):
+        """Start the background thread for writing ATAK flood stats to database"""
+        if self._db_writer_thread is None or not self._db_writer_thread.is_alive():
+            self._db_writer_thread = threading.Thread(target=self._db_writer_worker, daemon=True)
+            self._db_writer_thread.start()
+            logger.info("Started ATAK flood stats database writer thread")
+
+    def _db_writer_worker(self):
+        """Background worker that periodically writes ATAK flood stats to database"""
+        while not self._stop_db_writer.is_set():
+            try:
+                # Wait for 60 seconds or until stop signal
+                if self._stop_db_writer.wait(60):
+                    break
+
+                current_minute = int(time.time() / 60)
+
+                # Check if we need to write data for the previous minute
+                with self.lock:
+                    if current_minute > self.last_db_write_minute + 1:
+                        # We have one or more completed minutes to write
+                        minutes_to_write = current_minute - self.last_db_write_minute - 1
+
+                        # Look through recent message type data for the last completed minute
+                        if self.message_types_per_minute and minutes_to_write > 0:
+                            # Get the most recent completed minute data
+                            recent_minute_data = list(self.message_types_per_minute)[-1] if self.message_types_per_minute else {}
+
+                            atak_count = recent_minute_data.get(72, 0)  # portnum 72 is ATAK
+                            total_count = sum(recent_minute_data.values()) if recent_minute_data else 0
+
+                            # Only write if we had ATAK messages in this minute
+                            if atak_count > 0:
+                                completed_minute_timestamp = (current_minute - 1) * 60
+                                minute_start = datetime.fromtimestamp(completed_minute_timestamp)
+                                percentage = (atak_count / max(1, total_count)) * 100
+
+                                # Write to database
+                                self._write_to_database(minute_start, atak_count, total_count, percentage)
+
+                        # Update last write minute to current - 1 (the last completed minute)
+                        self.last_db_write_minute = current_minute - 1
+
+            except Exception as e:
+                logger.error(f"Error in ATAK flood stats database writer: {e}")
+
+    def _write_to_database(self, minute_period, atak_count, total_count, percentage):
+        """Write ATAK flood stats to database"""
+        try:
+            # Import here to avoid circular imports
+            from meshdata import MeshData
+
+            # Get database connection
+            mesh_data = MeshData()
+            mesh_data.store_atak_flood_stats(minute_period, atak_count, total_count, percentage)
+
+            logger.info(f"Stored ATAK flood stats: {minute_period}, ATAK: {atak_count}/{total_count} ({percentage:.1f}%)")
+
+        except Exception as e:
+            logger.error(f"Failed to write ATAK flood stats to database: {e}")
+
+    def stop_db_writer(self):
+        """Stop the database writer thread"""
+        if self._db_writer_thread and self._db_writer_thread.is_alive():
+            self._stop_db_writer.set()
+            self._db_writer_thread.join(timeout=5)
+            logger.info("Stopped ATAK flood stats database writer thread")
 
 # Global instance
 mqtt_stats = MQTTStats()

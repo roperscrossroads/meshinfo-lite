@@ -1265,6 +1265,14 @@ def get_diagnostics():
             'last_ping': time.time()
         }
 
+        # Get ATAK flood history
+        atak_flood_history = []
+        if md:
+            try:
+                atak_flood_history = md.get_atak_flood_history(hours=24)
+            except Exception as e:
+                logging.error(f"Error fetching ATAK flood history: {e}")
+
         # Format response
         diagnostics = {
             'mqtt': {
@@ -1273,6 +1281,11 @@ def get_diagnostics():
             },
             'system': system_stats,
             'database': db_status,
+            'atak_flood': {
+                'history': atak_flood_history,
+                'current_minute_count': mqtt_data.get('atak_messages_current_minute', 0),
+                'total_count': mqtt_data.get('atak_messages_total', 0)
+            },
             'timestamp': time.time()
         }
 

@@ -1798,6 +1798,51 @@ WHERE id = %s ORDER BY ts_created DESC LIMIT 1"""
                 import logging
                 logging.error(f"Failed to update relay_edges: {e}")
 
+    def store_atak_flood_stats(self, minute_period, atak_count, total_count, percentage):
+        """Store ATAK flood statistics for a given minute period."""
+        try:
+            sql = """INSERT INTO atak_flood_stats
+            (minute_period, atak_message_count, total_message_count, flood_percentage)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+            atak_message_count = VALUES(atak_message_count),
+            total_message_count = VALUES(total_message_count),
+            flood_percentage = VALUES(flood_percentage)"""
+
+            params = (minute_period, atak_count, total_count, percentage)
+
+            cur = self.db.cursor()
+            cur.execute(sql, params)
+            self.db.commit()
+            cur.close()
+
+            logging.debug(f"Stored ATAK flood stats: {minute_period}, ATAK: {atak_count}, Total: {total_count}, Percentage: {percentage}%")
+
+        except Exception as e:
+            logging.error(f"Failed to store ATAK flood stats: {e}")
+            try:
+                self.db.rollback()
+            except:
+                pass
+
+    def get_atak_flood_history(self, hours=24):
+        """Get ATAK flood statistics for the last N hours."""
+        try:
+            cursor = self.db.cursor(dictionary=True)
+            sql = """
+            SELECT minute_period, atak_message_count, total_message_count, flood_percentage, timestamp
+            FROM atak_flood_stats
+            WHERE minute_period >= NOW() - INTERVAL %s HOUR
+            ORDER BY minute_period DESC
+            """
+            cursor.execute(sql, (hours,))
+            results = cursor.fetchall()
+            cursor.close()
+            return results
+        except Exception as e:
+            logging.error(f"Failed to get ATAK flood history: {e}")
+            return []
+
     def setup_database(self):
         creates = [
             """CREATE TABLE IF NOT EXISTS meshuser (
