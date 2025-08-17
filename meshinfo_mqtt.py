@@ -173,24 +173,27 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
                 # Pass the existing MeshData instance
                 result = process_payload(msg.payload, msg.topic, md_instance)
 
-                if result == "stored":
+                # Handle both tuple and legacy single return values
+                if isinstance(result, tuple):
+                    action, reason = result
+                else:
+                    # Legacy single return value - shouldn't happen with new code
+                    action, reason = result, None
+
+                if action == "stored":
                     # Successfully processed and stored in database
                     mqtt_stats.on_message_processed(success=True)
-                elif result == "dropped":
-                    # Intentionally dropped (ATAK, unsupported type, etc.)
-                    # Count as dropped for statistics but as successful processing
-                    if message_type and "ATAK" in message_type:
-                        mqtt_stats.on_message_dropped("ATAK_PLUGIN", node_id=node_id)
-                    else:
-                        mqtt_stats.on_message_dropped("UNSUPPORTED_TYPE", node_id=node_id)
+                elif action == "dropped":
+                    # Intentionally dropped - use specific reason from process_payload
+                    mqtt_stats.on_message_dropped(reason or "UNKNOWN", node_id=node_id)
                     mqtt_stats.on_message_processed(success=True)
-                elif result == "ignored":
-                    # Ignored channel - also intentional, count as dropped for statistics
-                    mqtt_stats.on_message_dropped("IGNORED_CHANNEL", node_id=node_id)
+                elif action == "ignored":
+                    # Ignored channel - use specific reason from process_payload
+                    mqtt_stats.on_message_dropped(reason or "IGNORED_CHANNEL", node_id=node_id)
                     mqtt_stats.on_message_processed(success=True)
-                elif result == "failed":
-                    # Actual processing failure
-                    mqtt_stats.on_message_dropped("PROCESSING_ERROR", node_id=node_id)
+                elif action == "failed":
+                    # Processing failure - use specific reason from process_payload
+                    mqtt_stats.on_message_dropped(reason or "PROCESSING_ERROR", node_id=node_id)
                     mqtt_stats.on_message_processed(success=False)
                 else:
                     # Unknown result - treat as failure

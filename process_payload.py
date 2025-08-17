@@ -125,9 +125,8 @@ def get_data(msg):
             _rate_limited_log("atak_drop", j['from'],
                              f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
 
-            # Return "dropped" so the normal statistics flow handles counting
-            # ATAK-specific counting will be handled by mqtt_stats.py
-            return "dropped"
+            # Return detailed drop reason for accurate statistics
+            return ("dropped", "ATAK_PLUGIN")
 
         # Initialize type before the portnum checks
         j["type"] = None
@@ -330,7 +329,7 @@ def process_payload(payload, topic, md: MeshData):
         ignored_channels = config.get("channels", "ignored_channels", fallback="").split(",")
         if channel_name in ignored_channels:
             logger.debug(f"Ignoring message from channel: {channel_name}")
-            return "ignored"  # Return status instead of None
+            return ("ignored", "IGNORED_CHANNEL")
 
     # --- End log ---
     mp = get_packet(payload)
@@ -341,7 +340,7 @@ def process_payload(payload, topic, md: MeshData):
                 logger.debug(f"process_payload: Calling md.store() for topic {topic}")
                 # Use the passed-in MeshData instance
                 md.store(data, topic)
-                return "stored"  # Successfully processed and stored
+                return ("stored", None)
             else:
                 # get_data returned None - this could be ATAK (intentionally dropped) or parsing failure
                 # Log topic only if debug is enabled or if it's an unsupported type
@@ -349,15 +348,15 @@ def process_payload(payload, topic, md: MeshData):
                     logging.warning(f"Received invalid or unsupported message type on topic {topic}. Payload: {payload[:100]}...") # Log partial payload for debug
                 else:
                     logger.debug(f"process_payload: get_data returned None for topic {topic}")
-                return "dropped"  # Intentionally dropped (ATAK) or unsupported
+                return ("dropped", "UNSUPPORTED_TYPE")
 
         except KeyError as e:
             logging.warning(f"Failed to process message: Missing key {str(e)} in payload on topic {topic}")
-            return "failed"  # Processing failed
+            return ("failed", "PROCESSING_ERROR")
         except Exception as e:
             # Log the full traceback for unexpected errors
             logging.exception(f"Unexpected error processing message on topic {topic}: {str(e)}") # Use logging.exception
-            return "failed"  # Processing failed
+            return ("failed", "PROCESSING_ERROR")
     else:
         logger.debug(f"process_payload: get_packet returned None for topic {topic}")
-        return "failed"  # Failed to get packet
+        return ("failed", "PARSE_ERROR")
