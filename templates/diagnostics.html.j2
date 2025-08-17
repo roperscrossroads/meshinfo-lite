@@ -161,6 +161,25 @@
         </div>
     </div>
 
+    <!-- Message Type Statistics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">📊 Message Type Statistics (Top 10)</h5>
+                </div>
+                <div class="card-body">
+                    <div id="message-types-table">
+                        <p class="text-muted">Loading...</p>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">Total unique message types: <span id="message-type-count">—</span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Recent Disconnections -->
     <div class="row mb-4">
         <div class="col-12">
@@ -315,6 +334,65 @@ function updateDiagnostics() {
             document.getElementById('system-database').className =
                 database.connected ? 'metric-value status-connected' : 'metric-value status-disconnected';
             document.getElementById('system-uptime').textContent = formatDuration(system.uptime_seconds);
+
+            // Update message type statistics
+            const messageTypesDiv = document.getElementById('message-types-table');
+            if (mqtt.top_message_types && mqtt.top_message_types.length > 0) {
+                let html = '<div class="table-responsive"><table class="table table-sm table-hover">';
+                html += '<thead class="thead-light"><tr>';
+                html += '<th>Type</th>';
+                html += '<th class="text-right">Count</th>';
+                html += '<th class="text-right">Percentage</th>';
+                html += '<th class="text-right">Rate/Min</th>';
+                html += '<th>Visual</th>';
+                html += '</tr></thead><tbody>';
+
+                mqtt.top_message_types.forEach((msgType, index) => {
+                    const isATAK = msgType.name.includes('ATAK');
+                    const rowClass = isATAK ? 'table-warning' : '';
+                    const icon = isATAK ? '⚠️' : '';
+
+                    html += `<tr class="${rowClass}">
+                        <td>${icon} ${msgType.name}</td>
+                        <td class="text-right">${msgType.count.toLocaleString()}</td>
+                        <td class="text-right">${msgType.percentage.toFixed(1)}%</td>
+                        <td class="text-right">${msgType.rate_per_minute.toFixed(0)}/min</td>
+                        <td>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar ${isATAK ? 'bg-warning' : 'bg-primary'}"
+                                     role="progressbar"
+                                     style="width: ${msgType.percentage}%"
+                                     aria-valuenow="${msgType.percentage}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+
+                // Add warning if ATAK is dominating
+                const atakTypes = mqtt.top_message_types.filter(t => t.name.includes('ATAK'));
+                if (atakTypes.length > 0) {
+                    const totalAtakPercentage = atakTypes.reduce((sum, t) => sum + t.percentage, 0);
+                    if (totalAtakPercentage > 50) {
+                        html += `<div class="alert alert-warning mt-3" role="alert">
+                            <strong>⚠️ ATAK Flood Detected!</strong>
+                            ATAK messages are consuming ${totalAtakPercentage.toFixed(1)}% of all traffic.
+                            This may be impacting system performance.
+                        </div>`;
+                    }
+                }
+
+                messageTypesDiv.innerHTML = html;
+            } else {
+                messageTypesDiv.innerHTML = '<p class="text-muted">No message type data available yet</p>';
+            }
+
+            // Update message type count
+            document.getElementById('message-type-count').textContent = mqtt.message_type_count || 0;
 
             // Update recent disconnections
             const disconnectionsDiv = document.getElementById('recent-disconnections');

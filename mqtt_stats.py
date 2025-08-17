@@ -30,6 +30,12 @@ class MQTTStats:
         self.messages_failed = 0
         self.last_message_time = None
 
+        # Message type tracking (portnum statistics)
+        self.message_types = {}  # portnum -> count
+        self.message_type_names = {}  # portnum -> name
+        self.message_types_per_minute = deque(maxlen=60)  # Track types per minute
+        self.current_minute_types = {}
+
         # Performance tracking
         self.uptime_start = time.time()
         self.longest_connection_duration = 0
@@ -88,11 +94,27 @@ class MQTTStats:
 
             logger.warning(f"MQTT Stats: Disconnection #{self.total_disconnections}, RC: {return_code}, Duration: {duration:.1f}s")
 
-    def on_message_received(self):
+    def on_message_received(self, portnum=None, message_type=None):
         """Called when a message is received"""
         with self.lock:
             self.messages_received += 1
             self.last_message_time = time.time()
+
+            # Track message type if provided
+            if portnum is not None:
+                self.message_types[portnum] = self.message_types.get(portnum, 0) + 1
+                if message_type:
+                    self.message_type_names[portnum] = message_type
+
+                # Track per-minute type stats
+                current_minute = int(time.time() / 60)
+                if current_minute != self.current_minute_start:
+                    # Save previous minute's type counts
+                    if self.current_minute_types:
+                        self.message_types_per_minute.append(self.current_minute_types.copy())
+                    self.current_minute_types = {portnum: 1}
+                else:
+                    self.current_minute_types[portnum] = self.current_minute_types.get(portnum, 0) + 1
 
             # Update per-minute message rate
             current_minute = int(time.time() / 60)
@@ -142,6 +164,30 @@ class MQTTStats:
             if self.last_message_time:
                 time_since_last_message = current_time - self.last_message_time
 
+            # Get top message types
+            top_message_types = []
+            if self.message_types:
+                # Sort by count and get top 10
+                sorted_types = sorted(self.message_types.items(), key=lambda x: x[1], reverse=True)[:10]
+                for portnum, count in sorted_types:
+                    type_name = self.message_type_names.get(portnum, f"Unknown (portnum {portnum})")
+                    percentage = (count / self.messages_received * 100) if self.messages_received > 0 else 0
+
+                    # Calculate rate per minute for this type
+                    type_rate = 0
+                    if self.message_types_per_minute:
+                        recent_counts = [m.get(portnum, 0) for m in self.message_types_per_minute]
+                        if recent_counts:
+                            type_rate = sum(recent_counts) / len(recent_counts)
+
+                    top_message_types.append({
+                        'portnum': portnum,
+                        'name': type_name,
+                        'count': count,
+                        'percentage': percentage,
+                        'rate_per_minute': type_rate
+                    })
+
             return {
                 'connection_status': self.is_connected,
                 'total_connections': self.total_connections,
@@ -158,7 +204,9 @@ class MQTTStats:
                 'current_minute_messages': self.current_minute_messages,
                 'time_since_last_message': time_since_last_message,
                 'recent_disconnects': list(self.recent_disconnects),
-                'connection_history': list(self.connection_history)
+                'connection_history': list(self.connection_history),
+                'top_message_types': top_message_types,
+                'message_type_count': len(self.message_types)
             }
 
     def get_health_status(self) -> Dict:

@@ -5,6 +5,7 @@ from meshdata import MeshData # Import MeshData
 from mqtt_stats import mqtt_stats
 import configparser
 import time
+from meshtastic import mqtt_pb2, portnums_pb2
 
 
 config = configparser.ConfigParser()
@@ -79,16 +80,55 @@ def connect_mqtt() -> mqtt_client:
     return client
 
 
+def extract_message_info(payload):
+    """Extract basic message info for statistics without full processing"""
+    try:
+        se = mqtt_pb2.ServiceEnvelope()
+        se.ParseFromString(payload)
+        mp = se.packet
+
+        if mp and mp.HasField("decoded"):
+            portnum = mp.decoded.portnum
+
+            # Map portnum to friendly name
+            portnum_names = {
+                portnums_pb2.TEXT_MESSAGE_APP: "Text Message",
+                portnums_pb2.TEXT_MESSAGE_COMPRESSED_APP: "Text (Compressed)",
+                portnums_pb2.POSITION_APP: "Position",
+                portnums_pb2.NODEINFO_APP: "Node Info",
+                portnums_pb2.ROUTING_APP: "Routing",
+                portnums_pb2.TELEMETRY_APP: "Telemetry",
+                portnums_pb2.NEIGHBORINFO_APP: "Neighbor Info",
+                portnums_pb2.TRACEROUTE_APP: "Traceroute",
+                portnums_pb2.MAP_REPORT_APP: "Map Report",
+                portnums_pb2.ATAK_PLUGIN: "ATAK Plugin",
+                portnums_pb2.STORE_FORWARD_APP: "Store & Forward",
+                portnums_pb2.RANGE_TEST_APP: "Range Test",
+                portnums_pb2.SIMULATOR_APP: "Simulator",
+                portnums_pb2.ZPS_APP: "ZPS",
+                portnums_pb2.POWERSTRESS_APP: "Power Stress",
+                72: "ATAK Plugin"  # Explicitly include portnum 72
+            }
+
+            message_type = portnum_names.get(portnum, f"Unknown ({portnum})")
+            return portnum, message_type
+    except Exception as e:
+        logger.debug(f"Could not extract message info: {e}")
+    return None, None
+
 def subscribe(client: mqtt_client, md_instance: MeshData):
     # --- Add log at the start ---
     logger.info("subscribe: Entered function.")
     # --- End log ---
     def on_message(client, userdata, msg):
-        # Track message received
-        mqtt_stats.on_message_received()
+        # Extract message info for statistics
+        portnum, message_type = extract_message_info(msg.payload)
+
+        # Track message received with type info
+        mqtt_stats.on_message_received(portnum=portnum, message_type=message_type)
 
         # --- Add log for every message received ---
-        logger.debug(f"on_message: Received message on topic: {msg.topic}")
+        logger.debug(f"on_message: Received message on topic: {msg.topic} (type: {message_type})")
         # --- End log ---
 
         # Filter for relevant topics
