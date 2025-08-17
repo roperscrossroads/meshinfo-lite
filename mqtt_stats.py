@@ -120,10 +120,8 @@ class MQTTStats:
                 if message_type:
                     self.message_type_names[portnum] = message_type
 
-                # Track ATAK messages specifically (portnum 72)
-                if portnum == 72:  # ATAK_PLUGIN portnum
-                    self.atak_messages_current_minute += 1
-                    self.atak_messages_total += 1
+                # NOTE: ATAK counting is now done manually in process_payload.py
+                # to ensure we count them even when they're dropped
 
                 # Track per-minute type stats
                 current_minute = int(time.time() / 60)
@@ -142,7 +140,7 @@ class MQTTStats:
                 self.message_rates.append(self.current_minute_messages)
                 # Reset counters for new minute
                 self.current_minute_messages = 1
-                self.atak_messages_current_minute = 1 if portnum == 72 else 0
+                # Note: atak_messages_current_minute is reset manually in process_payload.py
                 self.current_minute_start = current_minute
             else:
                 self.current_minute_messages += 1
@@ -306,28 +304,29 @@ class MQTTStats:
 
                 # Check if we need to write data for the previous minute
                 with self.lock:
-                    if current_minute > self.last_db_write_minute + 1:
-                        # We have one or more completed minutes to write
-                        minutes_to_write = current_minute - self.last_db_write_minute - 1
+                    if current_minute > self.last_db_write_minute:
+                        # We have a completed minute to write
+                        # Use the ATAK counter that was tracked manually
+                        # Note: We write the data from the minute that just completed
 
-                        # Look through recent message type data for the last completed minute
-                        if self.message_types_per_minute and minutes_to_write > 0:
-                            # Get the most recent completed minute data
-                            recent_minute_data = list(self.message_types_per_minute)[-1] if self.message_types_per_minute else {}
+                        # Get total message count from the last completed minute
+                        recent_minute_data = list(self.message_types_per_minute)[-1] if self.message_types_per_minute else {}
+                        total_count = sum(recent_minute_data.values()) if recent_minute_data else self.current_minute_messages
 
-                            atak_count = recent_minute_data.get(72, 0)  # portnum 72 is ATAK
-                            total_count = sum(recent_minute_data.values()) if recent_minute_data else 0
+                        # Use the manually tracked ATAK count from the previous minute
+                        # Only write if we had any messages (ATAK or otherwise) in this minute
+                        if self.atak_messages_current_minute > 0 or total_count > 0:
+                            completed_minute_timestamp = (current_minute - 1) * 60
+                            minute_start = datetime.fromtimestamp(completed_minute_timestamp)
 
-                            # Only write if we had ATAK messages in this minute
-                            if atak_count > 0:
-                                completed_minute_timestamp = (current_minute - 1) * 60
-                                minute_start = datetime.fromtimestamp(completed_minute_timestamp)
-                                percentage = (atak_count / max(1, total_count)) * 100
+                            # Calculate total including ATAK messages (since they're dropped from message_types)
+                            total_with_atak = total_count + self.atak_messages_current_minute
+                            percentage = (self.atak_messages_current_minute / max(1, total_with_atak)) * 100
 
-                                # Write to database
-                                self._write_to_database(minute_start, atak_count, total_count, percentage)
+                            # Write to database (even if atak_count is 0 to track flood patterns)
+                            self._write_to_database(minute_start, self.atak_messages_current_minute, total_with_atak, percentage)
 
-                        # Update last write minute to current - 1 (the last completed minute)
+                        # Update last write minute
                         self.last_db_write_minute = current_minute - 1
 
             except Exception as e:

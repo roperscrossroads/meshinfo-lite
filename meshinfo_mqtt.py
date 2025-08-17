@@ -140,14 +140,35 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
             try:
                 # Pass the existing MeshData instance
                 result = process_payload(msg.payload, msg.topic, md_instance)
-                if result is None:
-                    # Message was dropped (likely ATAK or other filter)
-                    mqtt_stats.on_message_processed(success=True)  # Intentionally dropped
-                else:
+
+                if result == "stored":
+                    # Successfully processed and stored in database
                     mqtt_stats.on_message_processed(success=True)
+                elif result == "dropped":
+                    # Intentionally dropped (ATAK, unsupported type, etc.)
+                    # Count as dropped for statistics but as successful processing
+                    if message_type and "ATAK" in message_type:
+                        mqtt_stats.on_message_dropped("ATAK_PLUGIN")
+                    else:
+                        mqtt_stats.on_message_dropped("UNSUPPORTED_TYPE")
+                    mqtt_stats.on_message_processed(success=True)
+                elif result == "ignored":
+                    # Ignored channel - also intentional, count as dropped for statistics
+                    mqtt_stats.on_message_dropped("IGNORED_CHANNEL")
+                    mqtt_stats.on_message_processed(success=True)
+                elif result == "failed":
+                    # Actual processing failure
+                    mqtt_stats.on_message_dropped("PROCESSING_ERROR")
+                    mqtt_stats.on_message_processed(success=False)
+                else:
+                    # Unknown result - treat as failure
+                    logger.warning(f"Unknown process_payload result: {result}")
+                    mqtt_stats.on_message_dropped("UNKNOWN_RESULT")
+                    mqtt_stats.on_message_processed(success=False)
+
             except Exception as e:
                 logger.exception(f"on_message: Error calling process_payload for topic {msg.topic}")
-                mqtt_stats.on_message_dropped("PROCESSING_ERROR")
+                mqtt_stats.on_message_dropped("PROCESSING_EXCEPTION")
                 mqtt_stats.on_message_processed(success=False)
         else:
             logger.debug(f"on_message: Skipping message from topic: {msg.topic}")

@@ -122,9 +122,23 @@ def get_data(msg):
         # Filter out ATAK plugin messages (portnum 72) - these are not needed
         if portnum == portnums_pb2.ATAK_PLUGIN:
             logging.debug(f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
-            # Track dropped message
+            # Manually count ATAK since it was successfully parsed here
             from mqtt_stats import mqtt_stats
-            mqtt_stats.on_message_dropped("ATAK_PLUGIN")
+            import time
+
+            with mqtt_stats.lock:
+                # Check if we need to reset the minute counter
+                current_minute = int(time.time() / 60)
+                if current_minute != mqtt_stats.current_minute_start:
+                    # New minute - the main tracking will handle the reset
+                    # Just increment for this new minute
+                    mqtt_stats.atak_messages_current_minute = 1
+                    # Update the minute tracking to stay in sync
+                    mqtt_stats.current_minute_start = current_minute
+                else:
+                    mqtt_stats.atak_messages_current_minute += 1
+
+                mqtt_stats.atak_messages_total += 1
             return None
 
         # Initialize type before the portnum checks
@@ -327,7 +341,7 @@ def process_payload(payload, topic, md: MeshData):
         ignored_channels = config.get("channels", "ignored_channels", fallback="").split(",")
         if channel_name in ignored_channels:
             logger.debug(f"Ignoring message from channel: {channel_name}")
-            return
+            return "ignored"  # Return status instead of None
 
     # --- End log ---
     mp = get_packet(payload)
@@ -338,15 +352,23 @@ def process_payload(payload, topic, md: MeshData):
                 logger.debug(f"process_payload: Calling md.store() for topic {topic}")
                 # Use the passed-in MeshData instance
                 md.store(data, topic)
+                return "stored"  # Successfully processed and stored
             else:
+                # get_data returned None - this could be ATAK (intentionally dropped) or parsing failure
                 # Log topic only if debug is enabled or if it's an unsupported type
                 if config.get("server", "debug") == "true":
                     logging.warning(f"Received invalid or unsupported message type on topic {topic}. Payload: {payload[:100]}...") # Log partial payload for debug
                 else:
-                    logger.warning(f"process_payload: get_packet returned None for topic {topic}")
+                    logger.debug(f"process_payload: get_data returned None for topic {topic}")
+                return "dropped"  # Intentionally dropped (ATAK) or unsupported
 
         except KeyError as e:
             logging.warning(f"Failed to process message: Missing key {str(e)} in payload on topic {topic}")
+            return "failed"  # Processing failed
         except Exception as e:
-                # Log the full traceback for unexpected errors
+            # Log the full traceback for unexpected errors
             logging.exception(f"Unexpected error processing message on topic {topic}: {str(e)}") # Use logging.exception
+            return "failed"  # Processing failed
+    else:
+        logger.debug(f"process_payload: get_packet returned None for topic {topic}")
+        return "failed"  # Failed to get packet
