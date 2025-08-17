@@ -230,7 +230,7 @@
                         </div>
                     </div>
 
-                    <div id="atak-flood-history">
+                    <div id="atak-flood-history" style="display: none;">
                         <h6>Recent ATAK Flood Events (Last 24 Hours)</h6>
                         <div id="atak-history-table">
                             <p class="text-muted">Loading...</p>
@@ -452,9 +452,14 @@ function updateDiagnostics() {
                 floodStatusElement.className = 'metric-value text-success';
             }
 
-            // Update ATAK flood history table
+            // Update ATAK flood history table and show/hide the section
+            const atakHistorySection = document.getElementById('atak-flood-history');
             const atakHistoryDiv = document.getElementById('atak-history-table');
+
             if (atakFlood.history && atakFlood.history.length > 0) {
+                // Show the section since we have flood events
+                atakHistorySection.style.display = 'block';
+
                 let html = '<div class="table-responsive"><table class="table table-sm table-striped">';
                 html += '<thead class="thead-light"><tr>';
                 html += '<th>Time Period</th>';
@@ -466,21 +471,24 @@ function updateDiagnostics() {
 
                 atakFlood.history.slice(0, 10).forEach(event => {
                     const percentage = parseFloat(event.flood_percentage);
+                    // Since we only store floods with 1000+ ATAK messages, all are significant
                     const severityClass = percentage > 50 ? 'table-danger' : percentage > 20 ? 'table-warning' : 'table-info';
-                    const severityText = percentage > 50 ? 'SEVERE' : percentage > 20 ? 'HIGH' : 'MODERATE';
+                    const severityText = percentage > 50 ? 'SEVERE' : percentage > 20 ? 'HIGH' : 'SIGNIFICANT';
 
                     html += `<tr class="${severityClass}">
                         <td>${new Date(event.minute_period).toLocaleString()}</td>
-                        <td class="text-right">${event.atak_message_count.toLocaleString()}</td>
+                        <td class="text-right font-weight-bold">${event.atak_message_count.toLocaleString()}</td>
                         <td class="text-right">${event.total_message_count.toLocaleString()}</td>
                         <td class="text-right">${percentage.toFixed(1)}%</td>
-                        <td>${severityText}</td>
+                        <td><span class="badge badge-danger">${severityText}</span></td>
                     </tr>`;
                 });
 
                 html += '</tbody></table></div>';
                 atakHistoryDiv.innerHTML = html;
             } else {
+                // Hide the section since there are no flood events
+                atakHistorySection.style.display = 'none';
                 atakHistoryDiv.innerHTML = '<p class="text-muted">No ATAK flood events in the last 24 hours</p>';
             }
 

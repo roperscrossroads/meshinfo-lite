@@ -471,9 +471,9 @@ class MQTTStats:
                         recent_minute_data = list(self.message_types_per_minute)[-1] if self.message_types_per_minute else {}
                         total_count = sum(recent_minute_data.values()) if recent_minute_data else self.current_minute_messages
 
-                        # Use the manually tracked ATAK count from the previous minute
-                        # Only write if we had any messages (ATAK or otherwise) in this minute
-                        if self.atak_messages_current_minute > 0 or total_count > 0:
+                        # Only write to database if we have significant ATAK activity (1000+ messages)
+                        # This avoids cluttering the database with non-flood events
+                        if self.atak_messages_current_minute >= 1000:
                             completed_minute_timestamp = (current_minute - 1) * 60
                             minute_start = datetime.fromtimestamp(completed_minute_timestamp)
 
@@ -481,8 +481,9 @@ class MQTTStats:
                             total_with_atak = total_count + self.atak_messages_current_minute
                             percentage = (self.atak_messages_current_minute / max(1, total_with_atak)) * 100
 
-                            # Write to database (even if atak_count is 0 to track flood patterns)
+                            # Write to database only for actual flood events
                             self._write_to_database(minute_start, self.atak_messages_current_minute, total_with_atak, percentage)
+                            logger.warning(f"ATAK flood event recorded: {self.atak_messages_current_minute} ATAK messages in one minute")
 
                         # Update last write minute
                         self.last_db_write_minute = current_minute - 1
