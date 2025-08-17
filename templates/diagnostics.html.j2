@@ -615,7 +615,13 @@ function updateFloodDetection() {
                 };
 
                 const alerts = data.problem_nodes.slice(0, 3).map(node => {
-                    return `${emoji[node.primary_issue] || '❓'} ${node.node_id} (${node.name}) - ${node.primary_issue}`;
+                    // Make node ID clickable if valid
+                    let nodeDisplay = node.node_id;
+                    if (node.node_id && node.node_id.startsWith('!') && node.node_id.length === 9) {
+                        const hexId = node.node_id.substring(1);
+                        nodeDisplay = `<a href="/node_${hexId}.html" target="_blank" style="color: inherit; font-weight: bold;">${node.node_id}</a>`;
+                    }
+                    return `${emoji[node.primary_issue] || '❓'} ${nodeDisplay} (${node.name}) - ${node.primary_issue}`;
                 });
 
                 let alertText = '🚨 Problem Nodes Detected: ' + alerts.join(', ');
@@ -653,8 +659,16 @@ function updateFloodDetection() {
                     else if (node.primary_issue === 'PARSE ERRORS') rowClass = 'table-warning';
                     else if (node.primary_issue === 'HIGH VOLUME') rowClass = 'table-info';
 
+                    // Make node ID clickable if it's a valid hex ID and not "Unknown"
+                    let nodeIdDisplay = `<code>${node.node_id}</code>`;
+                    if (node.node_id && node.node_id.startsWith('!') && node.node_id.length === 9) {
+                        // Extract hex ID without the ! prefix for the URL
+                        const hexId = node.node_id.substring(1);
+                        nodeIdDisplay = `<a href="/node_${hexId}.html" target="_blank"><code>${node.node_id}</code></a>`;
+                    }
+
                     html += `<tr class="${rowClass}">
-                        <td><code>${node.node_id}</code></td>
+                        <td>${nodeIdDisplay}</td>
                         <td>${node.name}</td>
                         <td>${emoji[node.primary_issue] || '❓'} ${node.primary_issue}</td>
                         <td class="text-right"><strong>${node.total_problem_count.toLocaleString()}</strong></td>
