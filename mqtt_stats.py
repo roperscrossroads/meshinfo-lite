@@ -58,6 +58,12 @@ class MQTTStats:
         self.raw_messages_received = 0  # All messages received via MQTT
         self.dropped_messages_total = 0  # Messages dropped (ATAK, failed processing, etc.)
 
+        # Flood detection and logging
+        self.flood_threshold = 100  # messages per minute to trigger flood mode
+        self.is_flood_mode = False
+        self.last_flood_summary = 0  # timestamp of last flood summary log
+        self.flood_summary_interval = 30  # seconds between summary logs during floods
+
         # Start background thread for periodic database writes
         self._db_writer_thread = None
         self._stop_db_writer = threading.Event()
@@ -138,6 +144,10 @@ class MQTTStats:
             if current_minute != self.current_minute_start:
                 # New minute, save the previous minute's count
                 self.message_rates.append(self.current_minute_messages)
+
+                # Check for flood conditions when minute changes
+                self._check_flood_status()
+
                 # Reset counters for new minute
                 self.current_minute_messages = 1
                 # Note: atak_messages_current_minute is reset manually in process_payload.py
@@ -346,6 +356,55 @@ class MQTTStats:
 
         except Exception as e:
             logger.error(f"Failed to write ATAK flood stats to database: {e}")
+
+    def _check_flood_status(self):
+        """Check if we're in flood conditions and log appropriately"""
+        # Calculate current message rate (messages per minute)
+        current_rate = self.current_minute_messages
+
+        # Check if we should enter flood mode
+        if not self.is_flood_mode and current_rate >= self.flood_threshold:
+            self.is_flood_mode = True
+            logger.warning(f"Message flood detected: {current_rate} messages/min (threshold: {self.flood_threshold}). Switching to summary logging.")
+
+        # Check if we should exit flood mode
+        elif self.is_flood_mode and current_rate < self.flood_threshold * 0.7:  # 70% of threshold to prevent flapping
+            self.is_flood_mode = False
+            logger.info(f"Message flood ended: {current_rate} messages/min. Resuming normal logging.")
+
+    def should_log_message_reception(self):
+        """Determine if individual message reception should be logged"""
+        current_time = time.time()
+
+        if not self.is_flood_mode:
+            # Normal mode - log all messages at DEBUG level
+            return True, "debug"
+
+        # Flood mode - only log summary every 30 seconds
+        if current_time - self.last_flood_summary >= self.flood_summary_interval:
+            self.last_flood_summary = current_time
+            return True, "summary"
+
+        # Flood mode - suppress individual message logs
+        return False, None
+
+    def get_flood_summary_message(self):
+        """Generate a summary message for flood logging"""
+        # Get top message types for summary
+        top_types = []
+        if self.message_types:
+            sorted_types = sorted(self.message_types.items(), key=lambda x: x[1], reverse=True)[:3]
+            for portnum, count in sorted_types:
+                type_name = self.message_type_names.get(portnum, f"portnum {portnum}")
+                percentage = (count / max(1, self.messages_received)) * 100
+                top_types.append(f"{type_name} ({percentage:.0f}%)")
+
+        top_types_str = ", ".join(top_types) if top_types else "none"
+
+        return (f"Flood summary: {self.current_minute_messages} msgs/min, "
+                f"{self.atak_messages_current_minute} ATAK drops, "
+                f"{self.dropped_messages_total} total drops. "
+                f"Top types: {top_types_str}")
 
     def stop_db_writer(self):
         """Stop the database writer thread"""

@@ -121,7 +121,10 @@ def get_data(msg):
 
         # Filter out ATAK plugin messages (portnum 72) - these are not needed
         if portnum == portnums_pb2.ATAK_PLUGIN:
-            logging.debug(f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
+            # Use rate-limited logging to prevent spam during floods
+            _rate_limited_log("atak_drop", j['from'],
+                             f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
+
             # Manually count ATAK since it was successfully parsed here
             from mqtt_stats import mqtt_stats
             import time
@@ -262,42 +265,43 @@ def get_data(msg):
             j["decoded"]["json_payload"] = {
                 "message": "Store & Forward routing message"
             }
-            logging.debug(f"Received Store & Forward message from {j['from']} - internal routing message")
+            _rate_limited_log("store_forward", j['from'],
+                             f"Received Store & Forward message from {j['from']} - internal routing message")
         elif portnum == portnums_pb2.RANGE_TEST_APP:
             j["type"] = "range_test"
             # Range test messages are used for testing radio range
             j["decoded"]["json_payload"] = {
                 "message": "Range test message"
             }
-            logging.debug(f"Received Range Test message from {j['from']}")
+            _rate_limited_log("range_test", j['from'], f"Received Range Test message from {j['from']}")
         elif portnum == portnums_pb2.SIMULATOR_APP:
             j["type"] = "simulator"
             # Simulator messages are used for testing
             j["decoded"]["json_payload"] = {
                 "message": "Simulator message"
             }
-            logging.debug(f"Received Simulator message from {j['from']}")
+            _rate_limited_log("simulator", j['from'], f"Received Simulator message from {j['from']}")
         elif portnum == portnums_pb2.ZPS_APP:
             j["type"] = "zps"
             # ZPS (Zero Power Sensor) messages
             j["decoded"]["json_payload"] = {
                 "message": "ZPS message"
             }
-            logging.debug(f"Received ZPS message from {j['from']}")
+            _rate_limited_log("zps", j['from'], f"Received ZPS message from {j['from']}")
         elif portnum == portnums_pb2.POWERSTRESS_APP:
             j["type"] = "powerstress"
             # Power stress test messages
             j["decoded"]["json_payload"] = {
                 "message": "Power stress test message"
             }
-            logging.debug(f"Received Power Stress message from {j['from']}")
+            _rate_limited_log("powerstress", j['from'], f"Received Power Stress message from {j['from']}")
         elif portnum == portnums_pb2.RETICULUM_TUNNEL_APP:
             j["type"] = "reticulum_tunnel"
             # Reticulum tunnel messages
             j["decoded"]["json_payload"] = {
                 "message": "Reticulum tunnel message"
             }
-            logging.debug(f"Received Reticulum Tunnel message from {j['from']}")
+            _rate_limited_log("reticulum", j['from'], f"Received Reticulum Tunnel message from {j['from']}")
 
         if j["type"]:  # Only log if we successfully determined the type
             msg_type = j["type"]

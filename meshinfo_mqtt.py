@@ -130,13 +130,24 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
         # Track message received with type info
         mqtt_stats.on_message_received(portnum=portnum, message_type=message_type)
 
-        # --- Add log for every message received ---
-        logger.debug(f"on_message: Received message on topic: {msg.topic} (type: {message_type})")
-        # --- End log ---
+        # Debug logging for message type extraction issues (only when not flooding)
+        if portnum is None and not mqtt_stats.is_flood_mode:
+            logger.debug(f"Failed to extract portnum from message on topic {msg.topic}")
+
+        # --- Flood-aware logging for message reception ---
+        should_log, log_type = mqtt_stats.should_log_message_reception()
+        if should_log:
+            if log_type == "debug":
+                logger.debug(f"on_message: Received message on topic: {msg.topic} (type: {message_type})")
+            elif log_type == "summary":
+                logger.info(mqtt_stats.get_flood_summary_message())
+        # --- End flood-aware log ---
 
         # Filter for relevant topics
         if "/2/e/" in msg.topic or "/2/map/" in msg.topic:
-            logger.debug(f"on_message: Processing message from relevant topic: {msg.topic}")
+            # Only log processing details in debug mode if not flooding
+            if not mqtt_stats.is_flood_mode:
+                logger.debug(f"on_message: Processing message from relevant topic: {msg.topic}")
             try:
                 # Pass the existing MeshData instance
                 result = process_payload(msg.payload, msg.topic, md_instance)
@@ -171,7 +182,9 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
                 mqtt_stats.on_message_dropped("PROCESSING_EXCEPTION")
                 mqtt_stats.on_message_processed(success=False)
         else:
-            logger.debug(f"on_message: Skipping message from topic: {msg.topic}")
+            # Only log skipped messages if not in flood mode
+            if not mqtt_stats.is_flood_mode:
+                logger.debug(f"on_message: Skipping message from topic: {msg.topic}")
             # Still count as processed since we intentionally skipped it
             mqtt_stats.on_message_processed(success=True)
 
