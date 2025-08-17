@@ -107,13 +107,13 @@
                     <div class="row">
                         <div class="col-md-3">
                             <div class="metric">
-                                <div class="metric-label">Total Connections</div>
+                                <div class="metric-label">Successful Connections</div>
                                 <div id="mqtt-total-connections" class="metric-value">—</div>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="metric">
-                                <div class="metric-label">Total Disconnections</div>
+                                <div class="metric-label">Lost/Failed Connections</div>
                                 <div id="mqtt-total-disconnections" class="metric-value">—</div>
                             </div>
                         </div>
@@ -233,6 +233,28 @@
                     <div id="atak-flood-history">
                         <h6>Recent ATAK Flood Events (Last 24 Hours)</h6>
                         <div id="atak-history-table">
+                            <p class="text-muted">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flood Detection -->
+    <div class="row mb-4" id="flood-detection-row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">🚨 Flood Detection</h5>
+                </div>
+                <div class="card-body">
+                    <div id="flood-alert" class="alert alert-success" role="alert">
+                        ✅ Checking for problem nodes...
+                    </div>
+                    <div id="problem-nodes-table" style="display: none;">
+                        <h6>Problem Nodes</h6>
+                        <div id="problem-nodes-content">
                             <p class="text-muted">Loading...</p>
                         </div>
                     </div>
@@ -560,9 +582,111 @@ function updateDiagnostics() {
         });
 }
 
+function updateFloodDetection() {
+    fetch('/api/flood-status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Flood detection error:', data.error);
+                return;
+            }
+
+            const floodAlert = document.getElementById('flood-alert');
+            const problemNodesTable = document.getElementById('problem-nodes-table');
+            const problemNodesContent = document.getElementById('problem-nodes-content');
+
+            if (data.is_flooding && data.problem_nodes.length > 0) {
+                // Update alert to show problem nodes
+                const emoji = {
+                    'ATAK FLOODING': '🔴',
+                    'PARSE ERRORS': '⚠️',
+                    'UNKNOWN TYPES': '🟠',
+                    'CHANNEL ISSUES': '🟡',
+                    'PROCESSING ERRORS': '💥',
+                    'HIGH VOLUME': '🌊'
+                };
+
+                const alerts = data.problem_nodes.slice(0, 3).map(node => {
+                    return `${emoji[node.primary_issue] || '❓'} ${node.node_id} (${node.name}) - ${node.primary_issue}`;
+                });
+
+                let alertText = '🚨 Problem Nodes Detected: ' + alerts.join(', ');
+                if (data.problem_nodes.length > 3) {
+                    alertText += ` +${data.problem_nodes.length - 3} more`;
+                }
+
+                floodAlert.className = 'alert alert-danger';
+                floodAlert.innerHTML = alertText;
+
+                // Show detailed table
+                problemNodesTable.style.display = 'block';
+
+                // Build problem nodes table
+                let html = '<div class="table-responsive"><table class="table table-sm table-striped">';
+                html += '<thead class="thead-light"><tr>';
+                html += '<th>Node ID</th>';
+                html += '<th>Name</th>';
+                html += '<th>Primary Issue</th>';
+                html += '<th class="text-right">Total Problems</th>';
+                html += '<th class="text-right">ATAK Drops</th>';
+                html += '<th class="text-right">Parse Errors</th>';
+                html += '<th class="text-right">Other Issues</th>';
+                html += '<th>Last Seen</th>';
+                html += '</tr></thead><tbody>';
+
+                data.problem_nodes.forEach(node => {
+                    const problems = node.problems;
+                    const otherIssues = problems.unsupported_types + problems.ignored_channels + problems.processing_errors;
+                    const lastSeen = formatDateTime(node.last_seen);
+
+                    // Color code rows by primary issue
+                    let rowClass = '';
+                    if (node.primary_issue === 'ATAK FLOODING') rowClass = 'table-danger';
+                    else if (node.primary_issue === 'PARSE ERRORS') rowClass = 'table-warning';
+                    else if (node.primary_issue === 'HIGH VOLUME') rowClass = 'table-info';
+
+                    html += `<tr class="${rowClass}">
+                        <td><code>${node.node_id}</code></td>
+                        <td>${node.name}</td>
+                        <td>${emoji[node.primary_issue] || '❓'} ${node.primary_issue}</td>
+                        <td class="text-right"><strong>${node.total_problem_count.toLocaleString()}</strong></td>
+                        <td class="text-right">${problems.atak_drops.toLocaleString()}</td>
+                        <td class="text-right">${problems.parse_failures.toLocaleString()}</td>
+                        <td class="text-right">${otherIssues.toLocaleString()}</td>
+                        <td>${lastSeen}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+
+                // Add summary
+                html += `<div class="mt-3">
+                    <small class="text-muted">
+                        Total problem nodes: ${data.total_problem_nodes} |
+                        Showing top ${Math.min(data.problem_nodes.length, 10)} nodes
+                    </small>
+                </div>`;
+
+                problemNodesContent.innerHTML = html;
+            } else {
+                // No problems detected
+                floodAlert.className = 'alert alert-success';
+                floodAlert.innerHTML = '✅ No Problem Nodes Detected';
+                problemNodesTable.style.display = 'none';
+            }
+
+        })
+        .catch(error => {
+            console.error('Error fetching flood detection:', error);
+        });
+}
+
 function startAutoRefresh() {
     if (refreshInterval) clearInterval(refreshInterval);
-    refreshInterval = setInterval(updateDiagnostics, 5000); // Update every 5 seconds
+    refreshInterval = setInterval(() => {
+        updateDiagnostics();
+        updateFloodDetection();
+    }, 5000); // Update every 5 seconds
     document.getElementById('auto-refresh-status').textContent = 'Enabled';
 }
 
@@ -577,6 +701,7 @@ function stopAutoRefresh() {
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     updateDiagnostics();
+    updateFloodDetection();
     startAutoRefresh();
 });
 

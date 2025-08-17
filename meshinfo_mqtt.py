@@ -80,6 +80,18 @@ def connect_mqtt() -> mqtt_client:
     return client
 
 
+def extract_node_id_from_topic(topic):
+    """Extract node ID from MQTT topic"""
+    try:
+        # Topic format: msh/2/e/channel_name or msh/2/map/channel_name
+        # The node ID should be in the ServiceEnvelope, not the topic
+        # This function is for tracking parse failures per topic
+        # We'll return a topic-based identifier for now
+        return f"topic_{topic}"
+    except Exception as e:
+        logger.debug(f"Could not extract node ID from topic {topic}: {e}")
+        return None
+
 def extract_message_info(payload):
     """Extract basic message info for statistics without full processing"""
     try:
@@ -111,28 +123,37 @@ def extract_message_info(payload):
             }
 
             message_type = portnum_names.get(portnum, f"Unknown ({portnum})")
-            return portnum, message_type
+            # Also extract node_id from packet
+            node_id = getattr(mp, 'from', None) if mp else None
+            return portnum, message_type, node_id
     except Exception as e:
         logger.debug(f"Could not extract message info: {e}")
-    return None, None
+    return None, None, None
 
 def subscribe(client: mqtt_client, md_instance: MeshData):
     # --- Add log at the start ---
     logger.info("subscribe: Entered function.")
     # --- End log ---
     def on_message(client, userdata, msg):
-        # Track raw message received (before any processing)
-        mqtt_stats.on_raw_message_received()
+        # Extract message info for statistics (including node_id)
+        portnum, message_type, node_id = extract_message_info(msg.payload)
 
-        # Extract message info for statistics
-        portnum, message_type = extract_message_info(msg.payload)
+        # Track raw message received (before any processing)
+        mqtt_stats.on_raw_message_received(node_id=node_id)
 
         # Track message received with type info
         mqtt_stats.on_message_received(portnum=portnum, message_type=message_type)
 
-        # Debug logging for message type extraction issues (only when not flooding)
+        # Track parse failures per node
         if portnum is None and not mqtt_stats.is_flood_mode:
             logger.debug(f"Failed to extract portnum from message on topic {msg.topic}")
+            # Try to get node_id from topic for parse failure tracking
+            if "/2/e/" in msg.topic:
+                try:
+                    topic_node_id = extract_node_id_from_topic(msg.topic)
+                    mqtt_stats.track_node_problem(topic_node_id, 'parse_failures')
+                except:
+                    pass
 
         # --- Flood-aware logging for message reception ---
         should_log, log_type = mqtt_stats.should_log_message_reception()
@@ -159,27 +180,27 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
                     # Intentionally dropped (ATAK, unsupported type, etc.)
                     # Count as dropped for statistics but as successful processing
                     if message_type and "ATAK" in message_type:
-                        mqtt_stats.on_message_dropped("ATAK_PLUGIN")
+                        mqtt_stats.on_message_dropped("ATAK_PLUGIN", node_id=node_id)
                     else:
-                        mqtt_stats.on_message_dropped("UNSUPPORTED_TYPE")
+                        mqtt_stats.on_message_dropped("UNSUPPORTED_TYPE", node_id=node_id)
                     mqtt_stats.on_message_processed(success=True)
                 elif result == "ignored":
                     # Ignored channel - also intentional, count as dropped for statistics
-                    mqtt_stats.on_message_dropped("IGNORED_CHANNEL")
+                    mqtt_stats.on_message_dropped("IGNORED_CHANNEL", node_id=node_id)
                     mqtt_stats.on_message_processed(success=True)
                 elif result == "failed":
                     # Actual processing failure
-                    mqtt_stats.on_message_dropped("PROCESSING_ERROR")
+                    mqtt_stats.on_message_dropped("PROCESSING_ERROR", node_id=node_id)
                     mqtt_stats.on_message_processed(success=False)
                 else:
                     # Unknown result - treat as failure
                     logger.warning(f"Unknown process_payload result: {result}")
-                    mqtt_stats.on_message_dropped("UNKNOWN_RESULT")
+                    mqtt_stats.on_message_dropped("UNKNOWN_RESULT", node_id=node_id)
                     mqtt_stats.on_message_processed(success=False)
 
             except Exception as e:
                 logger.exception(f"on_message: Error calling process_payload for topic {msg.topic}")
-                mqtt_stats.on_message_dropped("PROCESSING_EXCEPTION")
+                mqtt_stats.on_message_dropped("PROCESSING_EXCEPTION", node_id=node_id)
                 mqtt_stats.on_message_processed(success=False)
         else:
             # Only log skipped messages if not in flood mode

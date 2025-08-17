@@ -1252,7 +1252,8 @@ def get_diagnostics():
         process = psutil.Process()
         system_stats = {
             'memory_usage_mb': process.memory_info().rss / 1024 / 1024,
-            'cpu_percent': process.cpu_percent(),
+            'cpu_percent': psutil.cpu_percent(),  # Total system CPU usage
+            'process_cpu_percent': process.cpu_percent(),  # Process-specific CPU usage
             'uptime_seconds': time.time() - process.create_time(),
             'python_version': sys.version,
             'system_load': psutil.getloadavg() if hasattr(psutil, 'getloadavg') else None
@@ -1314,4 +1315,74 @@ def get_mqtt_diagnostics():
         logging.error(f"Error fetching MQTT diagnostics: {str(e)}", exc_info=True)
         return jsonify({
             'error': f'Error fetching MQTT diagnostics: {str(e)}'
+        }), 500
+
+@api.route('/flood-status')
+def flood_status():
+    """Enhanced flood detection API - identifies problematic nodes"""
+    try:
+        problem_nodes = []
+
+        # Access node problem tracking data
+        with mqtt_stats.lock:
+            for node_id, problems in mqtt_stats.node_problem_counts.items():
+                # Calculate total problems (excluding metadata)
+                total_problems = sum(problems[k] for k in problems if k != 'last_seen')
+
+                if total_problems > 50:  # Threshold for "problem node"
+                    # Determine primary issue type
+                    problem_counts = {k: v for k, v in problems.items() if k != 'last_seen'}
+                    primary_issue = max(problem_counts, key=lambda k: problem_counts[k])
+
+                    # Map to user-friendly categories
+                    issue_map = {
+                        'atak_drops': 'ATAK FLOODING',
+                        'parse_failures': 'PARSE ERRORS',
+                        'unsupported_types': 'UNKNOWN TYPES',
+                        'ignored_channels': 'CHANNEL ISSUES',
+                        'processing_errors': 'PROCESSING ERRORS',
+                        'raw_messages': 'HIGH VOLUME'
+                    }
+
+                    # Get node name if available
+                    node_name = "Unknown"
+                    try:
+                        md = get_meshdata()
+                        if md:
+                            # Convert int node_id to hex for lookup
+                            if isinstance(node_id, int):
+                                node_id_hex = utils.convert_node_id_from_int_to_hex(node_id)
+                            else:
+                                node_id_hex = node_id
+
+                            nodes = md.get_nodes_cached()
+                            if nodes and node_id_hex in nodes:
+                                node_data = nodes[node_id_hex]
+                                node_name = node_data.get('long_name') or node_data.get('short_name') or "Unknown"
+                    except Exception as e:
+                        logging.debug(f"Could not get node name for {node_id}: {e}")
+
+                    problem_nodes.append({
+                        "node_id": str(node_id),
+                        "name": node_name,
+                        "problems": problem_counts,
+                        "primary_issue": issue_map.get(primary_issue, 'UNKNOWN'),
+                        "total_problem_count": total_problems,
+                        "last_seen": problems.get('last_seen', time.time())
+                    })
+
+        # Sort by total problem count descending
+        problem_nodes.sort(key=lambda x: x['total_problem_count'], reverse=True)
+
+        return jsonify({
+            "is_flooding": len(problem_nodes) > 0,
+            "problem_nodes": problem_nodes[:10],  # Limit to top 10
+            "total_problem_nodes": len(problem_nodes),
+            "timestamp": time.time()
+        })
+
+    except Exception as e:
+        logging.error(f"Error in flood-status API: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error fetching flood status: {str(e)}'
         }), 500

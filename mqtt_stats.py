@@ -64,6 +64,9 @@ class MQTTStats:
         self.last_flood_summary = 0  # timestamp of last flood summary log
         self.flood_summary_interval = 30  # seconds between summary logs during floods
 
+        # Enhanced flood detection - per-node problem tracking
+        self.node_problem_counts = {}  # node_id -> problem_type -> count
+
         # Start background thread for periodic database writes
         self._db_writer_thread = None
         self._stop_db_writer = threading.Event()
@@ -163,15 +166,47 @@ class MQTTStats:
             else:
                 self.messages_failed += 1
 
-    def on_raw_message_received(self):
+    def on_raw_message_received(self, node_id=None):
         """Called when any raw MQTT message is received (before processing)"""
         with self.lock:
             self.raw_messages_received += 1
 
-    def on_message_dropped(self, reason: str = "unknown"):
+            # Track raw messages per node for high volume detection
+            if node_id:
+                self.track_node_problem(node_id, 'raw_messages')
+
+    def on_message_dropped(self, reason: str = "unknown", node_id=None):
         """Called when a message is dropped (ATAK, failed parsing, etc.)"""
         with self.lock:
             self.dropped_messages_total += 1
+
+            # Track per-node problems if node_id provided
+            if node_id:
+                problem_map = {
+                    "ATAK_PLUGIN": "atak_drops",
+                    "UNSUPPORTED_TYPE": "unsupported_types",
+                    "IGNORED_CHANNEL": "ignored_channels",
+                    "PROCESSING_ERROR": "processing_errors",
+                    "PROCESSING_EXCEPTION": "processing_errors"
+                }
+                if reason in problem_map:
+                    self.track_node_problem(node_id, problem_map[reason])
+
+    def track_node_problem(self, node_id, problem_type, count=1):
+        """Track problems per node for flood detection"""
+        if node_id not in self.node_problem_counts:
+            self.node_problem_counts[node_id] = {
+                'atak_drops': 0,
+                'parse_failures': 0,
+                'unsupported_types': 0,
+                'ignored_channels': 0,
+                'processing_errors': 0,
+                'raw_messages': 0,
+                'last_seen': time.time()
+            }
+
+        self.node_problem_counts[node_id][problem_type] += count
+        self.node_problem_counts[node_id]['last_seen'] = time.time()
 
     def get_stats(self) -> Dict:
         """Get current statistics"""
