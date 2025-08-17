@@ -336,13 +336,19 @@ def process_payload(payload, topic, md: MeshData):
     if mp:
         try:
             data = get_data(mp)
-            if data:  # Only store if we got valid data
+
+            # Check if get_data returned a tuple (action, reason) instead of data
+            if isinstance(data, tuple):
+                # get_data returned an action tuple (e.g., ("dropped", "ATAK_PLUGIN"))
+                logger.debug(f"process_payload: get_data returned action tuple: {data}")
+                return data  # Return the tuple directly
+            elif data:  # Only store if we got valid dictionary data
                 logger.debug(f"process_payload: Calling md.store() for topic {topic}")
                 # Use the passed-in MeshData instance
                 md.store(data, topic)
                 return ("stored", None)
             else:
-                # get_data returned None - this could be ATAK (intentionally dropped) or parsing failure
+                # get_data returned None - parsing failure or unsupported type
                 # Log topic only if debug is enabled or if it's an unsupported type
                 if config.get("server", "debug") == "true":
                     logging.warning(f"Received invalid or unsupported message type on topic {topic}. Payload: {payload[:100]}...") # Log partial payload for debug
