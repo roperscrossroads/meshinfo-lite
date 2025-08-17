@@ -54,6 +54,10 @@ class MQTTStats:
         self.atak_messages_total = 0
         self.last_db_write_minute = int(time.time() / 60)
 
+        # Raw message tracking
+        self.raw_messages_received = 0  # All messages received via MQTT
+        self.dropped_messages_total = 0  # Messages dropped (ATAK, failed processing, etc.)
+
         # Start background thread for periodic database writes
         self._db_writer_thread = None
         self._stop_db_writer = threading.Event()
@@ -151,6 +155,16 @@ class MQTTStats:
             else:
                 self.messages_failed += 1
 
+    def on_raw_message_received(self):
+        """Called when any raw MQTT message is received (before processing)"""
+        with self.lock:
+            self.raw_messages_received += 1
+
+    def on_message_dropped(self, reason: str = "unknown"):
+        """Called when a message is dropped (ATAK, failed parsing, etc.)"""
+        with self.lock:
+            self.dropped_messages_total += 1
+
     def get_stats(self) -> Dict:
         """Get current statistics"""
         with self.lock:
@@ -225,7 +239,9 @@ class MQTTStats:
                 'top_message_types': top_message_types,
                 'message_type_count': len(self.message_types),
                 'atak_messages_current_minute': self.atak_messages_current_minute,
-                'atak_messages_total': self.atak_messages_total
+                'atak_messages_total': self.atak_messages_total,
+                'raw_messages_received': self.raw_messages_received,
+                'dropped_messages_total': self.dropped_messages_total
             }
 
     def get_health_status(self) -> Dict:

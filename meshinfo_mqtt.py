@@ -121,6 +121,9 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
     logger.info("subscribe: Entered function.")
     # --- End log ---
     def on_message(client, userdata, msg):
+        # Track raw message received (before any processing)
+        mqtt_stats.on_raw_message_received()
+
         # Extract message info for statistics
         portnum, message_type = extract_message_info(msg.payload)
 
@@ -136,10 +139,15 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
             logger.debug(f"on_message: Processing message from relevant topic: {msg.topic}")
             try:
                 # Pass the existing MeshData instance
-                process_payload(msg.payload, msg.topic, md_instance)
-                mqtt_stats.on_message_processed(success=True)
+                result = process_payload(msg.payload, msg.topic, md_instance)
+                if result is None:
+                    # Message was dropped (likely ATAK or other filter)
+                    mqtt_stats.on_message_processed(success=True)  # Intentionally dropped
+                else:
+                    mqtt_stats.on_message_processed(success=True)
             except Exception as e:
                 logger.exception(f"on_message: Error calling process_payload for topic {msg.topic}")
+                mqtt_stats.on_message_dropped("PROCESSING_ERROR")
                 mqtt_stats.on_message_processed(success=False)
         else:
             logger.debug(f"on_message: Skipping message from topic: {msg.topic}")

@@ -122,6 +122,9 @@ def get_data(msg):
         # Filter out ATAK plugin messages (portnum 72) - these are not needed
         if portnum == portnums_pb2.ATAK_PLUGIN:
             logging.debug(f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
+            # Track dropped message
+            from mqtt_stats import mqtt_stats
+            mqtt_stats.on_message_dropped("ATAK_PLUGIN")
             return None
 
         # Initialize type before the portnum checks

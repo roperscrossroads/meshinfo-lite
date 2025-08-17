@@ -189,22 +189,43 @@
                 </div>
                 <div class="card-body">
                     <div class="row mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="metric">
-                                <div class="metric-label">Current Minute ATAK Messages</div>
+                                <div class="metric-label">Raw Messages Received</div>
+                                <div id="raw-messages-count" class="metric-value text-info">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Dropped Messages</div>
+                                <div id="dropped-messages-count" class="metric-value text-danger">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Current Min ATAK</div>
                                 <div id="atak-current-minute" class="metric-value text-warning">—</div>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Flood Status</div>
+                                <div id="atak-flood-status" class="metric-value">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
                             <div class="metric">
                                 <div class="metric-label">Total ATAK Messages Since Start</div>
                                 <div id="atak-total-count" class="metric-value">—</div>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <div class="metric">
-                                <div class="metric-label">Flood Status</div>
-                                <div id="atak-flood-status" class="metric-value">—</div>
+                                <div class="metric-label">Drop Rate</div>
+                                <div id="drop-rate-percentage" class="metric-value">—</div>
                             </div>
                         </div>
                     </div>
@@ -377,6 +398,18 @@ function updateDiagnostics() {
 
             // Update ATAK flood statistics
             const atakFlood = data.atak_flood || {};
+
+            // Update raw and dropped message counts
+            const rawCount = mqtt.raw_messages_received || 0;
+            const droppedCount = mqtt.dropped_messages_total || 0;
+            document.getElementById('raw-messages-count').textContent = rawCount.toLocaleString();
+            document.getElementById('dropped-messages-count').textContent = droppedCount.toLocaleString();
+
+            // Calculate drop rate percentage
+            const dropRate = rawCount > 0 ? (droppedCount / rawCount * 100) : 0;
+            document.getElementById('drop-rate-percentage').textContent = dropRate.toFixed(1) + '%';
+
+            // Update ATAK counts
             document.getElementById('atak-current-minute').textContent = atakFlood.current_minute_count || 0;
             document.getElementById('atak-total-count').textContent = (atakFlood.total_count || 0).toLocaleString();
 
