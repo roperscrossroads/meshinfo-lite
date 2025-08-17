@@ -209,7 +209,7 @@
                         </div>
                         <div class="col-md-3">
                             <div class="metric">
-                                <div class="metric-label">Current Min ATAK</div>
+                                <div class="metric-label">ATAK per minute</div>
                                 <div id="atak-current-minute" class="metric-value text-warning">—</div>
                             </div>
                         </div>
@@ -231,7 +231,7 @@
                     </div>
 
                     <div id="atak-flood-history" style="display: none;">
-                        <h6>Recent ATAK Flood Events (Last 24 Hours)</h6>
+                        <h6>Recent Flood Events (Last 24 Hours)</h6>
                         <div id="atak-history-table">
                             <p class="text-muted">Loading...</p>
                         </div>
@@ -334,6 +334,8 @@
 <script>
 let autoRefresh = true;
 let refreshInterval;
+let currentRefreshRate = 5000; // Default 5 seconds
+let lastCpuPercent = 0;
 
 function formatDuration(seconds) {
     if (!seconds || seconds < 0) return '—';
@@ -418,6 +420,9 @@ function updateDiagnostics() {
                 database.connected ? 'metric-value status-connected' : 'metric-value status-disconnected';
             document.getElementById('system-uptime').textContent = formatDuration(system.uptime_seconds);
 
+            // Adjust refresh rate based on CPU load
+            adjustRefreshRateBasedOnCPU(system.cpu_percent);
+
             // Update ATAK flood statistics
             const atakFlood = data.atak_flood || {};
 
@@ -456,8 +461,13 @@ function updateDiagnostics() {
             const atakHistorySection = document.getElementById('atak-flood-history');
             const atakHistoryDiv = document.getElementById('atak-history-table');
 
-            if (atakFlood.history && atakFlood.history.length > 0) {
-                // Show the section since we have flood events
+            // Filter out non-flood events (0 ATAK messages or very low counts)
+            const realFloodEvents = atakFlood.history ? atakFlood.history.filter(event =>
+                event.atak_message_count >= 100 || event.flood_percentage >= 5.0
+            ) : [];
+
+            if (realFloodEvents.length > 0) {
+                // Show the section since we have real flood events
                 atakHistorySection.style.display = 'block';
 
                 let html = '<div class="table-responsive"><table class="table table-sm table-striped">';
@@ -469,27 +479,39 @@ function updateDiagnostics() {
                 html += '<th>Severity</th>';
                 html += '</tr></thead><tbody>';
 
-                atakFlood.history.slice(0, 10).forEach(event => {
+                realFloodEvents.slice(0, 10).forEach(event => {
                     const percentage = parseFloat(event.flood_percentage);
-                    // Since we only store floods with 1000+ ATAK messages, all are significant
-                    const severityClass = percentage > 50 ? 'table-danger' : percentage > 20 ? 'table-warning' : 'table-info';
-                    const severityText = percentage > 50 ? 'SEVERE' : percentage > 20 ? 'HIGH' : 'SIGNIFICANT';
+                    const atakCount = parseInt(event.atak_message_count);
+
+                    // Improved severity classification based on both percentage and absolute count
+                    let severityClass, severityText, badgeClass;
+                    if (atakCount >= 5000 || percentage > 75) {
+                        severityClass = 'table-danger'; severityText = 'CRITICAL'; badgeClass = 'badge-danger';
+                    } else if (atakCount >= 2000 || percentage > 50) {
+                        severityClass = 'table-danger'; severityText = 'SEVERE'; badgeClass = 'badge-danger';
+                    } else if (atakCount >= 1000 || percentage > 25) {
+                        severityClass = 'table-warning'; severityText = 'HIGH'; badgeClass = 'badge-warning';
+                    } else if (atakCount >= 500 || percentage > 10) {
+                        severityClass = 'table-warning'; severityText = 'MODERATE'; badgeClass = 'badge-warning';
+                    } else {
+                        severityClass = 'table-info'; severityText = 'LOW'; badgeClass = 'badge-info';
+                    }
 
                     html += `<tr class="${severityClass}">
                         <td>${new Date(event.minute_period).toLocaleString()}</td>
                         <td class="text-right font-weight-bold">${event.atak_message_count.toLocaleString()}</td>
                         <td class="text-right">${event.total_message_count.toLocaleString()}</td>
                         <td class="text-right">${percentage.toFixed(1)}%</td>
-                        <td><span class="badge badge-danger">${severityText}</span></td>
+                        <td><span class="badge ${badgeClass}">${severityText}</span></td>
                     </tr>`;
                 });
 
                 html += '</tbody></table></div>';
                 atakHistoryDiv.innerHTML = html;
             } else {
-                // Hide the section since there are no flood events
+                // Hide the section since there are no significant flood events
                 atakHistorySection.style.display = 'none';
-                atakHistoryDiv.innerHTML = '<p class="text-muted">No ATAK flood events in the last 24 hours</p>';
+                atakHistoryDiv.innerHTML = '<p class="text-muted">No significant flood events in the last 24 hours</p>';
             }
 
             // Update message type statistics
@@ -703,13 +725,14 @@ function updateFloodDetection() {
         });
 }
 
-function startAutoRefresh() {
+function startAutoRefresh(interval = currentRefreshRate) {
     if (refreshInterval) clearInterval(refreshInterval);
+    currentRefreshRate = interval;
     refreshInterval = setInterval(() => {
         updateDiagnostics();
         updateFloodDetection();
-    }, 5000); // Update every 5 seconds
-    document.getElementById('auto-refresh-status').textContent = 'Enabled';
+    }, currentRefreshRate);
+    updateRefreshStatus();
 }
 
 function stopAutoRefresh() {
@@ -718,6 +741,50 @@ function stopAutoRefresh() {
         refreshInterval = null;
     }
     document.getElementById('auto-refresh-status').textContent = 'Disabled';
+}
+
+function adjustRefreshRateBasedOnCPU(cpuPercent) {
+    let newRate;
+
+    if (cpuPercent > 75) {
+        newRate = 20000; // 20 seconds for high CPU load
+    } else if (cpuPercent > 50) {
+        newRate = 10000; // 10 seconds for moderate CPU load
+    } else {
+        newRate = 5000;  // 5 seconds for normal CPU load
+    }
+
+    // Only restart if refresh rate needs to change
+    if (newRate !== currentRefreshRate && autoRefresh && refreshInterval) {
+        lastCpuPercent = cpuPercent;
+        startAutoRefresh(newRate);
+    }
+}
+
+function updateRefreshStatus() {
+    const statusElement = document.getElementById('auto-refresh-status');
+    const rateSecs = currentRefreshRate / 1000;
+
+    if (!autoRefresh || !refreshInterval) {
+        statusElement.textContent = 'Disabled';
+        return;
+    }
+
+    let statusText = `${rateSecs}s`;
+
+    // Add CPU load indicator
+    if (lastCpuPercent > 75) {
+        statusText += ' (High CPU Load)';
+        statusElement.style.color = '#dc3545'; // Red
+    } else if (lastCpuPercent > 50) {
+        statusText += ' (Moderate CPU Load)';
+        statusElement.style.color = '#ffc107'; // Yellow
+    } else {
+        statusText += ' (Normal)';
+        statusElement.style.color = '#28a745'; // Green
+    }
+
+    statusElement.textContent = statusText;
 }
 
 // Initialize

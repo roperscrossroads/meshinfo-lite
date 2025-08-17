@@ -67,8 +67,8 @@ class MQTTStats:
         # Enhanced flood detection - per-node problem tracking
         self.node_problem_counts = {}  # node_id -> problem_type -> count
 
-        # High-volume node detection (1000+ messages/minute)
-        self.high_volume_threshold = 1000  # messages per minute to be considered high-volume
+        # High-volume node detection (2000+ messages/minute)
+        self.high_volume_threshold = 2000  # messages per minute to be considered high-volume
         self.node_message_rates = {}  # node_id -> deque of per-minute message counts (last 5 minutes)
         self.node_current_minute_counts = {}  # node_id -> current minute message count
         self.node_minute_start = int(time.time() / 60)  # current minute for node tracking
@@ -294,12 +294,14 @@ class MQTTStats:
                 if node_id in self.node_current_minute_counts:
                     node_info['current_minute_rate'] = self.node_current_minute_counts[node_id]
 
-                # Determine if high-volume (current minute or recent average)
-                max_recent_rate = max(node_info['message_rates']) if node_info['message_rates'] else 0
+                # Determine if high-volume (requires sustained activity, not just single spikes)
+                # Count how many recent minutes had high volume
+                recent_high_minutes = sum(1 for rate in node_info['message_rates'] if rate >= self.high_volume_threshold)
+
                 node_info['is_high_volume'] = (
-                    node_info['current_minute_rate'] >= self.high_volume_threshold or
-                    max_recent_rate >= self.high_volume_threshold or
-                    node_info['avg_message_rate'] >= self.high_volume_threshold
+                    node_info['current_minute_rate'] >= self.high_volume_threshold or  # Currently flooding
+                    recent_high_minutes >= 2 or  # 2+ high-volume minutes in last 5 minutes
+                    node_info['avg_message_rate'] >= self.high_volume_threshold  # Sustained average
                 )
 
                 # Include nodes that are problematic (high-volume OR high problem counts)
@@ -477,12 +479,14 @@ class MQTTStats:
                             completed_minute_timestamp = (current_minute - 1) * 60
                             minute_start = datetime.fromtimestamp(completed_minute_timestamp)
 
-                            # Calculate total including ATAK messages (since they're dropped from message_types)
-                            total_with_atak = total_count + self.atak_messages_current_minute
-                            percentage = (self.atak_messages_current_minute / max(1, total_with_atak)) * 100
+                            # Calculate percentage of ATAK messages vs total messages received
+                            # total_count already includes all message types except dropped ones
+                            # ATAK messages are dropped, so the percentage is ATAK vs total raw messages
+                            total_raw_messages = total_count + self.atak_messages_current_minute
+                            percentage = (self.atak_messages_current_minute / max(1, total_raw_messages)) * 100
 
                             # Write to database only for actual flood events
-                            self._write_to_database(minute_start, self.atak_messages_current_minute, total_with_atak, percentage)
+                            self._write_to_database(minute_start, self.atak_messages_current_minute, total_raw_messages, percentage)
                             logger.warning(f"ATAK flood event recorded: {self.atak_messages_current_minute} ATAK messages in one minute")
 
                         # Update last write minute
