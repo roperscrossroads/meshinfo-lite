@@ -844,9 +844,9 @@ where id <> 4294967295 order by ts_created desc limit 1"""
         return latest
 
     def get_user(self, username):
-        sql = """SELECT username, password_hash, email, is_active, is_verified,
-                        UNIX_TIMESTAMP(created_at) as created_at,
-                        UNIX_TIMESTAMP(last_login) as last_login
+        sql = """SELECT username, password as password_hash, email, status,
+                        UNIX_TIMESTAMP(ts_created) as created_at,
+                        UNIX_TIMESTAMP(ts_updated) as updated_at
                  FROM meshuser WHERE username=%s"""
         params = (username, )
         cur = self.db.cursor()
