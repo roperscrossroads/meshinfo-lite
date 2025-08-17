@@ -3,6 +3,35 @@
 
 {% block title %}Register | MeshInfo{% endblock %}
 
+{% block head %}
+<style>
+/* Ensure form input text is black and visible */
+.form-control {
+    color: #000000 !important;
+    background-color: #ffffff !important;
+}
+
+.form-control::placeholder {
+    color: #6c757d !important;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+    color: #000000 !important;
+    background-color: #ffffff !important;
+}
+
+/* Fix focus state */
+.form-control:focus {
+    color: #000000 !important;
+    background-color: #ffffff !important;
+    border-color: #17a2b8 !important;
+    box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="mt-5 d-flex justify-content-center align-items-center vh-100 bg-light">
     <div class="card p-4 shadow-lg" style="width: 350px;">
