@@ -2,6 +2,7 @@ import logging
 from paho.mqtt import client as mqtt_client
 from process_payload import process_payload
 from meshdata import MeshData # Import MeshData
+from mqtt_stats import mqtt_stats
 import configparser
 import time
 
@@ -19,6 +20,9 @@ except Exception as e:
 
 def connect_mqtt() -> mqtt_client:
     def on_connect(client, userdata, flags, rc):
+        # Track connection statistics
+        mqtt_stats.on_connect(rc)
+
         if rc == 0:
             logger.info("Connected to MQTT Broker! Return Code: %d", rc)
             # --- Add log before calling subscribe ---
@@ -33,7 +37,20 @@ def connect_mqtt() -> mqtt_client:
             logger.error("Failed to connect, return code %d", rc)
 
     def on_disconnect(client, userdata, rc):
-        logger.warning(f"Disconnected with result code {rc}. Will attempt reconnect.")
+        # Track disconnection statistics
+        disconnect_reasons = {
+            0: "Normal disconnection",
+            1: "Unacceptable protocol version",
+            2: "Identifier rejected",
+            3: "Server unavailable",
+            4: "Bad username or password",
+            5: "Not authorized",
+            7: "Connection lost"
+        }
+        reason = disconnect_reasons.get(rc, f"Unknown reason (code {rc})")
+        mqtt_stats.on_disconnect(rc, reason)
+
+        logger.warning(f"Disconnected with result code {rc} ({reason}). Will attempt reconnect.")
         # No need for manual reconnect loop, paho handles it with reconnect_delay_set
 
     client = mqtt_client.Client(client_id="", clean_session=True, userdata=mesh_data_instance) # Ensure clean session if needed
@@ -67,6 +84,9 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
     logger.info("subscribe: Entered function.")
     # --- End log ---
     def on_message(client, userdata, msg):
+        # Track message received
+        mqtt_stats.on_message_received()
+
         # --- Add log for every message received ---
         logger.debug(f"on_message: Received message on topic: {msg.topic}")
         # --- End log ---
@@ -77,10 +97,14 @@ def subscribe(client: mqtt_client, md_instance: MeshData):
             try:
                 # Pass the existing MeshData instance
                 process_payload(msg.payload, msg.topic, md_instance)
+                mqtt_stats.on_message_processed(success=True)
             except Exception as e:
                 logger.exception(f"on_message: Error calling process_payload for topic {msg.topic}")
+                mqtt_stats.on_message_processed(success=False)
         else:
             logger.debug(f"on_message: Skipping message from topic: {msg.topic}")
+            # Still count as processed since we intentionally skipped it
+            mqtt_stats.on_message_processed(success=True)
 
 
     topic_to_subscribe = config["mqtt"]["topic"]

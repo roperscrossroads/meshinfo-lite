@@ -26,6 +26,7 @@
     'traceroutes': 'bi-arrow-repeat',
     'logs': 'bi-journal-text',
     'metrics': 'bi-speedometer2',
+    'diagnostics': 'bi-cpu',
     'my nodes': 'bi-person-check'
   } %}
   {% set icon = icon_map.get(page_name.lower(), 'bi-circle') %}
@@ -90,7 +91,7 @@
     <div class="collapse navbar-collapse" id="navbarToggler">
       <a class="navbar-brand" href="/">{{ config["mesh"]["name"] }}</a>
       <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
-        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs","metrics"] %}
+        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs","metrics", "diagnostics"] %}
         <li class="nav-item{% if page == this_page %} active{% endif %}">
           <a class="nav-link" href="{{ page }}.html"><span class="d-lg-none d-xl-inline">{{ page_icon(page) }}</span>{{ page.title() }}</a>
         </li>

@@ -1,0 +1,387 @@
+{% extends "layout.html.j2" %}
+
+{% block title %}Diagnostics - {{ config["mesh"]["name"] }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1>System Diagnostics</h1>
+            <p class="text-muted">Real-time system health and MQTT connection statistics</p>
+        </div>
+    </div>
+
+    <!-- MQTT Status Card -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">MQTT Connection</h5>
+                    <span id="mqtt-status-badge" class="badge badge-secondary">Loading...</span>
+                </div>
+                <div class="card-body">
+                    <div id="mqtt-basic-stats">
+                        <div class="row">
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">Connection Status</div>
+                                    <div id="mqtt-connection-status" class="metric-value">—</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">Current Connection Duration</div>
+                                    <div id="mqtt-current-duration" class="metric-value">—</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">Uptime Percentage</div>
+                                    <div id="mqtt-uptime-percent" class="metric-value">—</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">Messages/Minute</div>
+                                    <div id="mqtt-message-rate" class="metric-value">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status Card -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">System Status</h5>
+                </div>
+                <div class="card-body">
+                    <div id="system-stats">
+                        <div class="row">
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">Memory Usage</div>
+                                    <div id="system-memory" class="metric-value">—</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">CPU Usage</div>
+                                    <div id="system-cpu" class="metric-value">—</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">Database</div>
+                                    <div id="system-database" class="metric-value">—</div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="metric">
+                                    <div class="metric-label">System Uptime</div>
+                                    <div id="system-uptime" class="metric-value">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed MQTT Statistics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">MQTT Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Total Connections</div>
+                                <div id="mqtt-total-connections" class="metric-value">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Total Disconnections</div>
+                                <div id="mqtt-total-disconnections" class="metric-value">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Messages Received</div>
+                                <div id="mqtt-messages-received" class="metric-value">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Success Rate</div>
+                                <div id="mqtt-success-rate" class="metric-value">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Longest Connection</div>
+                                <div id="mqtt-longest-connection" class="metric-value">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Messages Failed</div>
+                                <div id="mqtt-messages-failed" class="metric-value">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Time Since Last Message</div>
+                                <div id="mqtt-last-message" class="metric-value">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <div class="metric-label">Health Score</div>
+                                <div id="mqtt-health-score" class="metric-value">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Disconnections -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Disconnections</h5>
+                </div>
+                <div class="card-body">
+                    <div id="recent-disconnections">
+                        <p class="text-muted">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Issues -->
+    <div class="row mb-4" id="health-issues-row" style="display: none;">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">⚠️ Health Issues</h5>
+                </div>
+                <div class="card-body">
+                    <ul id="health-issues-list" class="mb-0">
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <p class="text-muted small">
+                Last updated: <span id="last-updated">—</span> |
+                Auto-refresh: <span id="auto-refresh-status">Enabled</span>
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+.metric {
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.status-connected { color: #28a745; }
+.status-disconnected { color: #dc3545; }
+.status-warning { color: #ffc107; }
+
+.badge-healthy { background-color: #28a745; }
+.badge-warning { background-color: #ffc107; color: #212529; }
+.badge-critical { background-color: #dc3545; }
+</style>
+
+<script>
+let autoRefresh = true;
+let refreshInterval;
+
+function formatDuration(seconds) {
+    if (!seconds || seconds < 0) return '—';
+
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes}m ${secs}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${secs}s`;
+    } else {
+        return `${secs}s`;
+    }
+}
+
+function formatDateTime(timestamp) {
+    if (!timestamp) return '—';
+    return new Date(timestamp * 1000).toLocaleString();
+}
+
+function updateDiagnostics() {
+    fetch('/api/diagnostics')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Diagnostics error:', data.error);
+                return;
+            }
+
+            const mqtt = data.mqtt.statistics;
+            const health = data.mqtt.health;
+            const system = data.system;
+            const database = data.database;
+
+            // Update MQTT status badge
+            const statusBadge = document.getElementById('mqtt-status-badge');
+            if (health.status === 'healthy') {
+                statusBadge.className = 'badge badge-success';
+                statusBadge.textContent = 'Healthy';
+            } else if (health.status === 'warning') {
+                statusBadge.className = 'badge badge-warning';
+                statusBadge.textContent = 'Warning';
+            } else {
+                statusBadge.className = 'badge badge-danger';
+                statusBadge.textContent = 'Critical';
+            }
+
+            // Update basic MQTT stats
+            document.getElementById('mqtt-connection-status').textContent =
+                mqtt.connection_status ? 'Connected' : 'Disconnected';
+            document.getElementById('mqtt-connection-status').className =
+                mqtt.connection_status ? 'metric-value status-connected' : 'metric-value status-disconnected';
+
+            document.getElementById('mqtt-current-duration').textContent =
+                formatDuration(mqtt.current_connection_duration);
+            document.getElementById('mqtt-uptime-percent').textContent =
+                mqtt.uptime_percentage.toFixed(1) + '%';
+            document.getElementById('mqtt-message-rate').textContent =
+                mqtt.avg_message_rate_per_minute.toFixed(1);
+
+            // Update detailed MQTT stats
+            document.getElementById('mqtt-total-connections').textContent = mqtt.total_connections;
+            document.getElementById('mqtt-total-disconnections').textContent = mqtt.total_disconnections;
+            document.getElementById('mqtt-messages-received').textContent = mqtt.messages_received.toLocaleString();
+            document.getElementById('mqtt-success-rate').textContent = mqtt.message_success_rate.toFixed(1) + '%';
+            document.getElementById('mqtt-longest-connection').textContent = formatDuration(mqtt.longest_connection_duration);
+            document.getElementById('mqtt-messages-failed').textContent = mqtt.messages_failed;
+            document.getElementById('mqtt-last-message').textContent =
+                mqtt.time_since_last_message ? formatDuration(mqtt.time_since_last_message) + ' ago' : 'Never';
+            document.getElementById('mqtt-health-score').textContent = health.health_score + '/100';
+
+            // Update system stats
+            document.getElementById('system-memory').textContent = system.memory_usage_mb.toFixed(1) + ' MB';
+            document.getElementById('system-cpu').textContent = system.cpu_percent.toFixed(1) + '%';
+            document.getElementById('system-database').textContent = database.connected ? 'Connected' : 'Disconnected';
+            document.getElementById('system-database').className =
+                database.connected ? 'metric-value status-connected' : 'metric-value status-disconnected';
+            document.getElementById('system-uptime').textContent = formatDuration(system.uptime_seconds);
+
+            // Update recent disconnections
+            const disconnectionsDiv = document.getElementById('recent-disconnections');
+            if (mqtt.recent_disconnects && mqtt.recent_disconnects.length > 0) {
+                let html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Time</th><th>Reason</th><th>Duration</th></tr></thead><tbody>';
+
+                mqtt.recent_disconnects.slice(-5).reverse().forEach(disconnect => {
+                    html += `<tr>
+                        <td>${formatDateTime(disconnect.timestamp)}</td>
+                        <td>${disconnect.reason || 'Unknown'}</td>
+                        <td>${formatDuration(disconnect.duration)}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+                disconnectionsDiv.innerHTML = html;
+            } else {
+                disconnectionsDiv.innerHTML = '<p class="text-muted">No recent disconnections</p>';
+            }
+
+            // Update health issues
+            const issuesRow = document.getElementById('health-issues-row');
+            const issuesList = document.getElementById('health-issues-list');
+
+            if (health.issues && health.issues.length > 0) {
+                issuesRow.style.display = 'block';
+                issuesList.innerHTML = health.issues.map(issue => `<li>${issue}</li>`).join('');
+            } else {
+                issuesRow.style.display = 'none';
+            }
+
+            // Update timestamp
+            document.getElementById('last-updated').textContent = formatDateTime(data.timestamp);
+
+        })
+        .catch(error => {
+            console.error('Error fetching diagnostics:', error);
+        });
+}
+
+function startAutoRefresh() {
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(updateDiagnostics, 5000); // Update every 5 seconds
+    document.getElementById('auto-refresh-status').textContent = 'Enabled';
+}
+
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    document.getElementById('auto-refresh-status').textContent = 'Disabled';
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateDiagnostics();
+    startAutoRefresh();
+});
+
+// Stop auto-refresh when page becomes hidden
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        stopAutoRefresh();
+    } else {
+        startAutoRefresh();
+    }
+});
+</script>
+{% endblock %}

@@ -6,6 +6,7 @@ import psutil
 from meshinfo_utils import get_meshdata, get_cache_timeout, auth, config, log_cache_stats, log_memory_usage
 from meshdata import MeshData
 from database_cache import DatabaseCache
+from mqtt_stats import mqtt_stats
 import utils
 import time
 
@@ -1237,4 +1238,67 @@ def get_map_data():
         logging.error(f"Error fetching map data: {str(e)}", exc_info=True)
         return jsonify({
             'error': f'Error fetching map data: {str(e)}'
+        }), 500
+
+@api.route('/diagnostics')
+def get_diagnostics():
+    """Get system diagnostics including MQTT statistics"""
+    try:
+        # Get MQTT statistics
+        mqtt_data = mqtt_stats.get_stats()
+        mqtt_health = mqtt_stats.get_health_status()
+
+        # Get system information
+        process = psutil.Process()
+        system_stats = {
+            'memory_usage_mb': process.memory_info().rss / 1024 / 1024,
+            'cpu_percent': process.cpu_percent(),
+            'uptime_seconds': time.time() - process.create_time(),
+            'python_version': sys.version,
+            'system_load': psutil.getloadavg() if hasattr(psutil, 'getloadavg') else None
+        }
+
+        # Get database status
+        md = get_meshdata()
+        db_status = {
+            'connected': md.ping_db() if md else False,
+            'last_ping': time.time()
+        }
+
+        # Format response
+        diagnostics = {
+            'mqtt': {
+                'statistics': mqtt_data,
+                'health': mqtt_health
+            },
+            'system': system_stats,
+            'database': db_status,
+            'timestamp': time.time()
+        }
+
+        return jsonify(diagnostics)
+
+    except Exception as e:
+        logging.error(f"Error fetching diagnostics: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error fetching diagnostics: {str(e)}'
+        }), 500
+
+@api.route('/diagnostics/mqtt')
+def get_mqtt_diagnostics():
+    """Get detailed MQTT diagnostics"""
+    try:
+        stats = mqtt_stats.get_stats()
+        health = mqtt_stats.get_health_status()
+
+        return jsonify({
+            'statistics': stats,
+            'health': health,
+            'timestamp': time.time()
+        })
+
+    except Exception as e:
+        logging.error(f"Error fetching MQTT diagnostics: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error fetching MQTT diagnostics: {str(e)}'
         }), 500

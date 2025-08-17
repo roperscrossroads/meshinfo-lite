@@ -1448,6 +1448,16 @@ def routing():
 
     return response
 
+@app.route('/diagnostics.html')
+def diagnostics():
+    """System diagnostics page"""
+    return render_template(
+        "diagnostics.html.j2",
+        auth=auth(),
+        config=config,
+        this_page="diagnostics"
+    )
+
 @app.route('/monday.html')
 def monday():
     md = get_meshdata()
