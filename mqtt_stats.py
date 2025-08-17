@@ -180,6 +180,18 @@ class MQTTStats:
         with self.lock:
             self.dropped_messages_total += 1
 
+            # Handle ATAK-specific counting
+            if reason == "ATAK_PLUGIN":
+                current_minute = int(time.time() / 60)
+                if current_minute != self.current_minute_start:
+                    # New minute - reset counter
+                    self.atak_messages_current_minute = 1
+                    self.current_minute_start = current_minute
+                else:
+                    self.atak_messages_current_minute += 1
+
+                self.atak_messages_total += 1
+
             # Track per-node problems if node_id provided
             if node_id:
                 problem_map = {

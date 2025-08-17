@@ -125,24 +125,9 @@ def get_data(msg):
             _rate_limited_log("atak_drop", j['from'],
                              f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
 
-            # Manually count ATAK since it was successfully parsed here
-            from mqtt_stats import mqtt_stats
-            import time
-
-            with mqtt_stats.lock:
-                # Check if we need to reset the minute counter
-                current_minute = int(time.time() / 60)
-                if current_minute != mqtt_stats.current_minute_start:
-                    # New minute - the main tracking will handle the reset
-                    # Just increment for this new minute
-                    mqtt_stats.atak_messages_current_minute = 1
-                    # Update the minute tracking to stay in sync
-                    mqtt_stats.current_minute_start = current_minute
-                else:
-                    mqtt_stats.atak_messages_current_minute += 1
-
-                mqtt_stats.atak_messages_total += 1
-            return None
+            # Return "dropped" so the normal statistics flow handles counting
+            # ATAK-specific counting will be handled by mqtt_stats.py
+            return "dropped"
 
         # Initialize type before the portnum checks
         j["type"] = None
