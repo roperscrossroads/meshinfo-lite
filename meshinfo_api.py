@@ -1384,3 +1384,60 @@ def flood_status():
         return jsonify({
             'error': f'Error fetching flood status: {str(e)}'
         }), 500
+
+@api.route('/diagnostics/aging-stats')
+def get_aging_stats():
+    """Get problem counter aging system statistics"""
+    try:
+        aging_stats = mqtt_stats.get_aging_stats()
+        return jsonify({
+            'aging_stats': aging_stats,
+            'timestamp': time.time()
+        })
+    except Exception as e:
+        logging.error(f"Error in aging-stats API: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error fetching aging stats: {str(e)}'
+        }), 500
+
+@api.route('/diagnostics/reset-counters', methods=['POST'])
+def reset_problem_counters():
+    """Reset problem counters for all nodes or a specific node"""
+    try:
+        data = request.get_json() if request.is_json else {}
+        node_id = data.get('node_id') if data else None
+
+        mqtt_stats.reset_problem_counters(node_id)
+
+        message = f"Reset problem counters for node {node_id}" if node_id else "Reset problem counters for all nodes"
+        logging.info(f"API call: {message}")
+
+        return jsonify({
+            'success': True,
+            'message': message,
+            'timestamp': time.time()
+        })
+    except Exception as e:
+        logging.error(f"Error in reset-counters API: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error resetting counters: {str(e)}'
+        }), 500
+
+@api.route('/diagnostics/age-counters', methods=['POST'])
+def manual_age_counters():
+    """Manually trigger aging of problem counters"""
+    try:
+        mqtt_stats._age_problem_counters()
+
+        logging.info("API call: Manually triggered problem counter aging")
+
+        return jsonify({
+            'success': True,
+            'message': 'Problem counter aging completed',
+            'timestamp': time.time()
+        })
+    except Exception as e:
+        logging.error(f"Error in age-counters API: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error aging counters: {str(e)}'
+        }), 500

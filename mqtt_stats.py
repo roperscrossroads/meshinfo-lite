@@ -67,6 +67,14 @@ class MQTTStats:
         # Enhanced flood detection - per-node problem tracking
         self.node_problem_counts = {}  # node_id -> problem_type -> count
 
+        # Problem aging configuration
+        self.problem_aging_enabled = True
+        self.inactive_node_threshold = 24 * 60 * 60  # 24 hours in seconds
+        self.problem_decay_rate = 0.1  # 10% reduction per decay interval
+        self.problem_decay_interval = 60 * 60  # 1 hour in seconds
+        self.last_aging_cleanup = time.time()
+        self.aging_cleanup_interval = 30 * 60  # 30 minutes in seconds
+
         # High-volume node detection (2000+ messages/minute)
         self.high_volume_threshold = 2000  # messages per minute to be considered high-volume
         self.node_message_rates = {}  # node_id -> deque of per-minute message counts (last 5 minutes)
@@ -227,6 +235,9 @@ class MQTTStats:
         self.node_problem_counts[node_id][problem_type] += count
         self.node_problem_counts[node_id]['last_seen'] = time.time()
 
+        # Trigger periodic aging cleanup if enough time has passed
+        self._maybe_run_aging_cleanup()
+
     def _track_node_message_rate(self, node_id):
         """Track per-node message rates for high-volume detection"""
         current_minute = int(time.time() / 60)
@@ -303,6 +314,16 @@ class MQTTStats:
                     recent_high_minutes >= 2 or  # 2+ high-volume minutes in last 5 minutes
                     node_info['avg_message_rate'] >= self.high_volume_threshold  # Sustained average
                 )
+
+                # Filter out nodes that haven't been seen recently (only for display)
+                current_time = time.time()
+                last_seen = node_info.get('last_seen', 0)
+                time_since_seen = current_time - last_seen
+
+                # Skip nodes inactive for more than 2 hours for display purposes
+                display_inactive_threshold = 2 * 60 * 60  # 2 hours
+                if time_since_seen > display_inactive_threshold:
+                    continue
 
                 # Include nodes that are problematic (high-volume OR high problem counts)
                 is_problematic = (
@@ -565,6 +586,103 @@ class MQTTStats:
             self._stop_db_writer.set()
             self._db_writer_thread.join(timeout=5)
             logger.info("Stopped ATAK flood stats database writer thread")
+
+    def _maybe_run_aging_cleanup(self):
+        """Check if it's time to run aging cleanup and do it if so"""
+        if not self.problem_aging_enabled:
+            return
+
+        current_time = time.time()
+        if current_time - self.last_aging_cleanup >= self.aging_cleanup_interval:
+            self._age_problem_counters()
+            self.last_aging_cleanup = current_time
+
+    def _age_problem_counters(self):
+        """Age out problem counters based on time and activity"""
+        if not self.problem_aging_enabled:
+            return
+
+        current_time = time.time()
+        nodes_to_remove = []
+
+        for node_id, node_data in self.node_problem_counts.items():
+            last_seen = node_data.get('last_seen', 0)
+            time_since_seen = current_time - last_seen
+
+            # Remove nodes that haven't been seen for more than the threshold
+            if time_since_seen > self.inactive_node_threshold:
+                nodes_to_remove.append(node_id)
+                logger.info(f"Removing inactive node {node_id} from problem tracking (last seen {time_since_seen/3600:.1f} hours ago)")
+                continue
+
+            # Apply exponential decay to problem counters
+            # More recent activity decays slower than older activity
+            decay_intervals = int(time_since_seen / self.problem_decay_interval)
+            if decay_intervals > 0:
+                decay_factor = (1 - self.problem_decay_rate) ** decay_intervals
+
+                # Apply decay to all problem type counters (except last_seen)
+                problems_decayed = False
+                for problem_type in ['atak_drops', 'parse_failures', 'unsupported_types',
+                                   'ignored_channels', 'processing_errors', 'raw_messages']:
+                    if problem_type in node_data and node_data[problem_type] > 0:
+                        old_count = node_data[problem_type]
+                        new_count = max(0, int(old_count * decay_factor))
+
+                        if new_count != old_count:
+                            node_data[problem_type] = new_count
+                            problems_decayed = True
+
+                if problems_decayed:
+                    logger.debug(f"Applied decay to node {node_id} problem counters (factor: {decay_factor:.3f})")
+
+        # Remove inactive nodes
+        for node_id in nodes_to_remove:
+            del self.node_problem_counts[node_id]
+            # Also remove from message rate tracking
+            if node_id in self.node_message_rates:
+                del self.node_message_rates[node_id]
+            if node_id in self.node_current_minute_counts:
+                del self.node_current_minute_counts[node_id]
+
+        if nodes_to_remove:
+            logger.info(f"Problem aging cleanup: removed {len(nodes_to_remove)} inactive nodes")
+
+    def reset_problem_counters(self, node_id=None):
+        """Manually reset problem counters for a node or all nodes"""
+        with self.lock:
+            if node_id:
+                if node_id in self.node_problem_counts:
+                    # Reset all counters but preserve last_seen
+                    last_seen = self.node_problem_counts[node_id].get('last_seen', time.time())
+                    self.node_problem_counts[node_id] = {
+                        'atak_drops': 0,
+                        'parse_failures': 0,
+                        'unsupported_types': 0,
+                        'ignored_channels': 0,
+                        'processing_errors': 0,
+                        'raw_messages': 0,
+                        'last_seen': last_seen
+                    }
+                    logger.info(f"Reset problem counters for node {node_id}")
+            else:
+                # Reset all nodes
+                count = len(self.node_problem_counts)
+                self.node_problem_counts.clear()
+                logger.info(f"Reset problem counters for all {count} nodes")
+
+    def get_aging_stats(self):
+        """Get statistics about the aging system"""
+        current_time = time.time()
+        return {
+            'aging_enabled': self.problem_aging_enabled,
+            'inactive_threshold_hours': self.inactive_node_threshold / 3600,
+            'decay_rate_percent': self.problem_decay_rate * 100,
+            'decay_interval_hours': self.problem_decay_interval / 3600,
+            'last_cleanup_minutes_ago': (current_time - self.last_aging_cleanup) / 60,
+            'cleanup_interval_minutes': self.aging_cleanup_interval / 60,
+            'tracked_nodes': len(self.node_problem_counts)
+        }
 
 # Global instance
 mqtt_stats = MQTTStats()
