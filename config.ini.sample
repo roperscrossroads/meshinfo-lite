@@ -53,6 +53,15 @@ metrics_average_interval=7200
 #problem_node_threshold=100
 #atak_problem_threshold=50
 
+# Problem aging time windows (optional, in hours)
+# Problems older than these windows are ignored in flood detection
+#problem_window_atak_drops=2
+#problem_window_parse_failures=4
+#problem_window_unsupported_types=6
+#problem_window_ignored_channels=6
+#problem_window_processing_errors=4
+#problem_window_raw_messages=1
+
 [channels]
 # Comma-separated list of channel names to ignore
 #ignored_channels=PKI

@@ -1394,11 +1394,13 @@ def get_flood_config():
             "high_volume_threshold": mqtt_stats.high_volume_threshold,
             "problem_node_threshold": mqtt_stats.problem_node_threshold,
             "atak_problem_threshold": mqtt_stats.atak_problem_threshold,
+            "problem_time_windows_hours": {k: v / 3600 for k, v in mqtt_stats.problem_time_windows.items()},
             "description": {
                 "flood_threshold": "Messages per minute to trigger flood mode",
                 "high_volume_threshold": "Messages per minute to flag high-volume nodes",
                 "problem_node_threshold": "Total problems to flag a problematic node",
-                "atak_problem_threshold": "ATAK drops to flag a problematic node"
+                "atak_problem_threshold": "ATAK drops to flag a problematic node",
+                "problem_time_windows_hours": "Time windows (in hours) for each problem type - problems older than these are ignored"
             }
         })
     except Exception as e:
