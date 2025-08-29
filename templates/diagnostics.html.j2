@@ -443,10 +443,10 @@ function updateDiagnostics() {
             // Determine flood status
             const currentMinuteCount = atakFlood.current_minute_count || 0;
             const floodStatusElement = document.getElementById('atak-flood-status');
-            if (currentMinuteCount > 1000) {
+            if (currentMinuteCount > 2000) {  // Increased from 1000
                 floodStatusElement.textContent = 'SEVERE FLOOD';
                 floodStatusElement.className = 'metric-value text-danger';
-            } else if (currentMinuteCount > 100) {
+            } else if (currentMinuteCount > 500) {  // Increased from 100
                 floodStatusElement.textContent = 'FLOOD DETECTED';
                 floodStatusElement.className = 'metric-value text-warning';
             } else if (currentMinuteCount > 0) {
@@ -463,7 +463,7 @@ function updateDiagnostics() {
 
             // Filter out non-flood events (0 ATAK messages or very low counts)
             const realFloodEvents = atakFlood.history ? atakFlood.history.filter(event =>
-                event.atak_message_count >= 100 || event.flood_percentage >= 5.0
+                event.atak_message_count >= 500 || event.flood_percentage >= 10.0  // Increased thresholds
             ) : [];
 
             if (realFloodEvents.length > 0) {
@@ -485,13 +485,13 @@ function updateDiagnostics() {
 
                     // Improved severity classification based on both percentage and absolute count
                     let severityClass, severityText, badgeClass;
-                    if (atakCount >= 5000 || percentage > 75) {
+                    if (atakCount >= 10000 || percentage > 90) {  // Increased thresholds
                         severityClass = 'table-danger'; severityText = 'CRITICAL'; badgeClass = 'badge-danger';
-                    } else if (atakCount >= 2000 || percentage > 50) {
+                    } else if (atakCount >= 5000 || percentage > 75) {  // Increased thresholds
                         severityClass = 'table-danger'; severityText = 'SEVERE'; badgeClass = 'badge-danger';
-                    } else if (atakCount >= 1000 || percentage > 25) {
+                    } else if (atakCount >= 2000 || percentage > 50) {  // Increased thresholds
                         severityClass = 'table-warning'; severityText = 'HIGH'; badgeClass = 'badge-warning';
-                    } else if (atakCount >= 500 || percentage > 10) {
+                    } else if (atakCount >= 1000 || percentage > 25) {  // Increased thresholds
                         severityClass = 'table-warning'; severityText = 'MODERATE'; badgeClass = 'badge-warning';
                     } else {
                         severityClass = 'table-info'; severityText = 'LOW'; badgeClass = 'badge-info';
@@ -556,7 +556,7 @@ function updateDiagnostics() {
                 const atakTypes = mqtt.top_message_types.filter(t => t.name.includes('ATAK'));
                 if (atakTypes.length > 0) {
                     const totalAtakPercentage = atakTypes.reduce((sum, t) => sum + t.percentage, 0);
-                    if (totalAtakPercentage > 50) {
+                    if (totalAtakPercentage > 75) {  // Increased from 50% to 75%
                         html += `<div class="alert alert-warning mt-3" role="alert">
                             <strong>⚠️ ATAK Flood Detected!</strong>
                             ATAK messages are consuming ${totalAtakPercentage.toFixed(1)}% of all traffic.

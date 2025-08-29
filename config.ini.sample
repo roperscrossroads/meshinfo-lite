@@ -46,6 +46,13 @@ zero_hop_timeout=43200
 telemetry_retention_days = 30
 metrics_average_interval=7200
 
+# Flood detection sensitivity settings (optional)
+# Uncomment and adjust these values to tune flood detection sensitivity
+#flood_threshold=500
+#high_volume_threshold=5000
+#problem_node_threshold=100
+#atak_problem_threshold=50
+
 [channels]
 # Comma-separated list of channel names to ignore
 #ignored_channels=PKI

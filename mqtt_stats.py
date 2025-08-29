@@ -5,6 +5,7 @@ Tracks connection events, disconnections, and provides diagnostics
 import logging
 import time
 import threading
+import configparser
 from datetime import datetime, timedelta
 from collections import deque
 from typing import Dict, List, Optional
@@ -58,8 +59,10 @@ class MQTTStats:
         self.raw_messages_received = 0  # All messages received via MQTT
         self.dropped_messages_total = 0  # Messages dropped (ATAK, failed processing, etc.)
 
+        # Load configuration for flood detection thresholds
+        self._load_flood_config()
+
         # Flood detection and logging
-        self.flood_threshold = 100  # messages per minute to trigger flood mode
         self.is_flood_mode = False
         self.last_flood_summary = 0  # timestamp of last flood summary log
         self.flood_summary_interval = 30  # seconds between summary logs during floods
@@ -75,8 +78,8 @@ class MQTTStats:
         self.last_aging_cleanup = time.time()
         self.aging_cleanup_interval = 30 * 60  # 30 minutes in seconds
 
-        # High-volume node detection (2000+ messages/minute)
-        self.high_volume_threshold = 2000  # messages per minute to be considered high-volume
+        # High-volume node detection (configurable, default 5000+ messages/minute)
+        # self.high_volume_threshold is set in _load_flood_config()
         self.node_message_rates = {}  # node_id -> deque of per-minute message counts (last 5 minutes)
         self.node_current_minute_counts = {}  # node_id -> current minute message count
         self.node_minute_start = int(time.time() / 60)  # current minute for node tracking
@@ -85,6 +88,44 @@ class MQTTStats:
         self._db_writer_thread = None
         self._stop_db_writer = threading.Event()
         self._start_db_writer_thread()
+
+    def _load_flood_config(self):
+        """Load flood detection configuration from config.ini"""
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        
+        # Set default values (updated from original more sensitive thresholds)
+        self.flood_threshold = 500  # messages per minute to trigger flood mode (increased from 100)
+        self.high_volume_threshold = 5000  # messages per minute to be considered high-volume (increased from 2000)
+        self.problem_node_threshold = 100  # total problems to flag a node (increased from 50)
+        self.atak_problem_threshold = 50  # ATAK drops to flag a node (increased from 10)
+        
+        # Override with config file values if present
+        if config.has_section('server'):
+            try:
+                if config.has_option('server', 'flood_threshold'):
+                    self.flood_threshold = config.getint('server', 'flood_threshold')
+                    logger.info(f"Using configured flood_threshold: {self.flood_threshold}")
+                    
+                if config.has_option('server', 'high_volume_threshold'):
+                    self.high_volume_threshold = config.getint('server', 'high_volume_threshold')
+                    logger.info(f"Using configured high_volume_threshold: {self.high_volume_threshold}")
+                    
+                if config.has_option('server', 'problem_node_threshold'):
+                    self.problem_node_threshold = config.getint('server', 'problem_node_threshold')
+                    logger.info(f"Using configured problem_node_threshold: {self.problem_node_threshold}")
+                    
+                if config.has_option('server', 'atak_problem_threshold'):
+                    self.atak_problem_threshold = config.getint('server', 'atak_problem_threshold')
+                    logger.info(f"Using configured atak_problem_threshold: {self.atak_problem_threshold}")
+                    
+            except (ValueError, configparser.Error) as e:
+                logger.warning(f"Error reading flood detection config, using defaults: {e}")
+        
+        logger.info(f"Flood detection thresholds: flood={self.flood_threshold}, "
+                   f"high_volume={self.high_volume_threshold}, "
+                   f"problems={self.problem_node_threshold}, "
+                   f"atak_problems={self.atak_problem_threshold}")
 
     def on_connect(self, return_code: int):
         """Called when MQTT connects"""
@@ -292,6 +333,8 @@ class MQTTStats:
                 if node_id in self.node_problem_counts:
                     problems = self.node_problem_counts[node_id].copy()
                     node_info['last_seen'] = problems.pop('last_seen', None)
+                    # Remove raw_messages from problems as it's not actually a problem
+                    problems.pop('raw_messages', None)
                     node_info['problems'] = problems
                     node_info['total_problems'] = sum(problems.values())
 
@@ -328,8 +371,8 @@ class MQTTStats:
                 # Include nodes that are problematic (high-volume OR high problem counts)
                 is_problematic = (
                     node_info['is_high_volume'] or
-                    node_info['total_problems'] >= 50 or  # 50+ problems of any type
-                    node_info['problems'].get('atak_drops', 0) >= 10  # 10+ ATAK drops
+                    node_info['total_problems'] >= self.problem_node_threshold or  # Configurable threshold (default 100, increased from 50)
+                    node_info['problems'].get('atak_drops', 0) >= self.atak_problem_threshold  # Configurable threshold (default 50, increased from 10)
                 )
 
                 if is_problematic:
@@ -494,9 +537,10 @@ class MQTTStats:
                         recent_minute_data = list(self.message_types_per_minute)[-1] if self.message_types_per_minute else {}
                         total_count = sum(recent_minute_data.values()) if recent_minute_data else self.current_minute_messages
 
-                        # Only write to database if we have significant ATAK activity (1000+ messages)
+                        # Only write to database if we have significant ATAK activity (configurable threshold, default 2000+)
                         # This avoids cluttering the database with non-flood events
-                        if self.atak_messages_current_minute >= 1000:
+                        atak_db_threshold = getattr(self, 'atak_problem_threshold', 50) * 40  # 40x ATAK problem threshold
+                        if self.atak_messages_current_minute >= atak_db_threshold:
                             completed_minute_timestamp = (current_minute - 1) * 60
                             minute_start = datetime.fromtimestamp(completed_minute_timestamp)
 

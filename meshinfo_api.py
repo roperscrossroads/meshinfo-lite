@@ -1330,11 +1330,11 @@ def flood_status():
             # Determine primary issue type
             if node_data['is_high_volume']:
                 primary_issue = 'HIGH VOLUME'
-            elif node_data['problems'].get('atak_drops', 0) >= 10:
+            elif node_data['problems'].get('atak_drops', 0) >= mqtt_stats.atak_problem_threshold:  # Use configurable threshold
                 primary_issue = 'ATAK FLOODING'
-            elif node_data['problems'].get('parse_failures', 0) >= 20:
+            elif node_data['problems'].get('parse_failures', 0) >= mqtt_stats.atak_problem_threshold:  # Use same threshold for consistency
                 primary_issue = 'PARSE ERRORS'
-            elif node_data['problems'].get('processing_errors', 0) >= 20:
+            elif node_data['problems'].get('processing_errors', 0) >= mqtt_stats.atak_problem_threshold:  # Use same threshold for consistency
                 primary_issue = 'PROCESSING ERRORS'
             else:
                 primary_issue = 'MULTIPLE ISSUES'
@@ -1383,6 +1383,28 @@ def flood_status():
         logging.error(f"Error in flood-status API: {str(e)}", exc_info=True)
         return jsonify({
             'error': f'Error fetching flood status: {str(e)}'
+        }), 500
+
+@api.route('/diagnostics/flood-config')
+def get_flood_config():
+    """Get current flood detection configuration"""
+    try:
+        return jsonify({
+            "flood_threshold": mqtt_stats.flood_threshold,
+            "high_volume_threshold": mqtt_stats.high_volume_threshold,
+            "problem_node_threshold": mqtt_stats.problem_node_threshold,
+            "atak_problem_threshold": mqtt_stats.atak_problem_threshold,
+            "description": {
+                "flood_threshold": "Messages per minute to trigger flood mode",
+                "high_volume_threshold": "Messages per minute to flag high-volume nodes",
+                "problem_node_threshold": "Total problems to flag a problematic node",
+                "atak_problem_threshold": "ATAK drops to flag a problematic node"
+            }
+        })
+    except Exception as e:
+        logging.error(f"Error in flood-config API: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f'Error fetching flood config: {str(e)}'
         }), 500
 
 @api.route('/diagnostics/aging-stats')
