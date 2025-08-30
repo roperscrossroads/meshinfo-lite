@@ -5,6 +5,7 @@ Tracks connection events, disconnections, and provides diagnostics
 import logging
 import time
 import threading
+import configparser
 from datetime import datetime, timedelta
 from collections import deque
 from typing import Dict, List, Optional
@@ -58,25 +59,38 @@ class MQTTStats:
         self.raw_messages_received = 0  # All messages received via MQTT
         self.dropped_messages_total = 0  # Messages dropped (ATAK, failed processing, etc.)
 
+        # Problem aging configuration - time-window based approach
+        self.problem_aging_enabled = True
+        self.inactive_node_threshold = 24 * 60 * 60  # 24 hours in seconds
+        
+        # Time windows for different problem types (in seconds)
+        # Problems older than these windows are ignored in flood detection
+        self.problem_time_windows = {
+            'atak_drops': 2 * 60 * 60,      # 2 hours for ATAK drops
+            'parse_failures': 4 * 60 * 60,  # 4 hours for parse failures  
+            'unsupported_types': 6 * 60 * 60,  # 6 hours for unsupported types
+            'ignored_channels': 6 * 60 * 60,   # 6 hours for ignored channels
+            'processing_errors': 4 * 60 * 60,  # 4 hours for processing errors
+            'raw_messages': 1 * 60 * 60      # 1 hour for raw message tracking
+        }
+        
+        self.last_aging_cleanup = time.time()
+        self.aging_cleanup_interval = 15 * 60  # 15 minutes - more frequent cleanup
+
+        # Load configuration for flood detection thresholds
+        self._load_flood_config()
+
         # Flood detection and logging
-        self.flood_threshold = 100  # messages per minute to trigger flood mode
         self.is_flood_mode = False
         self.last_flood_summary = 0  # timestamp of last flood summary log
         self.flood_summary_interval = 30  # seconds between summary logs during floods
 
-        # Enhanced flood detection - per-node problem tracking
-        self.node_problem_counts = {}  # node_id -> problem_type -> count
+        # Enhanced flood detection - per-node problem tracking with timestamps
+        # Structure: node_id -> problem_type -> list of timestamps
+        self.node_problem_counts = {}  # node_id -> problem_type -> list of timestamps
 
-        # Problem aging configuration
-        self.problem_aging_enabled = True
-        self.inactive_node_threshold = 24 * 60 * 60  # 24 hours in seconds
-        self.problem_decay_rate = 0.1  # 10% reduction per decay interval
-        self.problem_decay_interval = 60 * 60  # 1 hour in seconds
-        self.last_aging_cleanup = time.time()
-        self.aging_cleanup_interval = 30 * 60  # 30 minutes in seconds
-
-        # High-volume node detection (2000+ messages/minute)
-        self.high_volume_threshold = 2000  # messages per minute to be considered high-volume
+        # High-volume node detection (configurable, default 5000+ messages/minute)
+        # self.high_volume_threshold is set in _load_flood_config()
         self.node_message_rates = {}  # node_id -> deque of per-minute message counts (last 5 minutes)
         self.node_current_minute_counts = {}  # node_id -> current minute message count
         self.node_minute_start = int(time.time() / 60)  # current minute for node tracking
@@ -85,6 +99,62 @@ class MQTTStats:
         self._db_writer_thread = None
         self._stop_db_writer = threading.Event()
         self._start_db_writer_thread()
+
+    def _load_flood_config(self):
+        """Load flood detection configuration from config.ini"""
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        
+        # Set default values (updated from original more sensitive thresholds)
+        self.flood_threshold = 500  # messages per minute to trigger flood mode (increased from 100)
+        self.high_volume_threshold = 5000  # messages per minute to be considered high-volume (increased from 2000)
+        self.problem_node_threshold = 100  # total problems to flag a node (increased from 50)
+        self.atak_problem_threshold = 50  # ATAK drops to flag a node (increased from 10)
+        
+        # Override with config file values if present
+        if config.has_section('server'):
+            try:
+                if config.has_option('server', 'flood_threshold'):
+                    self.flood_threshold = config.getint('server', 'flood_threshold')
+                    logger.info(f"Using configured flood_threshold: {self.flood_threshold}")
+                    
+                if config.has_option('server', 'high_volume_threshold'):
+                    self.high_volume_threshold = config.getint('server', 'high_volume_threshold')
+                    logger.info(f"Using configured high_volume_threshold: {self.high_volume_threshold}")
+                    
+                if config.has_option('server', 'problem_node_threshold'):
+                    self.problem_node_threshold = config.getint('server', 'problem_node_threshold')
+                    logger.info(f"Using configured problem_node_threshold: {self.problem_node_threshold}")
+                    
+                if config.has_option('server', 'atak_problem_threshold'):
+                    self.atak_problem_threshold = config.getint('server', 'atak_problem_threshold')
+                    logger.info(f"Using configured atak_problem_threshold: {self.atak_problem_threshold}")
+                
+                # Load time window configurations (convert hours to seconds)
+                time_window_configs = {
+                    'problem_window_atak_drops': 'atak_drops',
+                    'problem_window_parse_failures': 'parse_failures',
+                    'problem_window_unsupported_types': 'unsupported_types',
+                    'problem_window_ignored_channels': 'ignored_channels',
+                    'problem_window_processing_errors': 'processing_errors',
+                    'problem_window_raw_messages': 'raw_messages'
+                }
+                
+                for config_key, problem_type in time_window_configs.items():
+                    if config.has_option('server', config_key):
+                        hours = config.getfloat('server', config_key)
+                        self.problem_time_windows[problem_type] = int(hours * 60 * 60)
+                        logger.info(f"Using configured {config_key}: {hours} hours ({self.problem_time_windows[problem_type]} seconds)")
+                    
+            except (ValueError, configparser.Error) as e:
+                logger.warning(f"Error reading flood detection config, using defaults: {e}")
+        
+        logger.info(f"Flood detection thresholds: flood={self.flood_threshold}, "
+                   f"high_volume={self.high_volume_threshold}, "
+                   f"problems={self.problem_node_threshold}, "
+                   f"atak_problems={self.atak_problem_threshold}")
+        
+        logger.info(f"Problem time windows: {', '.join([f'{k}={v/3600:.1f}h' for k, v in self.problem_time_windows.items()])}")
 
     def on_connect(self, return_code: int):
         """Called when MQTT connects"""
@@ -220,20 +290,25 @@ class MQTTStats:
                     self.track_node_problem(node_id, problem_map[reason])
 
     def track_node_problem(self, node_id, problem_type, count=1):
-        """Track problems per node for flood detection"""
+        """Track problems per node for flood detection using timestamps"""
+        current_time = time.time()
+        
         if node_id not in self.node_problem_counts:
             self.node_problem_counts[node_id] = {
-                'atak_drops': 0,
-                'parse_failures': 0,
-                'unsupported_types': 0,
-                'ignored_channels': 0,
-                'processing_errors': 0,
-                'raw_messages': 0,
-                'last_seen': time.time()
+                'atak_drops': [],
+                'parse_failures': [],
+                'unsupported_types': [],
+                'ignored_channels': [],
+                'processing_errors': [],
+                'raw_messages': [],
+                'last_seen': current_time
             }
 
-        self.node_problem_counts[node_id][problem_type] += count
-        self.node_problem_counts[node_id]['last_seen'] = time.time()
+        # Add timestamp entries for each occurrence
+        for _ in range(count):
+            self.node_problem_counts[node_id][problem_type].append(current_time)
+        
+        self.node_problem_counts[node_id]['last_seen'] = current_time
 
         # Trigger periodic aging cleanup if enough time has passed
         self._maybe_run_aging_cleanup()
@@ -288,12 +363,21 @@ class MQTTStats:
                     'last_seen': None
                 }
 
-                # Get problem counts
+                # Get problem counts (only count recent problems within time windows)
                 if node_id in self.node_problem_counts:
-                    problems = self.node_problem_counts[node_id].copy()
-                    node_info['last_seen'] = problems.pop('last_seen', None)
-                    node_info['problems'] = problems
-                    node_info['total_problems'] = sum(problems.values())
+                    node_data = self.node_problem_counts[node_id]
+                    node_info['last_seen'] = node_data.get('last_seen', None)
+                    
+                    # Count recent problems within their respective time windows
+                    recent_problems = {}
+                    for problem_type in ['atak_drops', 'parse_failures', 'unsupported_types',
+                                       'ignored_channels', 'processing_errors']:
+                        count = self._count_recent_problems(node_id, problem_type)
+                        if count > 0:  # Only include problem types that have recent occurrences
+                            recent_problems[problem_type] = count
+                    
+                    node_info['problems'] = recent_problems
+                    node_info['total_problems'] = sum(recent_problems.values())
 
                 # Get message rate data
                 if node_id in self.node_message_rates:
@@ -328,8 +412,8 @@ class MQTTStats:
                 # Include nodes that are problematic (high-volume OR high problem counts)
                 is_problematic = (
                     node_info['is_high_volume'] or
-                    node_info['total_problems'] >= 50 or  # 50+ problems of any type
-                    node_info['problems'].get('atak_drops', 0) >= 10  # 10+ ATAK drops
+                    node_info['total_problems'] >= self.problem_node_threshold or  # Configurable threshold (default 100, increased from 50)
+                    node_info['problems'].get('atak_drops', 0) >= self.atak_problem_threshold  # Configurable threshold (default 50, increased from 10)
                 )
 
                 if is_problematic:
@@ -494,9 +578,10 @@ class MQTTStats:
                         recent_minute_data = list(self.message_types_per_minute)[-1] if self.message_types_per_minute else {}
                         total_count = sum(recent_minute_data.values()) if recent_minute_data else self.current_minute_messages
 
-                        # Only write to database if we have significant ATAK activity (1000+ messages)
+                        # Only write to database if we have significant ATAK activity (configurable threshold, default 2000+)
                         # This avoids cluttering the database with non-flood events
-                        if self.atak_messages_current_minute >= 1000:
+                        atak_db_threshold = getattr(self, 'atak_problem_threshold', 50) * 40  # 40x ATAK problem threshold
+                        if self.atak_messages_current_minute >= atak_db_threshold:
                             completed_minute_timestamp = (current_minute - 1) * 60
                             minute_start = datetime.fromtimestamp(completed_minute_timestamp)
 
@@ -597,13 +682,46 @@ class MQTTStats:
             self._age_problem_counters()
             self.last_aging_cleanup = current_time
 
+    def _count_recent_problems(self, node_id, problem_type=None, time_window=None):
+        """Count recent problems for a node within a specified time window"""
+        if node_id not in self.node_problem_counts:
+            return 0
+            
+        current_time = time.time()
+        node_data = self.node_problem_counts[node_id]
+        
+        if problem_type:
+            # Count specific problem type
+            if problem_type not in node_data or not isinstance(node_data[problem_type], list):
+                return 0
+            
+            if time_window is None:
+                time_window = self.problem_time_windows.get(problem_type, 4 * 60 * 60)
+            
+            cutoff_time = current_time - time_window
+            return len([ts for ts in node_data[problem_type] if ts > cutoff_time])
+        else:
+            # Count all problem types (excluding raw_messages and last_seen)
+            total = 0
+            for prob_type in ['atak_drops', 'parse_failures', 'unsupported_types',
+                            'ignored_channels', 'processing_errors']:
+                if prob_type in node_data and isinstance(node_data[prob_type], list):
+                    if time_window is None:
+                        window = self.problem_time_windows.get(prob_type, 4 * 60 * 60)
+                    else:
+                        window = time_window
+                    cutoff_time = current_time - window
+                    total += len([ts for ts in node_data[prob_type] if ts > cutoff_time])
+            return total
+
     def _age_problem_counters(self):
-        """Age out problem counters based on time and activity"""
+        """Age out problem counters based on time windows"""
         if not self.problem_aging_enabled:
             return
 
         current_time = time.time()
         nodes_to_remove = []
+        total_entries_removed = 0
 
         for node_id, node_data in self.node_problem_counts.items():
             last_seen = node_data.get('last_seen', 0)
@@ -615,26 +733,25 @@ class MQTTStats:
                 logger.info(f"Removing inactive node {node_id} from problem tracking (last seen {time_since_seen/3600:.1f} hours ago)")
                 continue
 
-            # Apply exponential decay to problem counters
-            # More recent activity decays slower than older activity
-            decay_intervals = int(time_since_seen / self.problem_decay_interval)
-            if decay_intervals > 0:
-                decay_factor = (1 - self.problem_decay_rate) ** decay_intervals
+            # Clean up old problem entries based on time windows
+            node_entries_removed = 0
+            for problem_type in ['atak_drops', 'parse_failures', 'unsupported_types',
+                               'ignored_channels', 'processing_errors', 'raw_messages']:
+                if problem_type in node_data and isinstance(node_data[problem_type], list):
+                    time_window = self.problem_time_windows.get(problem_type, 4 * 60 * 60)  # default 4 hours
+                    cutoff_time = current_time - time_window
+                    
+                    # Filter out old entries
+                    old_length = len(node_data[problem_type])
+                    node_data[problem_type] = [ts for ts in node_data[problem_type] if ts > cutoff_time]
+                    new_length = len(node_data[problem_type])
+                    
+                    entries_removed = old_length - new_length
+                    node_entries_removed += entries_removed
+                    total_entries_removed += entries_removed
 
-                # Apply decay to all problem type counters (except last_seen)
-                problems_decayed = False
-                for problem_type in ['atak_drops', 'parse_failures', 'unsupported_types',
-                                   'ignored_channels', 'processing_errors', 'raw_messages']:
-                    if problem_type in node_data and node_data[problem_type] > 0:
-                        old_count = node_data[problem_type]
-                        new_count = max(0, int(old_count * decay_factor))
-
-                        if new_count != old_count:
-                            node_data[problem_type] = new_count
-                            problems_decayed = True
-
-                if problems_decayed:
-                    logger.debug(f"Applied decay to node {node_id} problem counters (factor: {decay_factor:.3f})")
+            if node_entries_removed > 0:
+                logger.debug(f"Aged out {node_entries_removed} old problem entries for node {node_id}")
 
         # Remove inactive nodes
         for node_id in nodes_to_remove:
@@ -647,6 +764,61 @@ class MQTTStats:
 
         if nodes_to_remove:
             logger.info(f"Problem aging cleanup: removed {len(nodes_to_remove)} inactive nodes")
+        
+        if total_entries_removed > 0:
+            logger.info(f"Problem aging cleanup: removed {total_entries_removed} old problem entries across all nodes")
+        """Age out problem counters based on time windows"""
+        if not self.problem_aging_enabled:
+            return
+
+        current_time = time.time()
+        nodes_to_remove = []
+        total_entries_removed = 0
+
+        for node_id, node_data in self.node_problem_counts.items():
+            last_seen = node_data.get('last_seen', 0)
+            time_since_seen = current_time - last_seen
+
+            # Remove nodes that haven't been seen for more than the threshold
+            if time_since_seen > self.inactive_node_threshold:
+                nodes_to_remove.append(node_id)
+                logger.info(f"Removing inactive node {node_id} from problem tracking (last seen {time_since_seen/3600:.1f} hours ago)")
+                continue
+
+            # Clean up old problem entries based on time windows
+            node_entries_removed = 0
+            for problem_type in ['atak_drops', 'parse_failures', 'unsupported_types',
+                               'ignored_channels', 'processing_errors', 'raw_messages']:
+                if problem_type in node_data and isinstance(node_data[problem_type], list):
+                    time_window = self.problem_time_windows.get(problem_type, 4 * 60 * 60)  # default 4 hours
+                    cutoff_time = current_time - time_window
+                    
+                    # Filter out old entries
+                    old_length = len(node_data[problem_type])
+                    node_data[problem_type] = [ts for ts in node_data[problem_type] if ts > cutoff_time]
+                    new_length = len(node_data[problem_type])
+                    
+                    entries_removed = old_length - new_length
+                    node_entries_removed += entries_removed
+                    total_entries_removed += entries_removed
+
+            if node_entries_removed > 0:
+                logger.debug(f"Aged out {node_entries_removed} old problem entries for node {node_id}")
+
+        # Remove inactive nodes
+        for node_id in nodes_to_remove:
+            del self.node_problem_counts[node_id]
+            # Also remove from message rate tracking
+            if node_id in self.node_message_rates:
+                del self.node_message_rates[node_id]
+            if node_id in self.node_current_minute_counts:
+                del self.node_current_minute_counts[node_id]
+
+        if nodes_to_remove:
+            logger.info(f"Problem aging cleanup: removed {len(nodes_to_remove)} inactive nodes")
+        
+        if total_entries_removed > 0:
+            logger.info(f"Problem aging cleanup: removed {total_entries_removed} old problem entries across all nodes")
 
     def reset_problem_counters(self, node_id=None):
         """Manually reset problem counters for a node or all nodes"""
@@ -656,12 +828,12 @@ class MQTTStats:
                     # Reset all counters but preserve last_seen
                     last_seen = self.node_problem_counts[node_id].get('last_seen', time.time())
                     self.node_problem_counts[node_id] = {
-                        'atak_drops': 0,
-                        'parse_failures': 0,
-                        'unsupported_types': 0,
-                        'ignored_channels': 0,
-                        'processing_errors': 0,
-                        'raw_messages': 0,
+                        'atak_drops': [],
+                        'parse_failures': [],
+                        'unsupported_types': [],
+                        'ignored_channels': [],
+                        'processing_errors': [],
+                        'raw_messages': [],
                         'last_seen': last_seen
                     }
                     logger.info(f"Reset problem counters for node {node_id}")
@@ -674,14 +846,28 @@ class MQTTStats:
     def get_aging_stats(self):
         """Get statistics about the aging system"""
         current_time = time.time()
+        
+        # Calculate total problem entries across all nodes
+        total_problem_entries = 0
+        problem_type_counts = {}
+        
+        for node_id, node_data in self.node_problem_counts.items():
+            for problem_type in ['atak_drops', 'parse_failures', 'unsupported_types',
+                               'ignored_channels', 'processing_errors', 'raw_messages']:
+                if problem_type in node_data and isinstance(node_data[problem_type], list):
+                    count = len(node_data[problem_type])
+                    total_problem_entries += count
+                    problem_type_counts[problem_type] = problem_type_counts.get(problem_type, 0) + count
+        
         return {
             'aging_enabled': self.problem_aging_enabled,
             'inactive_threshold_hours': self.inactive_node_threshold / 3600,
-            'decay_rate_percent': self.problem_decay_rate * 100,
-            'decay_interval_hours': self.problem_decay_interval / 3600,
+            'problem_time_windows_hours': {k: v / 3600 for k, v in self.problem_time_windows.items()},
             'last_cleanup_minutes_ago': (current_time - self.last_aging_cleanup) / 60,
             'cleanup_interval_minutes': self.aging_cleanup_interval / 60,
-            'tracked_nodes': len(self.node_problem_counts)
+            'tracked_nodes': len(self.node_problem_counts),
+            'total_problem_entries': total_problem_entries,
+            'problem_type_counts': problem_type_counts
         }
 
 # Global instance
