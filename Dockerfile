@@ -1,5 +1,5 @@
 # trunk-ignore-all(checkov/CKV_DOCKER_3)
-FROM python:3.13.3-slim-bookworm
+FROM python:3.13.3-slim-bookworm AS base
 
 LABEL org.opencontainers.image.source=https://github.com/agessaman/meshinfo-lite
 LABEL org.opencontainers.image.description="Realtime web UI to run against a Meshtastic regional or private mesh network."
@@ -12,7 +12,9 @@ ENV PYTHONUNBUFFERED=1 \
     APP_PORT=8000 \
     # Optimize pip for faster builds
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # Speed up pip installations
+    PIP_DEFAULT_TIMEOUT=100
 
 RUN groupadd --system app && \
     useradd --system --gid app --home-dir /app --create-home app
@@ -20,13 +22,15 @@ RUN groupadd --system app && \
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies in a single layer with better caching
+FROM base AS dependencies
 ARG TARGETPLATFORM
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
+    curl \
     libexpat1 \
     libcairo2 \
     pkg-config \
@@ -39,50 +43,41 @@ RUN apt-get update && \
     libproj-dev \
     proj-bin \
     default-mysql-client \
-    $([ "$(uname -m)" = "aarch64" ] && echo "curl") \
-    && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    && fc-cache -fv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN fc-cache -fv
-
-# Architecture-specific rasterio installation
+# Architecture-specific optimizations
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 
-# For ARM64: Install conda/mamba and use conda-forge for rasterio
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt requirements-rasterio.txt ./
+
+# Install requirements with optimized strategy for each architecture
 RUN if [ "$(uname -m)" = "aarch64" ]; then \
-    echo "Installing conda and rasterio for ARM64"; \
-    curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh && \
-    bash Miniforge3-Linux-aarch64.sh -b -p /opt/conda && \
-    rm Miniforge3-Linux-aarch64.sh && \
-    /opt/conda/bin/mamba install -c conda-forge rasterio -y; \
-    fi
-
-# Update PATH to include conda if installed
-ENV PATH="/opt/conda/bin:${PATH}"
-
-COPY requirements.txt banner run.sh ./
-
-# Upgrade pip and install packages
-RUN pip install --upgrade pip setuptools wheel
-
-# Install requirements with platform-specific optimizations
-# Detect ARM64 by checking uname since TARGETPLATFORM may not be set
-RUN if [ "$(uname -m)" = "aarch64" ]; then \
-    echo "ARM64 detected, using conda for heavy packages and piwheels for others"; \
-    # Install heavy packages via conda for faster ARM64 builds \
-    /opt/conda/bin/mamba install -c conda-forge matplotlib scipy pandas Pillow shapely cryptography -y; \
-    # Filter out conda-installed packages from requirements for pip \
-    grep -v -E "^(rasterio|matplotlib|scipy|pandas|Pillow|shapely|cryptography)" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt; \
-    su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements_filtered.txt"; \
+    echo "ARM64 detected, using mamba for rasterio (fastest pre-compiled option)"; \
+    # Install miniforge (includes mamba) - mambaforge is deprecated \
+    curl -fsSL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh && \
+    echo "Downloaded miniforge installer, size: $(stat -c%s miniforge.sh) bytes" && \
+    bash miniforge.sh -b -p /opt/miniforge && \
+    rm miniforge.sh && \
+    # Use mamba to install rasterio (much faster than compiling) \
+    /opt/miniforge/bin/mamba install -c conda-forge rasterio=1.4.3 -y && \
+    # Install all other packages via pip with piwheels for speed \
+    su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements.txt"; \
     else \
-    echo "Non-ARM64 detected, using standard pip install"; \
-    # Standard install for non-ARM64 \
-    su app -c "pip install --no-cache-dir --user -r requirements.txt"; \
+    echo "Non-ARM64 detected, using standard pip install for all packages"; \
+    # Standard install for non-ARM64 (includes rasterio) \
+    su app -c "pip install --no-cache-dir --user -r requirements.txt -r requirements-rasterio.txt"; \
     fi
 
 # Ensure pytz is installed for timezone support (critical for time display)
 RUN su app -c "pip install --no-cache-dir --user pytz==2025.2"
 
+# Application stage
+FROM dependencies AS application
+
+# Copy application files (better layer caching by copying requirements first)
 COPY --chown=app:app banner run.sh ./
 COPY --chown=app:app *.py ./
 COPY --chown=app:app *.sh ./
