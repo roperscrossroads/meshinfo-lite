@@ -56,12 +56,13 @@ COPY requirements.txt requirements-rasterio.txt ./
 # Install requirements with optimized strategy for each architecture
 RUN if [ "$(uname -m)" = "aarch64" ]; then \
     echo "ARM64 detected, using mamba for rasterio (fastest pre-compiled option)"; \
-    # Install mamba for conda-forge (faster than conda) \
-    curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-Linux-aarch64.sh -o mambaforge.sh && \
-    bash mambaforge.sh -b -p /opt/mambaforge && \
-    rm mambaforge.sh && \
+    # Install miniforge (includes mamba) - mambaforge is deprecated \
+    curl -fsSL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh && \
+    echo "Downloaded miniforge installer, size: $(stat -c%s miniforge.sh) bytes" && \
+    bash miniforge.sh -b -p /opt/miniforge && \
+    rm miniforge.sh && \
     # Use mamba to install rasterio (much faster than compiling) \
-    /opt/mambaforge/bin/mamba install -c conda-forge rasterio=1.4.3 -y && \
+    /opt/miniforge/bin/mamba install -c conda-forge rasterio=1.4.3 -y && \
     # Install all other packages via pip with piwheels for speed \
     su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements.txt"; \
     else \
