@@ -30,6 +30,7 @@ RUN apt-get update && \
     build-essential \
     gcc \
     g++ \
+    curl \
     libexpat1 \
     libcairo2 \
     pkg-config \
@@ -50,17 +51,23 @@ RUN apt-get update && \
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 
 # Copy requirements first for better Docker layer caching
-COPY requirements.txt ./
+COPY requirements.txt requirements-rasterio.txt ./
 
 # Install requirements with optimized strategy for each architecture
 RUN if [ "$(uname -m)" = "aarch64" ]; then \
-    echo "ARM64 detected, using piwheels and optimized package strategy"; \
-    # Use piwheels for ARM64 - much faster than conda \
+    echo "ARM64 detected, using mamba for rasterio (fastest pre-compiled option)"; \
+    # Install mamba for conda-forge (faster than conda) \
+    curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-Linux-aarch64.sh -o mambaforge.sh && \
+    bash mambaforge.sh -b -p /opt/mambaforge && \
+    rm mambaforge.sh && \
+    # Use mamba to install rasterio (much faster than compiling) \
+    /opt/mambaforge/bin/mamba install -c conda-forge rasterio=1.4.3 -y && \
+    # Install all other packages via pip with piwheels for speed \
     su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements.txt"; \
     else \
-    echo "Non-ARM64 detected, using standard pip install"; \
-    # Standard install for non-ARM64 \
-    su app -c "pip install --no-cache-dir --user -r requirements.txt"; \
+    echo "Non-ARM64 detected, using standard pip install for all packages"; \
+    # Standard install for non-ARM64 (includes rasterio) \
+    su app -c "pip install --no-cache-dir --user -r requirements.txt -r requirements-rasterio.txt"; \
     fi
 
 # Ensure pytz is installed for timezone support (critical for time display)

@@ -12,7 +12,6 @@ matplotlib
 cairocffi
 cairosvg
 Pillow
-rasterio
 scipy
 geopy
 boto3
