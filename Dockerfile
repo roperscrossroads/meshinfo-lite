@@ -1,5 +1,5 @@
 # trunk-ignore-all(checkov/CKV_DOCKER_3)
-FROM python:3.13.3-slim-bookworm
+FROM python:3.13.3-slim-bookworm AS base
 
 LABEL org.opencontainers.image.source=https://github.com/agessaman/meshinfo-lite
 LABEL org.opencontainers.image.description="Realtime web UI to run against a Meshtastic regional or private mesh network."
@@ -23,6 +23,7 @@ RUN groupadd --system app && \
 WORKDIR /app
 
 # Install system dependencies in a single layer with better caching
+FROM base AS dependencies
 ARG TARGETPLATFORM
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -64,6 +65,9 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
 
 # Ensure pytz is installed for timezone support (critical for time display)
 RUN su app -c "pip install --no-cache-dir --user pytz==2025.2"
+
+# Application stage
+FROM dependencies AS application
 
 # Copy application files (better layer caching by copying requirements first)
 COPY --chown=app:app banner run.sh ./
