@@ -1581,6 +1581,93 @@ def verify():
         return login(success_message=res["success"])
     return serve_index()
 
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        reg = Register()
+        res = reg.request_password_reset(email)
+        if "error" in res:
+            return render_template(
+                "forgot_password.html.j2",
+                auth=auth(),
+                config=config,
+                datetime=datetime.datetime,
+                timestamp=datetime.datetime.now(),
+                error_message=res["error"]
+            )
+        elif "success" in res:
+            return render_template(
+                "forgot_password.html.j2",
+                auth=auth(),
+                config=config,
+                datetime=datetime.datetime,
+                timestamp=datetime.datetime.now(),
+                success_message=res["success"]
+            )
+    
+    return render_template(
+        "forgot_password.html.j2",
+        auth=auth(),
+        config=config,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now()
+    )
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    if request.method == 'POST':
+        token = request.form.get('token')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if password != confirm_password:
+            return render_template(
+                "reset_password.html.j2",
+                auth=auth(),
+                config=config,
+                datetime=datetime.datetime,
+                timestamp=datetime.datetime.now(),
+                token=token,
+                error_message="Passwords do not match."
+            )
+        
+        reg = Register()
+        res = reg.reset_password(token, password)
+        if "error" in res:
+            return render_template(
+                "reset_password.html.j2",
+                auth=auth(),
+                config=config,
+                datetime=datetime.datetime,
+                timestamp=datetime.datetime.now(),
+                token=token,
+                error_message=res["error"]
+            )
+        elif "success" in res:
+            return render_template(
+                "reset_password.html.j2",
+                auth=auth(),
+                config=config,
+                datetime=datetime.datetime,
+                timestamp=datetime.datetime.now(),
+                success_message=res["success"]
+            )
+    
+    # GET request - show the reset form
+    token = request.args.get('token')
+    if not token:
+        return redirect(url_for('forgot_password'))
+    
+    return render_template(
+        "reset_password.html.j2",
+        auth=auth(),
+        config=config,
+        datetime=datetime.datetime,
+        timestamp=datetime.datetime.now(),
+        token=token
+    )
+
 @app.route('/<path:filename>')
 def serve_static(filename):
     nodep = r"node\_(\w{8})\.html"
