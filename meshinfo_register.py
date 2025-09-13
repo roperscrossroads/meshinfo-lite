@@ -201,9 +201,16 @@ WHERE email = %s"""
         """
         Reset password using a valid reset token.
         """
-        if not new_password or len(new_password) < 6:
-            return {"error": "Password must be at least 6 characters long."}
-        
+        if not new_password or len(new_password) < 8:
+            return {"error": "Password must be at least 8 characters long."}
+        if not re.search(r'[A-Z]', new_password):
+            return {"error": "Password must contain at least one uppercase letter."}
+        if not re.search(r'[a-z]', new_password):
+            return {"error": "Password must contain at least one lowercase letter."}
+        if not re.search(r'\d', new_password):
+            return {"error": "Password must contain at least one number."}
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', new_password):
+            return {"error": "Password must contain at least one special character."}
         try:
             # Decode and validate the reset token
             payload = jwt.decode(
