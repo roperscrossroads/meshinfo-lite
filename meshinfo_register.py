@@ -58,7 +58,7 @@ VALUES (%s, %s, %s, %s)"""
             return {"error": "Invalid password."}
         elif not username or not re.match(username_regex, username):
             return {"error": "Invalid username."}
-        elif not self.verify(username, password):
+        elif not self.verify(username, email):  # Fixed: was (username, password)
             return {"error": "Username or email already exist."}
         code = utils.generate_random_code(4)
         self.add_user(
@@ -99,7 +99,7 @@ WHERE status='VERIFIED' AND email = %s"""
                 utils.check_password(password, hashed_password):
             encoded_jwt = jwt.encode(
                 {
-                    "email": email,
+                    "email": email.lower(),  # Fixed: use lowercase email consistently
                     "username": row[1],
                     "time": int(time.time())
                 },
@@ -152,6 +152,93 @@ WHERE email = %s"""
         cur.close()
         self.db.commit()
         return otp
+
+    def request_password_reset(self, email):
+        """
+        Request a password reset for the given email address.
+        Generates a reset token and sends an email if the address is in the database.
+        """
+        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not email or not re.match(email_regex, email):
+            return {"error": "Invalid email address."}
+        
+        # Check if email exists and is verified
+        sql = "SELECT username FROM meshuser WHERE status='VERIFIED' AND email = %s"
+        params = (email.lower(),)
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        cur.close()
+        
+        if not row:
+            # Return success message even if email doesn't exist (security best practice)
+            return {"success": "If your email is in our system, you will receive a password reset link."}
+        
+        # Generate reset token with expiration (24 hours)
+        reset_token = jwt.encode(
+            {
+                "email": email.lower(),
+                "purpose": "password_reset",
+                "exp": int(time.time()) + 86400  # 24 hours
+            },
+            self.config["registrations"]["jwt_secret"],
+            algorithm="HS256"
+        )
+        
+        # Use meshinfo_url if specified, otherwise fall back to url
+        base_url = self.config["mesh"].get("meshinfo_url", self.config["mesh"]["url"])
+        
+        # Send reset email
+        utils.send_email(
+            email,
+            "MeshInfo Password Reset",
+            f"Please visit {base_url}/reset-password?token={reset_token} to reset your password. This link will expire in 24 hours."
+        )
+        
+        return {"success": "If your email is in our system, you will receive a password reset link."}
+    
+    def reset_password(self, token, new_password):
+        """
+        Reset password using a valid reset token.
+        """
+        if not new_password or len(new_password) < 8:
+            return {"error": "Password must be at least 8 characters long."}
+        if not re.search(r'[A-Z]', new_password):
+            return {"error": "Password must contain at least one uppercase letter."}
+        if not re.search(r'[a-z]', new_password):
+            return {"error": "Password must contain at least one lowercase letter."}
+        if not re.search(r'\d', new_password):
+            return {"error": "Password must contain at least one number."}
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', new_password):
+            return {"error": "Password must contain at least one special character."}
+        try:
+            # Decode and validate the reset token
+            payload = jwt.decode(
+                token,
+                self.config["registrations"]["jwt_secret"],
+                algorithms=["HS256"]
+            )
+            
+            # Verify token purpose and extract email
+            if payload.get("purpose") != "password_reset":
+                return {"error": "Invalid reset token."}
+            
+            email = payload.get("email")
+            if not email:
+                return {"error": "Invalid reset token."}
+            
+            # Update password
+            self.update_password(email, new_password)
+            
+            return {"success": "Password successfully reset. You can now log in with your new password."}
+            
+        except jwt.ExpiredSignatureError:
+            return {"error": "Reset link has expired. Please request a new password reset."}
+        except jwt.InvalidTokenError:
+            return {"error": "Invalid reset token."}
+        except Exception as e:
+            logger.error(f"Password reset error: {str(e)}")
+            return {"error": "An error occurred while resetting your password."}
 
     def __del__(self):
         if self.db:
