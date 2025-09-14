@@ -61,6 +61,11 @@ PIL.ImageDraw.ImageDraw.textsize = textsize
 
 app = Flask(__name__)
 
+# Custom error handler for 503 errors to redirect to setup status
+@app.errorhandler(503)
+def service_unavailable(error):
+    """Redirect 503 errors to setup status page instead of showing generic error."""
+    return redirect(url_for('setup_status'))
 
 # --- OG image generation for message_map ---
 OG_IMAGE_DIR = "/tmp/og_images"
@@ -1787,11 +1792,13 @@ def chat():
     # Get cached data
     nodes = get_cached_nodes()
     if not nodes:
-        abort(503, description="Database connection unavailable")
+        # Instead of showing 503 error, redirect to setup status page
+        return redirect(url_for('setup_status'))
 
     chat_data = get_cached_chat_data(page, per_page)
     if not chat_data:
-        abort(503, description="Database connection unavailable")
+        # Instead of showing 503 error, redirect to setup status page
+        return redirect(url_for('setup_status'))
 
     return render_template(
         "chat.html.j2",
@@ -1899,7 +1906,8 @@ def serve_index(success_message=None, error_message=None):
     # Get cached data
     nodes = get_cached_nodes()
     if not nodes:
-        abort(503, description="Database connection unavailable")
+        # Instead of showing 503 error, redirect to setup status page
+        return redirect(url_for('setup_status'))
 
     active_nodes = get_cached_active_nodes()
 
@@ -1919,7 +1927,8 @@ def nodes():
     # Get cached data
     nodes = get_cached_nodes()
     if not nodes:
-        abort(503, description="Database connection unavailable")
+        # Instead of showing 503 error, redirect to setup status page
+        return redirect(url_for('setup_status'))
     latest = get_cached_latest_node()
     logging.info(f"/nodes.html: Loaded {len(nodes)} nodes.")
 
@@ -1949,7 +1958,8 @@ def allnodes():
     # Get cached data
     nodes = get_cached_nodes()
     if not nodes:
-        abort(503, description="Database connection unavailable")
+        # Instead of showing 503 error, redirect to setup status page
+        return redirect(url_for('setup_status'))
     latest = get_cached_latest_node()
     logging.info(f"/allnodes.html: Loaded {len(nodes)} nodes.")
 
@@ -2189,6 +2199,97 @@ def get_hardware_photos():
     """Get HARDWARE_PHOTOS dict without direct module reference."""
     import meshtastic_support
     return meshtastic_support.HARDWARE_PHOTOS
+
+def check_config_status():
+    """Check the status of configuration and database connectivity."""
+    status = {
+        'config_exists': False,
+        'config_errors': [],
+        'database_connected': False,
+        'database_error': None,
+        'mqtt_configured': False
+    }
+    
+    # Check if config.ini exists and is readable
+    try:
+        test_config = configparser.ConfigParser()
+        test_config.read('config.ini')
+        status['config_exists'] = True
+        
+        # Check for required sections
+        required_sections = ['mesh', 'database', 'webserver']
+        for section in required_sections:
+            if not test_config.has_section(section):
+                status['config_errors'].append(f"Missing required section: [{section}]")
+        
+        # Check for critical database settings
+        if test_config.has_section('database'):
+            required_db_options = ['host', 'username', 'password', 'database']
+            for option in required_db_options:
+                if not test_config.has_option('database', option):
+                    status['config_errors'].append(f"Missing database setting: {option}")
+        
+        # Check MQTT configuration
+        if test_config.has_section('mqtt'):
+            if (test_config.has_option('mqtt', 'broker') and 
+                test_config.has_option('mqtt', 'topic')):
+                status['mqtt_configured'] = True
+    except Exception as e:
+        status['config_errors'].append(f"Error reading config.ini: {str(e)}")
+    
+    # Check database connectivity
+    if status['config_exists'] and not status['config_errors']:
+        try:
+            from meshdata import MeshData
+            md = MeshData()
+            # Try a simple query to test connectivity
+            cursor = md.db.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            cursor.close()
+            status['database_connected'] = True
+        except Exception as e:
+            status['database_error'] = str(e)
+    
+    return status
+
+@app.route('/setup-status')
+def setup_status():
+    """Display setup status and configuration guidance."""
+    config_status = check_config_status()
+    
+    # Try to load config for display purposes
+    display_config = None
+    try:
+        display_config = configparser.ConfigParser()
+        display_config.read('config.ini')
+    except:
+        pass
+    
+    return render_template(
+        "setup_status.html.j2",
+        config_status=config_status,
+        config=display_config
+    )
+
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint."""
+    config_status = check_config_status()
+    
+    if config_status['database_connected']:
+        return jsonify({
+            'status': 'healthy',
+            'database': 'connected',
+            'config': 'ok'
+        }), 200
+    else:
+        return jsonify({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'config': 'ok' if config_status['config_exists'] else 'missing',
+            'setup_url': url_for('setup_status', _external=True)
+        }), 503
 
 def run():
     # Enable Waitress logging
