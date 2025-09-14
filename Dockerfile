@@ -50,6 +50,9 @@ RUN apt-get update && \
 # Architecture-specific optimizations
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 
+# For ARM64 conda environment
+ENV CONDA_PREFIX=/opt/miniforge
+
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt requirements-rasterio.txt ./
 
@@ -69,6 +72,15 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
     echo "Non-ARM64 detected, using standard pip install for all packages"; \
     # Standard install for non-ARM64 (includes rasterio) \
     su app -c "pip install --no-cache-dir --user -r requirements.txt -r requirements-rasterio.txt"; \
+    fi
+
+# For ARM64, ensure Python can find conda-installed packages
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+    echo "Setting up environment for ARM64 conda packages"; \
+    # Add conda site-packages to Python path via pth file \
+    su app -c "mkdir -p /app/.local/lib/python3.13/site-packages" && \
+    echo "/opt/miniforge/lib/python3.13/site-packages" > /app/.local/lib/python3.13/site-packages/conda-packages.pth && \
+    chown app:app /app/.local/lib/python3.13/site-packages/conda-packages.pth; \
     fi
 
 # Ensure pytz is installed for timezone support (critical for time display)
@@ -102,6 +114,13 @@ RUN echo '#!/bin/bash' > /app/fix_cache.sh && \
     echo 'mkdir -p /app/runtime_cache' >> /app/fix_cache.sh && \
     echo 'chmod 777 /app/runtime_cache' >> /app/fix_cache.sh && \
     echo 'chown -R app:app /app/runtime_cache' >> /app/fix_cache.sh && \
+    echo '# Test rasterio import for ARM64 systems' >> /app/fix_cache.sh && \
+    echo 'if [ "$(uname -m)" = "aarch64" ]; then' >> /app/fix_cache.sh && \
+    echo '  echo "Testing rasterio import for ARM64..."' >> /app/fix_cache.sh && \
+    echo '  if ! python3 -c "import rasterio; print(f\"rasterio {rasterio.__version__} found at {rasterio.__file__}\")" 2>/dev/null; then' >> /app/fix_cache.sh && \
+    echo '    echo "Warning: rasterio not found, LOS profile features may not work"' >> /app/fix_cache.sh && \
+    echo '  fi' >> /app/fix_cache.sh && \
+    echo 'fi' >> /app/fix_cache.sh && \
     echo 'exec su app -c "./run.sh"' >> /app/fix_cache.sh && \
     chmod +x /app/fix_cache.sh
 
