@@ -11,9 +11,17 @@ import signal
 
 def setup_logger():
     config = configparser.ConfigParser()
-    config.read('config.ini')
-    log_level = logging.DEBUG if config["server"]["debug"] == "true" \
-        else logging.INFO
+    log_level = logging.INFO  # Default log level
+    
+    try:
+        config.read('config.ini')
+        if config.has_section('server') and config.has_option('server', 'debug'):
+            log_level = logging.DEBUG if config["server"]["debug"] == "true" \
+                else logging.INFO
+    except Exception as e:
+        # If config.ini doesn't exist or is malformed, use default log level
+        print(f"Warning: Could not read config.ini for log level: {e}")
+        print("Using default log level: INFO")
     # Get the root logger
     logger = logging.getLogger()
     logger.setLevel(log_level)  # Set to lowest level to capture all logs
