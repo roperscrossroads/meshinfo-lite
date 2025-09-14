@@ -146,10 +146,12 @@ for i in range(10):
     except Exception as e:
         logger.warning(f"Waiting for database to become ready.")
         logger.error(str(e))
-        time.sleep(10)
+        if i < 9:  # Only sleep if we're not on the last attempt
+            time.sleep(10)
 if not db_connected:
-    logger.error("Giving up. Bye.")
-    sys.exit(1)
+    logger.error("Database connection failed after 10 attempts.")
+    logger.info("Starting web server anyway to allow access to setup status page.")
+    logger.info("Visit /setup-status for troubleshooting guidance.")
 
 thread_mqtt = threading.Thread(target=threadwrap(meshinfo_mqtt.run))
 thread_web = threading.Thread(target=threadwrap(meshinfo_web.run))
