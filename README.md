@@ -197,21 +197,6 @@ pip install -r requirements.txt
 python main.py
 ```
 
-## Troubleshooting
-
-**🆘 Setup Issues?** If you encounter problems with configuration or database connectivity, MeshInfo-Lite now includes a built-in setup status page:
-
-- **Visit `/setup-status`** on your running instance for detailed troubleshooting
-- **Health check**: Use `/health` endpoint for monitoring
-- **Auto-redirect**: Database connection issues automatically redirect to setup guidance
-
-The setup status page provides:
-- Configuration file validation
-- Database connectivity testing  
-- MQTT configuration verification
-- Docker-specific troubleshooting steps
-- Step-by-step setup guidance
-
 ## Development
 
 ### Building a local Docker image

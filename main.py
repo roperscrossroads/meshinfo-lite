@@ -158,8 +158,8 @@ for i in range(10):
             time.sleep(10)
 if not db_connected:
     logger.error("Database connection failed after 10 attempts.")
-    logger.info("Starting web server anyway to allow access to setup status page.")
-    logger.info("Visit /setup-status for troubleshooting guidance.")
+    logger.info("Starting web server anyway for troubleshooting purposes.")
+    logger.info("Database connectivity will be required for full functionality.")
 
 thread_mqtt = threading.Thread(target=threadwrap(meshinfo_mqtt.run))
 thread_web = threading.Thread(target=threadwrap(meshinfo_web.run))
