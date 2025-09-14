@@ -51,9 +51,24 @@ def layout_preview():
                          **mock_data)
 
 @app.route('/login')
+@app.route('/login.html')
 def login():
-    """Mock login route"""
-    return "Login page (not implemented in preview)"
+    """Login page preview"""
+    return render_template('login.html.j2', 
+                         config=config,
+                         this_page='login',
+                         **mock_data)
+
+@app.route('/register')
+@app.route('/register.html')
+def register():
+    """Mock register route"""
+    return "Register page (not implemented in preview)"
+
+@app.route('/forgot-password')
+def forgot_password():
+    """Mock forgot password route"""
+    return "Forgot Password page (not implemented in preview)"
 
 @app.route('/logout')
 def logout():
