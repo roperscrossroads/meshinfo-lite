@@ -1,7 +1,6 @@
 import json
 import utils
 import os
-import rasterio
 import numpy as np
 import matplotlib
 import logging
@@ -16,6 +15,15 @@ import base64
 import pandas as pd
 import atexit
 
+# Optional rasterio import with fallback
+try:
+    import rasterio
+    RASTERIO_AVAILABLE = True
+    logging.info("rasterio module loaded successfully")
+except ImportError as e:
+    RASTERIO_AVAILABLE = False
+    logging.warning(f"rasterio not available: {e}. LOS profile features will be disabled.")
+
 
 class LOSProfile():
     def __init__(self, nodes={}, node=None, config=None, cache=None):
@@ -26,6 +34,11 @@ class LOSProfile():
         self.cache_duration = int(config['los']['cache_duration']) if config and 'los' in config else 43200  # Default to 43200 if not set
 
         self.cache = cache  # Store the cache object
+
+        # Check if rasterio is available before attempting to load SRTM data
+        if not RASTERIO_AVAILABLE:
+            logging.warning("rasterio not available. LOS profile features will be disabled.")
+            return
 
         directory = "srtm_data"
         try:
@@ -313,8 +326,15 @@ class LOSProfile():
 
     def get_profiles(self):
         profiles = {}
+        
+        # Check if rasterio is available
+        if not RASTERIO_AVAILABLE:
+            logging.debug("LOS profiles not available: rasterio module not found")
+            return profiles
+            
         hexid = utils.convert_node_id_from_int_to_hex(self.node)
         if not self.datasets:
+            logging.debug("LOS profiles not available: no SRTM datasets loaded")
             return profiles
         if hexid not in self.nodes:
             return profiles

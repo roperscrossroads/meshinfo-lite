@@ -11,9 +11,17 @@ import signal
 
 def setup_logger():
     config = configparser.ConfigParser()
-    config.read('config.ini')
-    log_level = logging.DEBUG if config["server"]["debug"] == "true" \
-        else logging.INFO
+    log_level = logging.INFO  # Default log level
+    
+    try:
+        config.read('config.ini')
+        if config.has_section('server') and config.has_option('server', 'debug'):
+            log_level = logging.DEBUG if config["server"]["debug"] == "true" \
+                else logging.INFO
+    except Exception as e:
+        # If config.ini doesn't exist or is malformed, use default log level
+        print(f"Warning: Could not read config.ini for log level: {e}")
+        print("Using default log level: INFO")
     # Get the root logger
     logger = logging.getLogger()
     logger.setLevel(log_level)  # Set to lowest level to capture all logs
@@ -146,10 +154,12 @@ for i in range(10):
     except Exception as e:
         logger.warning(f"Waiting for database to become ready.")
         logger.error(str(e))
-        time.sleep(10)
+        if i < 9:  # Only sleep if we're not on the last attempt
+            time.sleep(10)
 if not db_connected:
-    logger.error("Giving up. Bye.")
-    sys.exit(1)
+    logger.error("Database connection failed after 10 attempts.")
+    logger.info("Starting web server anyway for troubleshooting purposes.")
+    logger.info("Database connectivity will be required for full functionality.")
 
 thread_mqtt = threading.Thread(target=threadwrap(meshinfo_mqtt.run))
 thread_web = threading.Thread(target=threadwrap(meshinfo_web.run))
