@@ -11,12 +11,6 @@ jobs:
           sudo apt update
           sudo apt install gh -y
 
-      - name: Authenticate GitHub CLI
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo $GH_TOKEN | gh auth login --with-token
-
       - name: Delete all caches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
