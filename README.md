@@ -12,7 +12,7 @@ To make deployment to run an instance for your mesh easy, Docker support is incl
 
 ## 🎯 For Other Mesh Networks
 
-This fork has been made **fully generic and configurable**. Other mesh networks can:
+This fork has been made **generic and configurable**. Other mesh networks can:
 
 1. **Fork this repository**
 2. **Copy one of the example configs** (`config-csra.ini.example` or `config-middlega.ini.example`) 
