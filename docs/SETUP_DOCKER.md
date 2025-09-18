@@ -1,6 +1,6 @@
 # MeshInfo-Lite Docker Setup Guide
 
-This guide covers setting up MeshInfo-Lite with Docker Compose, including proper database privileges.
+This guide covers setting up MeshInfo-Lite with Docker Compose. **Database setup is now fully automatic!**
 
 ## Prerequisites
 
@@ -77,15 +77,29 @@ curl http://localhost:8001/
 - **Full logging** - All setup steps are logged for troubleshooting
 - **Backwards compatible** - Manual setup still works for advanced scenarios
 
-## What the Setup Script Does
+## What Happens During Automatic Startup
 
-The `setup_docker.py` script performs these operations:
+When you run `docker-compose up -d`, here's what happens automatically:
 
-1. **Waits for Database**: Ensures MariaDB is fully started and ready
-2. **Connects as Root**: Uses root credentials to grant privileges
-3. **Grants RELOAD**: Allows query cache clearing operations
-4. **Grants PROCESS**: Enables monitoring and debugging
-5. **Tests Everything**: Verifies the setup worked correctly
+### Container Startup Sequence
+1. **Database Container Starts** - MariaDB initializes with basic user and database
+2. **App Container Starts** - MeshInfo-Lite container begins startup sequence  
+3. **Wait for Database** - App waits until database is fully ready
+4. **Automatic Privilege Setup** - Grants RELOAD and PROCESS privileges automatically
+5. **Database Migrations** - Runs any pending database schema updates
+6. **Application Launch** - Starts the web application with full functionality
+
+### What Gets Set Up Automatically
+- ✅ **RELOAD Privilege** - For query cache operations and performance optimization
+- ✅ **PROCESS Privilege** - For monitoring and debugging capabilities  
+- ✅ **Database Migrations** - Schema updates applied automatically
+- ✅ **Error Handling** - Setup continues even if some steps fail
+
+### Startup Resilience
+- **Non-blocking Setup** - Container starts even if privilege setup fails temporarily
+- **Detailed Logging** - All setup steps logged for troubleshooting
+- **Graceful Degradation** - App runs with limited functionality until privileges are available
+- **Retry Capability** - Can manually re-run setup anytime with `python setup_docker.py`
 
 ## Docker Compose Configuration
 
