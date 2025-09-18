@@ -1523,8 +1523,9 @@ def register():
         email = request.form.get('email')
         username = request.form.get('username')
         password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
         reg = Register()
-        res = reg.register(username, email, password)
+        res = reg.register(username, email, password, confirm_password)
         if "error" in res:
             error_message = res["error"]
         elif "success" in res:
@@ -1552,7 +1553,15 @@ def login(success_message=None, error_message=None):
         elif "success" in res:
             jwt = res["success"]
             resp = make_response(redirect(url_for('mynodes')))
-            resp.set_cookie("jwt", jwt)
+            # Set secure cookie flags for JWT
+            resp.set_cookie(
+                "jwt",
+                jwt,
+                httponly=True,
+                secure=request.is_secure,  # Use secure flag only on HTTPS
+                samesite='Strict',
+                max_age=86400  # 24 hours
+            )
             return resp
     return render_template(
             "login.html.j2",
@@ -1565,9 +1574,18 @@ def login(success_message=None, error_message=None):
         )
 
 @app.route('/logout.html')
+@app.route('/logout', methods=['GET', 'POST'])
 def logout():
+    # Clear the JWT cookie properly
     resp = make_response(redirect(url_for('serve_index')))
-    resp.set_cookie('jwt', '', expires=0)
+    resp.set_cookie(
+        'jwt',
+        '',
+        expires=0,
+        httponly=True,
+        secure=request.is_secure,
+        samesite='Strict'
+    )
     return resp
 
 @app.route('/verify')

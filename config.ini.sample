@@ -75,6 +75,28 @@ apikey=YOUR_KEY_HERE
 enabled=false
 jwt_secret=YOUR_JWT_SECRET
 
+[security]
+# Password security settings
+password_min_length=8
+password_require_uppercase=true
+password_require_lowercase=true
+password_require_numbers=true
+password_require_special=true
+
+# Login security settings
+max_login_attempts=5
+lockout_duration_minutes=30
+
+# Token and verification settings
+verification_expiry_hours=24
+jwt_expiry_hours=24
+use_legacy_verification=false
+
+# Rate limiting (requires Redis or in-memory tracking)
+enable_rate_limiting=false
+rate_limit_window=300
+rate_limit_max_attempts=5
+
 [smtp]
 # Required for user registration - configure when enabling registrations
 # Gmail example (recommended):
