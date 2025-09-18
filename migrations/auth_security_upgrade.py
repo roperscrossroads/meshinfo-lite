@@ -184,14 +184,23 @@ def add_indexes(cursor):
     ]
 
     for table, index_name, column in indexes_to_add:
-        if not check_index_exists(cursor, table, index_name):
-            try:
-                cursor.execute(f"CREATE INDEX {index_name} ON {table}({column})")
-                logger.info(f"Created index {index_name} on {table}.{column}")
-            except Exception as e:
-                logger.warning(f"Could not create index {index_name}: {str(e)}")
+        # Whitelist validation: only allow known values
+        if (
+            table in {"meshuser"} and
+            index_name in {"idx_meshuser_status", "idx_meshuser_verification", "idx_meshuser_failed_attempts"} and
+            column in {"status", "verification", "failed_login_attempts"}
+        ):
+            if not check_index_exists(cursor, table, index_name):
+                try:
+                    query = f"CREATE INDEX {index_name} ON {table}({column})"
+                    cursor.execute(query)
+                    logger.info(f"Created index {index_name} on {table}.{column}")
+                except Exception as e:
+                    logger.warning(f"Could not create index {index_name}: {str(e)}")
+            else:
+                logger.info(f"Index {index_name} already exists on {table}")
         else:
-            logger.info(f"Index {index_name} already exists on {table}")
+            logger.error(f"Attempted to create index with invalid table/index/column: {table}, {index_name}, {column}")
 
 
 def create_cleanup_procedure(cursor):
