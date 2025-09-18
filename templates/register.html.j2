@@ -29,28 +29,202 @@ input[type="text"] {
     border-color: #17a2b8 !important;
     box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
 }
+
+/* Password strength meter */
+.password-strength-meter {
+    height: 5px;
+    margin-top: 5px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.strength-bar {
+    height: 100%;
+    width: 0;
+    transition: width 0.3s, background-color 0.3s;
+}
+
+.strength-very-weak { background-color: #dc3545; width: 20%; }
+.strength-weak { background-color: #fd7e14; width: 40%; }
+.strength-fair { background-color: #ffc107; width: 60%; }
+.strength-good { background-color: #28a745; width: 80%; }
+.strength-strong { background-color: #20c997; width: 100%; }
+
+.password-requirements {
+    font-size: 0.85rem;
+    margin-top: 5px;
+}
+
+.requirement {
+    color: #6c757d;
+}
+
+.requirement.met {
+    color: #28a745;
+}
+
+.password-toggle {
+    cursor: pointer;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="mt-5 d-flex justify-content-center align-items-center vh-100 bg-light">
-    <div class="card p-4 shadow-lg" style="width: 350px;">
+    <div class="card p-4 shadow-lg" style="width: 400px;">
         <h3 class="text-center mb-4">Register</h3>
-        <form action="register.html" method="POST">
+
+        {% if error_message %}
+        <div class="alert alert-danger" role="alert">
+            {{ error_message }}
+        </div>
+        {% endif %}
+
+        <form action="register.html" method="POST" id="registrationForm">
             <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
-                <input type="text" class="form-control" id="username" name="username" required>
+                <input type="text" class="form-control" id="username" name="username"
+                       placeholder="3-20 characters" required
+                       pattern="^\w{3,20}$"
+                       title="Username must be 3-20 characters, letters, numbers, and underscores only">
             </div>
+
             <div class="mb-3">
                 <label for="email" class="form-label">Email</label>
-                <input type="email" class="form-control" id="email" name="email" required>
+                <input type="email" class="form-control" id="email" name="email"
+                       placeholder="your@email.com" required>
             </div>
+
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" name="password" required>
+                <div class="position-relative">
+                    <input type="password" class="form-control" id="password" name="password"
+                           placeholder="Minimum 8 characters" required minlength="8">
+                    <span class="password-toggle" onclick="togglePassword('password')">👁️</span>
+                </div>
+                <div class="password-strength-meter">
+                    <div class="strength-bar" id="strengthBar"></div>
+                </div>
+                <div class="password-requirements">
+                    <div class="requirement" id="req-length">✗ At least 8 characters</div>
+                    <div class="requirement" id="req-upper">✗ One uppercase letter</div>
+                    <div class="requirement" id="req-lower">✗ One lowercase letter</div>
+                    <div class="requirement" id="req-number">✗ One number</div>
+                    <div class="requirement" id="req-special">✗ One special character (!@#$%^&*...)</div>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary w-100">Register</button>
+
+            <div class="mb-3">
+                <label for="confirm_password" class="form-label">Confirm Password</label>
+                <div class="position-relative">
+                    <input type="password" class="form-control" id="confirm_password"
+                           name="confirm_password" placeholder="Re-enter password" required>
+                    <span class="password-toggle" onclick="togglePassword('confirm_password')">👁️</span>
+                </div>
+                <div class="invalid-feedback" id="passwordMatchError" style="display: none;">
+                    Passwords do not match
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" id="submitBtn">Register</button>
+            <div class="mt-2">
+                <a href="{{ url_for('login') }}" class="btn btn-secondary w-100">Already have an account? Login</a>
+            </div>
         </form>
     </div>
 </div>
+
+<script>
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    const type = field.getAttribute('type') === 'password' ? 'text' : 'password';
+    field.setAttribute('type', type);
+}
+
+function checkPasswordStrength(password) {
+    let strength = 0;
+    const requirements = {
+        length: password.length >= 8,
+        upper: /[A-Z]/.test(password),
+        lower: /[a-z]/.test(password),
+        number: /[0-9]/.test(password),
+        special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    };
+
+    // Update requirement indicators
+    document.getElementById('req-length').className = requirements.length ? 'requirement met' : 'requirement';
+    document.getElementById('req-length').textContent = (requirements.length ? '✓' : '✗') + ' At least 8 characters';
+
+    document.getElementById('req-upper').className = requirements.upper ? 'requirement met' : 'requirement';
+    document.getElementById('req-upper').textContent = (requirements.upper ? '✓' : '✗') + ' One uppercase letter';
+
+    document.getElementById('req-lower').className = requirements.lower ? 'requirement met' : 'requirement';
+    document.getElementById('req-lower').textContent = (requirements.lower ? '✓' : '✗') + ' One lowercase letter';
+
+    document.getElementById('req-number').className = requirements.number ? 'requirement met' : 'requirement';
+    document.getElementById('req-number').textContent = (requirements.number ? '✓' : '✗') + ' One number';
+
+    document.getElementById('req-special').className = requirements.special ? 'requirement met' : 'requirement';
+    document.getElementById('req-special').textContent = (requirements.special ? '✓' : '✗') + ' One special character';
+
+    // Calculate strength score
+    Object.values(requirements).forEach(met => { if (met) strength++; });
+
+    // Update strength bar
+    const bar = document.getElementById('strengthBar');
+    const classes = ['strength-very-weak', 'strength-weak', 'strength-fair', 'strength-good', 'strength-strong'];
+    bar.className = 'strength-bar';
+    if (strength > 0) {
+        bar.classList.add(classes[Math.min(strength - 1, 4)]);
+    }
+
+    return Object.values(requirements).every(met => met);
+}
+
+function checkPasswordMatch() {
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    const errorDiv = document.getElementById('passwordMatchError');
+
+    if (confirmPassword && password !== confirmPassword) {
+        document.getElementById('confirm_password').classList.add('is-invalid');
+        errorDiv.style.display = 'block';
+        return false;
+    } else {
+        document.getElementById('confirm_password').classList.remove('is-invalid');
+        errorDiv.style.display = 'none';
+        return true;
+    }
+}
+
+// Add event listeners
+document.getElementById('password').addEventListener('input', function() {
+    checkPasswordStrength(this.value);
+    if (document.getElementById('confirm_password').value) {
+        checkPasswordMatch();
+    }
+});
+
+document.getElementById('confirm_password').addEventListener('input', checkPasswordMatch);
+
+document.getElementById('registrationForm').addEventListener('submit', function(e) {
+    const password = document.getElementById('password').value;
+    if (!checkPasswordStrength(password)) {
+        e.preventDefault();
+        alert('Please ensure your password meets all requirements.');
+        return false;
+    }
+    if (!checkPasswordMatch()) {
+        e.preventDefault();
+        alert('Passwords do not match.');
+        return false;
+    }
+});
+</script>
 {% endblock %}
