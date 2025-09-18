@@ -143,6 +143,8 @@ For detailed Docker setup instructions, see **[docs/SETUP_DOCKER.md](docs/SETUP_
 
 #### Quick Setup
 
+🎉 **Now with fully automatic database setup!** Just configure and run - no manual database steps required.
+
 ##### Clone the repo
 
 ```sh
@@ -168,6 +170,14 @@ cd meshinfo-lite
 ```sh
 docker compose down && docker compose up --build -d && docker compose ps && docker compose logs -f meshinfo
 ```
+
+**That's it!** The application now automatically:
+- ✅ Waits for database to be ready
+- ✅ Sets up database privileges  
+- ✅ Runs all database migrations
+- ✅ Starts with full functionality
+
+No manual database setup steps required!
 
 #### To Update
 

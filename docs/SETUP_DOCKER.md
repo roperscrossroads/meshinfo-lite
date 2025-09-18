@@ -1,6 +1,6 @@
 # MeshInfo-Lite Docker Setup Guide
 
-This guide covers setting up MeshInfo-Lite with Docker Compose, including proper database privileges.
+This guide covers setting up MeshInfo-Lite with Docker Compose. **Database setup is now fully automatic!**
 
 ## Prerequisites
 
@@ -46,64 +46,60 @@ docker-compose up -d
 docker-compose ps
 ```
 
-### 4. Set Up Database Privileges
+**That's it!** The application now automatically sets up database privileges during startup. No manual setup is required.
 
-**Important**: The Docker Compose setup automatically creates the database, user, and tables, but **does not grant all the privileges needed for optimal performance**.
-
-**What's Created Automatically:**
-- ✅ Database (`meshdata`)
-- ✅ User (`meshdata`) 
-- ✅ All application tables
-- ✅ Basic database operations (SELECT, INSERT, UPDATE, DELETE)
-
-**What's Missing:**
-- ❌ RELOAD privilege (needed for query cache operations)
-- ❌ PROCESS privilege (needed for monitoring)
-
-You have two options to complete the setup:
-
-#### Option A: Python Setup Script (Recommended)
-
-```bash
-# Run the Python setup script
-python setup_docker.py
-```
-
-#### Option B: Shell Script (Alternative)
-
-```bash
-# Run the shell script inside the container
-docker-compose exec meshinfo ./docker_setup.sh
-```
-
-Both scripts will:
-- ✅ Wait for the database to become available
-- ✅ Grant RELOAD privilege for query cache operations
-- ✅ Grant PROCESS privilege for monitoring
-- ✅ Test the connection and privileges
-- ✅ Provide detailed feedback
-
-### 5. Verify Setup
+### 4. Verify Setup
 
 Check that everything is working:
 
 ```bash
-# Check application logs
+# Check application logs (you should see automatic database setup messages)
 docker-compose logs meshinfo
 
 # Test the application
 curl http://localhost:8001/
 ```
 
-## What the Setup Script Does
+## Automatic Database Setup
 
-The `setup_docker.py` script performs these operations:
+**🎉 NEW: Fully Automatic Setup!** As of this version, MeshInfo-Lite automatically handles database privilege setup when the container starts. 
 
-1. **Waits for Database**: Ensures MariaDB is fully started and ready
-2. **Connects as Root**: Uses root credentials to grant privileges
-3. **Grants RELOAD**: Allows query cache clearing operations
-4. **Grants PROCESS**: Enables monitoring and debugging
-5. **Tests Everything**: Verifies the setup worked correctly
+**What happens automatically:**
+- ✅ Container waits for database to become available
+- ✅ Database privileges are granted automatically (RELOAD, PROCESS)
+- ✅ Application starts with full functionality
+- ✅ Setup errors are logged but don't prevent startup
+- ✅ All database migrations run automatically
+
+**Benefits:**
+- **Zero manual setup** - Just `docker-compose up -d` and you're done
+- **Resilient startup** - Container starts even if privilege setup fails temporarily
+- **Full logging** - All setup steps are logged for troubleshooting
+- **Backwards compatible** - Manual setup still works for advanced scenarios
+
+## What Happens During Automatic Startup
+
+When you run `docker-compose up -d`, here's what happens automatically:
+
+### Container Startup Sequence
+1. **Database Container Starts** - MariaDB initializes with basic user and database
+2. **App Container Starts** - MeshInfo-Lite container begins startup sequence  
+3. **Wait for Database** - App waits until database is fully ready
+4. **Automatic Privilege Setup** - Grants RELOAD and PROCESS privileges automatically
+5. **Database Migrations** - Runs any pending database schema updates
+6. **Application Launch** - Starts the web application with full functionality
+
+### What Gets Set Up Automatically
+- ✅ **RELOAD Privilege** - For query cache operations and performance optimization
+- ✅ **PROCESS Privilege** - For monitoring and debugging capabilities  
+- ✅ **Database Migrations** - Schema updates applied automatically
+- ✅ **Error Handling** - Setup continues even if some steps fail
+
+### Startup Resilience
+- **Non-blocking Setup** - Container starts even if privilege setup fails temporarily
+- **Detailed Logging** - All setup steps logged for troubleshooting
+- **Graceful Degradation** - App runs with limited functionality until privileges are available
+- **Retry Capability** - Can manually re-run setup anytime with `python setup_docker.py`
 
 ## Docker Compose Configuration
 
@@ -132,7 +128,25 @@ services:
       - 8001:8000
 ```
 
-## Manual Setup (Alternative)
+## Manual Setup (Advanced/Optional)
+
+**Note**: Manual setup is no longer required for normal Docker deployments. The container now automatically handles database privilege setup. However, you can still perform manual setup if needed for advanced configurations or troubleshooting.
+
+### Manual Database Privilege Setup
+
+If you need to manually set up database privileges (e.g., for custom configurations or troubleshooting):
+
+#### Option A: Using Setup Scripts
+
+```bash
+# Run the Python setup script manually
+python setup_docker.py
+
+# Or run the shell script inside the container
+docker-compose exec meshinfo ./docker_setup.sh
+```
+
+#### Option B: Direct Database Commands
 
 If you prefer to set up privileges manually:
 

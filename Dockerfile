@@ -108,7 +108,7 @@ HEALTHCHECK NONE
 RUN chmod +x run.sh
 RUN chmod +x *.sh
 
-# Ensure cache directory permissions persist
+# Ensure cache directory permissions persist and set up startup script
 USER root
 RUN echo '#!/bin/bash' > /app/fix_cache.sh && \
     echo 'mkdir -p /app/runtime_cache' >> /app/fix_cache.sh && \
@@ -121,12 +121,12 @@ RUN echo '#!/bin/bash' > /app/fix_cache.sh && \
     echo '    echo "Warning: rasterio not found, LOS profile features may not work"' >> /app/fix_cache.sh && \
     echo '  fi' >> /app/fix_cache.sh && \
     echo 'fi' >> /app/fix_cache.sh && \
-    echo 'exec su app -c "./run.sh"' >> /app/fix_cache.sh && \
+    echo 'exec su app -c "./start.sh"' >> /app/fix_cache.sh && \
     chmod +x /app/fix_cache.sh
 
 USER root
 
 EXPOSE ${APP_PORT}
 
-# Run with cache fix wrapper to ensure permissions
+# Run with cache fix wrapper that now calls start.sh for automatic setup
 CMD ["/app/fix_cache.sh"]
