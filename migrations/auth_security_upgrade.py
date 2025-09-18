@@ -92,15 +92,22 @@ def add_meshuser_columns(cursor):
         ("two_factor_secret", "VARCHAR(32) NULL")
     ]
 
+    allowed_columns = dict(columns_to_add)
     for column_name, column_def in columns_to_add:
-        if not check_column_exists(cursor, "meshuser", column_name):
-            try:
-                cursor.execute(f"ALTER TABLE meshuser ADD COLUMN {column_name} {column_def}")
-                logger.info(f"Added column {column_name} to meshuser table")
-            except Exception as e:
-                logger.warning(f"Could not add column {column_name}: {str(e)}")
+        # Validate column_name and column_def against whitelist
+        if column_name in allowed_columns and allowed_columns[column_name] == column_def:
+            if not check_column_exists(cursor, "meshuser", column_name):
+                try:
+                    # Build query safely after validation
+                    query = "ALTER TABLE meshuser ADD COLUMN {} {}".format(column_name, column_def)
+                    cursor.execute(query)
+                    logger.info(f"Added column {column_name} to meshuser table")
+                except Exception as e:
+                    logger.warning(f"Could not add column {column_name}: {str(e)}")
+            else:
+                logger.info(f"Column {column_name} already exists in meshuser table")
         else:
-            logger.info(f"Column {column_name} already exists in meshuser table")
+            logger.warning(f"Attempted to add invalid column definition: {column_name} {column_def}")
 
 
 def create_auth_tables(cursor):
