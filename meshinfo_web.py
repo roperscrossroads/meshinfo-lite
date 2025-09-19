@@ -1599,7 +1599,7 @@ def verify():
         return login(success_message=res["success"])
     return serve_index()
 
-@app.route('/forgot-password', methods=['GET', 'POST'])
+@app.route('/forgot-password.html', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -1632,7 +1632,7 @@ def forgot_password():
         timestamp=datetime.datetime.now()
     )
 
-@app.route('/reset-password', methods=['GET', 'POST'])
+@app.route('/reset-password.html', methods=['GET', 'POST'])
 def reset_password():
     if request.method == 'POST':
         token = request.form.get('token')

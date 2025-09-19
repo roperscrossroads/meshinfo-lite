@@ -65,7 +65,7 @@ def register():
     """Mock register route"""
     return "Register page (not implemented in preview)"
 
-@app.route('/forgot-password')
+@app.route('/forgot-password.html')
 def forgot_password():
     """Mock forgot password route"""
     return "Forgot Password page (not implemented in preview)"
