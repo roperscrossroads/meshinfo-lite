@@ -7,11 +7,36 @@ from meshdata import MeshData
 import configparser
 import json
 import logging
+import time
 
 config = configparser.ConfigParser()
 config.read("config.ini")
 
 DEFAULT_KEY = config["mesh"]["channel_key"]
+
+# Rate limiting for message logging (30 second intervals per node)
+_last_log_times = {}
+
+def _rate_limited_log(msg_type, node_id, message, rate_limit_seconds=30):
+    """
+    Log a message with rate limiting per node.
+
+    Args:
+        msg_type: Message type (e.g., 'mapreport', 'text')
+        node_id: Node ID for rate limiting
+        message: Log message
+        rate_limit_seconds: Seconds between INFO logs for same node (default 30)
+    """
+    current_time = time.time()
+    log_key = f"{msg_type}_{node_id}"
+
+    # Check if we should log at INFO level (first time or after rate limit period)
+    if log_key not in _last_log_times or current_time - _last_log_times[log_key] >= rate_limit_seconds:
+        logging.info(message)
+        _last_log_times[log_key] = current_time
+    else:
+        # Rate limited - log at DEBUG level to reduce spam
+        logging.debug(f"[RATE LIMITED] {message}")
 
 
 def decrypt_packet(mp):
@@ -93,7 +118,13 @@ def get_data(msg):
             j["hop_start"] = msg.hop_start
         
         portnum = j["decoded"]["portnum"]
-        
+
+        # Filter out ATAK plugin messages (portnum 72) - these are not needed
+        if portnum == portnums_pb2.ATAK_PLUGIN:
+            _rate_limited_log("atak_drop", j['from'],
+                             f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
+            return None
+
         # Initialize type before the portnum checks
         j["type"] = None
         
@@ -241,12 +272,20 @@ def get_data(msg):
         if j["type"]:  # Only log if we successfully determined the type
             msg_type = j["type"]
             msg_from = j["from"]
-            
+
+            # Track message type with mqtt_stats
+            try:
+                from mqtt_stats import mqtt_stats
+                mqtt_stats.on_message_received(portnum=portnum, message_type=j["type"])
+            except ImportError:
+                pass  # mqtt_stats not available
+
             if msg_type == "traceroute":
                 route_info = j["decoded"]["json_payload"]
                 forward_hops = len(route_info.get("route", []))
                 return_hops = len(route_info.get("route_back", []))
-                logging.info(f"Received traceroute from {msg_from} with {forward_hops} forward hops and {return_hops} return hops")
+                _rate_limited_log("traceroute", msg_from,
+                    f"Received traceroute from {msg_from} with {forward_hops} forward hops and {return_hops} return hops")
             elif msg_type == "routing":
                 routing_info = j["decoded"]["json_payload"]
                 error_reason = routing_info.get("error_reason", 0)
@@ -254,12 +293,14 @@ def get_data(msg):
                 hops_taken = routing_info.get("hops_taken", 0)
                 relay_node = routing_info.get("relay_node", "None")
                 success = routing_info.get("success", False)
-                logging.info(f"Received routing from {msg_from} via relay {relay_node} with {hops_taken} hops (error: {error_desc}, success: {success})")
+                _rate_limited_log("routing", msg_from,
+                    f"Received routing from {msg_from} via relay {relay_node} with {hops_taken} hops (error: {error_desc}, success: {success})")
             elif msg_type == "text" and j.get("hop_limit") is not None and j.get("hop_start") is not None:
                 hop_count = j["hop_start"] - j["hop_limit"]
-                logging.info(f"Received {msg_type} from {msg_from} with {hop_count} hops ({j['hop_limit']}/{j['hop_start']})")
+                _rate_limited_log("text", msg_from,
+                    f"Received {msg_type} from {msg_from} with {hop_count} hops ({j['hop_limit']}/{j['hop_start']})")
             else:
-                logging.info(f"Received {msg_type} from {msg_from}")
+                _rate_limited_log(msg_type, msg_from, f"Received {msg_type} from {msg_from}")
         else:
             logging.warning(f"Received message with unknown portnum: {portnum}")
             
