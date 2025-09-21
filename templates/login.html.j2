@@ -19,6 +19,23 @@ input[type="password"],
 input[type="text"] {
     color: #000000 !important;
 }
+
+/* Ensure forgot password link is always visible and clickable */
+.forgot-password-link {
+    color: #007bff !important;
+    text-decoration: none !important;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+}
+
+.forgot-password-link:hover,
+.forgot-password-link:focus {
+    color: #0056b3 !important;
+    text-decoration: underline !important;
+}
 </style>
 {% endblock %}
 
@@ -36,6 +53,9 @@ input[type="text"] {
                 <input type="password" class="form-control" id="password" name="password" required>
             </div>
             <button type="submit" class="btn btn-primary w-100">Login</button>
+            <div class="mt-2 text-center">
+                <a href="{{ url_for("forgot_password") }}" class="text-primary forgot-password-link">Forgot Password?</a>
+            </div>
             <div class="mt-2"><a href="{{ url_for("register") }}" class="btn btn-info w-100" role="button">Register</a></div>
         </form>
     </div>
