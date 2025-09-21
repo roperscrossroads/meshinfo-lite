@@ -1,0 +1,191 @@
+[mesh]
+name=CSRA Mesh
+short_name=CSRA Mesh
+region=Central Savannah River Area
+description=Serving Meshtastic to the CSRA
+contact=https://www.csramesh.org
+url=https://www.csramesh.org
+# URL for this MeshInfo instance (used for verification emails, etc.)
+meshinfo_url=https://csramesh.duckdns.org
+# Optional: link to your mesh's configuration guide
+config_url=https://www.csramesh.org/faqs
+# Optional: link to your mesh's Discord or community chat
+discord_url=https://discord.com/invite/mgzj2PmhKf
+latitude=33.4687
+longitude=-81.9717
+channel_key=1PG7OiApB1nwvP+rz05pAQ==
+# MQTT display settings for user instructions
+mqtt_server_display=mqtt.csramsh.net
+mqtt_username_display=meshdev
+mqtt_password_display=large4cats
+mqtt_root_topic_display=msh/US/GA/csramsh
+
+[mqtt]
+# CSRA MQTT Server: mqtt.csramsh.net
+# Middle GA MQTT Server: middlegamesh.duckdns.org
+broker=mqtt.csramsh.net
+port=1883
+topic=msh/US/GA/csramsh/#
+username=meshdev
+password=large4cats
+
+[database]
+host=mariadb
+username=meshdata
+password=YOUR_DATABASE_PASSWORD
+database=meshdata
+
+[webserver]
+port=8000
+
+[server]
+node_activity_prune_threshold=7200
+node_location_prune_threshold=86400
+render_interval=15
+debug=true
+timezone=America/New_York
+zero_hop_timeout=43200
+telemetry_retention_days=30
+metrics_average_interval=7200
+
+[channels]
+# Comma-separated list of channel names to ignore
+#ignored_channels=PKI
+
+[geocoding]
+enabled=false
+apikey=YOUR_KEY_HERE
+
+[registrations]
+# Set to true to enable user registration and node claiming
+enabled=false
+jwt_secret=YOUR_JWT_SECRET
+
+[smtp]
+# Required for user registration - configure when enabling registrations
+# Gmail example (recommended):
+#email=csramesh.noreply@gmail.com
+#password=your-gmail-app-password
+#server=smtp.gmail.com
+#port=587
+# Generic example:
+email=YOUR_EMAIL_ADDRESS
+password=SMTP_PASSWORD
+server=SMTP_SERVER
+port=SMTP_PORT
+
+[los]
+enabled=true
+max_distance=10000
+cache_duration=43200
+
+[srtm]
+# SRTM elevation data download settings for LOS (Line of Sight) terrain analysis
+# Set coordinates for your mesh region to download appropriate elevation data
+# CSRA region (Central Savannah River Area) covers parts of Georgia and South Carolina
+min_latitude=32
+max_latitude=35
+min_longitude=-84
+max_longitude=-80
+
+[features]
+# Show or hide the #MeshtasticMonday page
+show_meshtastic_monday=false
+
+[community_links]
+# Fellow mesh networks - Georgia
+link1=https://middlega.duckdns.org
+link1_label=Middle GA Mesh
+link2=https://discord.gg/6cSJ738Prp
+link2_label=Middle GA Discord
+# Fellow mesh networks - Southeast
+link3=https://ncmesh.net/
+link3_label=NC Mesh
+link4=https://discord.gg/AUjz5RGGVu
+link4_label=NC Mesh Discord
+link5=https://birminghammesh.org/
+link5_label=Birmingham Mesh (AL)
+link6=https://mtnme.sh/
+link6_label=Mountain Mesh
+link7=https://discord.gg/4WN32RHGSs
+link7_label=Mountain Mesh Discord
+link8=https://view.mtnme.sh/map
+link8_label=Mountain Mesh View
+# Fellow mesh networks - Original meshbros
+link9=https://pugetmesh.org
+link9_label=PugetMesh (Seattle, WA)
+link10=https://baymesh.net
+link10_label=BayMesh (SF Bay Area, CA)
+
+[tools]
+# CSRA-specific tools and resources
+tool1=https://csramesh.duckdns.org/
+tool1_label=CSRA Mesh Network Map
+tool2=https://csramon.duckdns.org/status/all
+tool2_label=CSRA Mesh Service Monitors
+tool3=https://www.csramsh.net/
+tool3_label=CSRA Mesh Skunk Works
+tool4=https://www.csramesh.org/
+tool4_label=CSRA Mesh Website
+tool5=https://discord.com/invite/mgzj2PmhKf
+tool5_label=CSRA Mesh Discord
+# Georgia mesh networks
+tool6=https://middlega.duckdns.org
+tool6_label=Middle GA Mesh Network Map
+tool7=https://discord.gg/6cSJ738Prp
+tool7_label=Middle GA Mesh Discord
+tool8=https://middlegeorgiamesh.org
+tool8_label=Middle GA Mesh Website
+# Mountain Mesh (TN/GA)
+tool9=https://mtnme.sh/
+tool9_label=Mountain Mesh
+tool10=https://discord.gg/4WN32RHGSs
+tool10_label=Mountain Mesh Discord
+tool11=https://view.mtnme.sh/map
+tool11_label=Mountain Mesh View
+
+# Node-specific external links (shown on individual node pages)
+node_link1=https://csramesh.duckdns.org/map.html?node={{ node.id }}
+node_link1_label=CSRA MeshInfo Map
+node_link2=https://meshmap.net/#{{ node.id }}
+node_link2_label=MeshMap
+
+[theme]
+# Header background color (navbar)
+header_color=#9fdef9
+# Header brand/title color
+header_brand_color=#000
+# Header navigation link color
+header_link_color=#555
+# Header active navigation link color
+header_link_active_color=#000
+# Accent color (login/logout button, etc.)
+accent_color=#17a2b8
+# Page background color
+page_background_color=#ffffff
+# Table header background color
+table_header_color=#D7F9FF
+# Table subheader background color
+table_subheader_color=#e1ebef
+# Table border color
+table_border_color=#dee2e6
+# Table alternating row background color
+table_alternating_row_color=#f0f0f0
+# Link color
+link_color=#007bff
+# Link hover color  
+link_color_hover=#0056b3
+# Control color (buttons, form controls)
+control_color=#17a2b8
+# Control hover color
+control_color_hover=#1396a5
+# Chat box background color
+chat_box_background_color=#f0f0f0
+# Chat box border color (leave empty for no border)
+chat_box_border_color=
+# Banner background color (e.g. for newest node welcome in nodes page)
+banner_background_color=#F9F9D7
+# Favicon background color override (optional, falls back to accent_color if not set)
+favicon_background_color=
+# Favicon logo (stroke) color override (optional, falls back to auto-contrast if not set)
+favicon_logo_color=

@@ -1,5 +1,6 @@
 import configparser
 import mysql.connector
+import mysql.connector.pooling
 import bcrypt
 import utils
 import re
@@ -7,6 +8,8 @@ import jwt
 import time
 import logging
 import uuid
+import string
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +19,135 @@ class Register:
         config = configparser.ConfigParser()
         config.read('config.ini')
         self.config = config
-        self.db = mysql.connector.connect(
-            host=self.config["database"]["host"],
-            user=self.config["database"]["username"],
-            password=self.config["database"]["password"],
-            database=self.config["database"]["database"],
-            charset="utf8mb4"
-        )
-        cur = self.db.cursor()
-        cur.execute("SET NAMES utf8mb4;")
+
+        # Use connection pooling for better security and performance
+        try:
+            pool_config = {
+                'host': self.config["database"]["host"],
+                'user': self.config["database"]["username"],
+                'password': self.config["database"]["password"],
+                'database': self.config["database"]["database"],
+                'charset': "utf8mb4",
+                'pool_name': 'meshinfo_pool',
+                'pool_size': 5,
+                'pool_reset_session': True,
+                'autocommit': False
+            }
+            self.db_pool = mysql.connector.pooling.MySQLConnectionPool(**pool_config)
+            # Test the connection
+            test_conn = self.db_pool.get_connection()
+            test_conn.close()
+        except mysql.connector.Error as err:
+            logger.error(f"Database connection pool error: {err}")
+            # Fallback to single connection
+            self.db_pool = None
+            self.db = mysql.connector.connect(
+                host=self.config["database"]["host"],
+                user=self.config["database"]["username"],
+                password=self.config["database"]["password"],
+                database=self.config["database"]["database"],
+                charset="utf8mb4"
+            )
+            cur = self.db.cursor()
+            cur.execute("SET NAMES utf8mb4;")
+
+    def get_db_connection(self):
+        """Get database connection from pool or fallback connection."""
+        if self.db_pool:
+            return self.db_pool.get_connection()
+        else:
+            return self.db
+
+    def validate_password(self, password):
+        """Validate password against security policy."""
+        # Get password policy from config, with defaults
+        min_length = int(self.config.get("registrations", "password_min_length", fallback="8"))
+        require_uppercase = self.config.getboolean("registrations", "password_require_uppercase", fallback=True)
+        require_lowercase = self.config.getboolean("registrations", "password_require_lowercase", fallback=True)
+        require_numbers = self.config.getboolean("registrations", "password_require_numbers", fallback=True)
+        require_special = self.config.getboolean("registrations", "password_require_special", fallback=True)
+
+        if len(password) < min_length:
+            return False, f"Password must be at least {min_length} characters long"
+
+        if require_uppercase and not any(c.isupper() for c in password):
+            return False, "Password must contain at least one uppercase letter"
+
+        if require_lowercase and not any(c.islower() for c in password):
+            return False, "Password must contain at least one lowercase letter"
+
+        if require_numbers and not any(c.isdigit() for c in password):
+            return False, "Password must contain at least one number"
+
+        if require_special and not any(c in string.punctuation for c in password):
+            return False, "Password must contain at least one special character"
+
+        return True, "Password is valid"
+
+    def record_failed_login(self, email, ip_address=None):
+        """Record a failed login attempt."""
+        if self.db_pool:
+            conn = self.db_pool.get_connection()
+        else:
+            conn = self.db
+
+        try:
+            sql = """INSERT INTO failed_logins (email, ip_address, attempt_time)
+                     VALUES (%s, %s, NOW())"""
+            cur = conn.cursor()
+            cur.execute(sql, (email.lower(), ip_address))
+            conn.commit()
+            cur.close()
+        except mysql.connector.Error as err:
+            logger.error(f"Failed to record failed login: {err}")
+        finally:
+            if self.db_pool:
+                conn.close()
+
+    def get_failed_login_count(self, email, minutes=30):
+        """Get the count of failed login attempts for an email in the specified time window."""
+        if self.db_pool:
+            conn = self.db_pool.get_connection()
+        else:
+            conn = self.db
+
+        try:
+            sql = """SELECT COUNT(*) FROM failed_logins
+                     WHERE email = %s AND attempt_time > DATE_SUB(NOW(), INTERVAL %s MINUTE)"""
+            cur = conn.cursor()
+            cur.execute(sql, (email.lower(), minutes))
+            count = cur.fetchone()[0]
+            cur.close()
+            return count
+        except mysql.connector.Error as err:
+            logger.error(f"Failed to get failed login count: {err}")
+            return 0
+        finally:
+            if self.db_pool:
+                conn.close()
+
+    def clear_failed_logins(self, email):
+        """Clear failed login attempts for a successful login."""
+        if self.db_pool:
+            conn = self.db_pool.get_connection()
+        else:
+            conn = self.db
+
+        try:
+            sql = "DELETE FROM failed_logins WHERE email = %s"
+            cur = conn.cursor()
+            cur.execute(sql, (email.lower(),))
+            conn.commit()
+            cur.close()
+        except mysql.connector.Error as err:
+            logger.error(f"Failed to clear failed logins: {err}")
+        finally:
+            if self.db_pool:
+                conn.close()
+
+    def generate_secure_code(self, length=32):
+        """Generate a cryptographically secure random code."""
+        return secrets.token_urlsafe(length)
 
     def verify(self, username, email):
         sql = "SELECT 1 FROM meshuser WHERE username=%s OR email=%s"
@@ -55,13 +178,19 @@ VALUES (%s, %s, %s, %s)"""
         username_regex = r'^\w+$'
         if not email or not re.match(email_regex, email):
             return {"error": "Invalid email."}
-        elif not password or len(password) < 6:
-            return {"error": "Invalid password."}
-        elif not username or not re.match(username_regex, username):
+
+        # Use enhanced password validation
+        password_valid, password_message = self.validate_password(password)
+        if not password_valid:
+            return {"error": password_message}
+
+        if not username or not re.match(username_regex, username):
             return {"error": "Invalid username."}
-        elif not self.verify(username, password):
+        elif not self.verify(username, email):
             return {"error": "Username or email already exist."}
-        code = utils.generate_random_code(4)
+
+        # Use secure code generation
+        code = self.generate_secure_code(8)  # More secure than utils.generate_random_code(4)
         self.add_user(
            username,
            email.lower(),
@@ -86,7 +215,15 @@ WHERE email = %s"""
         cur.close()
         self.db.commit()
 
-    def authenticate(self, email, password):
+    def authenticate(self, email, password, ip_address=None):
+        # Check for account lockout
+        max_failed_attempts = int(self.config.get("registrations", "max_failed_login_attempts", fallback="5"))
+        lockout_duration = int(self.config.get("registrations", "login_lockout_duration_minutes", fallback="30"))
+
+        failed_count = self.get_failed_login_count(email, lockout_duration)
+        if failed_count >= max_failed_attempts:
+            return {"error": f"Account temporarily locked due to too many failed login attempts. Try again in {lockout_duration} minutes."}
+
         sql = """SELECT password, username FROM meshuser
 WHERE status='VERIFIED' AND email = %s"""
         params = (email.lower(), )
@@ -95,8 +232,11 @@ WHERE status='VERIFIED' AND email = %s"""
         row = cur.fetchone()
         hashed_password = row[0] if row else None
         cur.close()
-        if hashed_password and \
-                utils.check_password(password, hashed_password):
+
+        if hashed_password and utils.check_password(password, hashed_password):
+            # Clear any failed login attempts on successful login
+            self.clear_failed_logins(email)
+
             encoded_jwt = jwt.encode(
                 {
                     "email": email,
@@ -107,8 +247,10 @@ WHERE status='VERIFIED' AND email = %s"""
                 algorithm="HS256"
             )
             return {"success": encoded_jwt}
-
-        return {"error": "Login failed."}
+        else:
+            # Record failed login attempt
+            self.record_failed_login(email, ip_address)
+            return {"error": "Login failed."}
 
     def auth(self, encoded_jwt):
         try:
@@ -198,9 +340,10 @@ WHERE email = %s"""
 
     def reset_password(self, token, new_password):
         """Reset password using secure token."""
-        # Validate new password (we'll need to add this validation function)
-        if len(new_password) < 8:
-            return {"error": "Password must be at least 8 characters long."}
+        # Use enhanced password validation
+        password_valid, password_message = self.validate_password(new_password)
+        if not password_valid:
+            return {"error": password_message}
 
         try:
             # Decode and validate token

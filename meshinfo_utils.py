@@ -35,23 +35,23 @@ def log_memory_usage(force=False):
     """Log memory usage information."""
     import psutil
     import gc
-    
+
     process = psutil.Process()
     memory_info = process.memory_info()
     current_usage = memory_info.rss
-    
+
     # Force garbage collection
     gc.collect()
-    
+
     logging.info(f"Memory Usage: {current_usage / 1024 / 1024:.2f} MB")
-    
+
     return current_usage
 
 def get_cache_size():
     """Get total size of cache directory in bytes."""
     import os
     cache_dir = os.path.join(os.path.dirname(__file__), 'runtime_cache')
-    
+
     if os.path.exists(cache_dir):
         try:
             total_size = 0
@@ -68,7 +68,7 @@ def get_cache_entry_count():
     """Get number of entries in cache directory."""
     import os
     cache_dir = os.path.join(os.path.dirname(__file__), 'runtime_cache')
-    
+
     if os.path.exists(cache_dir):
         try:
             return len([f for f in os.listdir(cache_dir) if not f.endswith('.lock')])
@@ -80,7 +80,7 @@ def get_largest_cache_entries(limit=5):
     """Get the largest cache entries with their sizes."""
     import os
     cache_dir = os.path.join(os.path.dirname(__file__), 'runtime_cache')
-    
+
     if os.path.exists(cache_dir):
         try:
             entries = []
@@ -100,7 +100,7 @@ def log_cache_stats():
         total_size = get_cache_size()
         entry_count = get_cache_entry_count()
         largest_entries = get_largest_cache_entries()
-        
+
         logging.info(f"Cache Statistics:")
         logging.info(f"  Total Size: {total_size / 1024 / 1024:.2f} MB")
         logging.info(f"  Entry Count: {entry_count}")
@@ -118,22 +118,22 @@ def cleanup_cache():
         log_memory_usage(force=True)
         logging.info("Cache stats before cleanup:")
         log_cache_stats()
-        
+
         # Clear nodes-related cache entries
         clear_nodes_cache()
-        
+
         # Clear database query cache
         clear_database_cache()
-        
+
         # Force garbage collection
         import gc
         gc.collect()
-        
+
         logging.info("Memory usage after cache cleanup:")
         log_memory_usage(force=True)
         logging.info("Cache stats after cleanup:")
         log_cache_stats()
-        
+
     except Exception as e:
         logging.error(f"Error during cache cleanup: {e}")
 
@@ -165,27 +165,7 @@ def format_timestamp(timestamp):
     except (ValueError, TypeError):
         return str(timestamp)
 
-def time_ago(timestamp):
-    """Get human-readable time ago string."""
-    if timestamp is None:
-        return "Unknown"
-    try:
-        dt = datetime.fromtimestamp(timestamp)
-        now = datetime.now()
-        diff = now - dt
-        
-        if diff.days > 0:
-            return f"{diff.days} days ago"
-        elif diff.seconds > 3600:
-            hours = diff.seconds // 3600
-            return f"{hours} hours ago"
-        elif diff.seconds > 60:
-            minutes = diff.seconds // 60
-            return f"{minutes} minutes ago"
-        else:
-            return "Just now"
-    except (ValueError, TypeError):
-        return "Unknown"
+# time_ago function removed - use the timezone-aware version from timezone_utils.py instead
 
 def convert_to_local(timestamp):
     """Convert timestamp to local timezone."""
@@ -202,7 +182,7 @@ def get_cached_chat_data(page=1, per_page=50, channel=None):
     md = get_meshdata()
     if not md:
         return None
-    
+
     # Build channel filter SQL
     channel_filter = ""
     channel_params = []
@@ -216,37 +196,40 @@ def get_cached_chat_data(page=1, per_page=50, channel=None):
         else:
             channel_filter = " WHERE t.channel = %s"
             channel_params = [int(channel)]
-    
+
     # Get total count first (this is fast)
     cur = md.db.cursor()
     cur.execute(f"SELECT COUNT(DISTINCT t.message_id) FROM text t{channel_filter}", channel_params)
     total = cur.fetchone()[0]
     cur.close()
-    
+
     # Get paginated chat messages (without reception data)
     offset = (page - 1) * per_page
     cur = md.db.cursor(dictionary=True)
     cur.execute(f"""
-        SELECT t.* FROM text t{channel_filter}
+        SELECT t.message_id, t.from_id, t.to_id, t.text, t.channel,
+               UNIX_TIMESTAMP(t.ts_created) as ts_created
+        FROM text t{channel_filter}
         ORDER BY t.ts_created DESC
         LIMIT %s OFFSET %s
     """, channel_params + [per_page, offset])
     messages = cur.fetchall()
     cur.close()
-    
+
     # Get reception data for these messages in a separate query
     if messages:
         message_ids = [msg['message_id'] for msg in messages]
         placeholders = ','.join(['%s'] * len(message_ids))
         cur = md.db.cursor(dictionary=True)
         cur.execute(f"""
-            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start, rx_time
+            SELECT message_id, received_by_id, rx_snr, rx_rssi, hop_limit, hop_start,
+                   UNIX_TIMESTAMP(rx_time) as rx_time
             FROM message_reception
             WHERE message_id IN ({placeholders})
         """, message_ids)
         receptions = cur.fetchall()
         cur.close()
-        
+
         # Group receptions by message_id
         receptions_by_message = {}
         for reception in receptions:
@@ -259,35 +242,30 @@ def get_cached_chat_data(page=1, per_page=50, channel=None):
                 "rx_rssi": int(reception['rx_rssi']) if reception['rx_rssi'] is not None else 0,
                 "hop_limit": int(reception['hop_limit']) if reception['hop_limit'] is not None else None,
                 "hop_start": int(reception['hop_start']) if reception['hop_start'] is not None else None,
-                "rx_time": reception['rx_time'].timestamp() if isinstance(reception['rx_time'], datetime) else reception['rx_time']
+                "rx_time": reception['rx_time']
             })
     else:
         receptions_by_message = {}
-    
+
     # Process messages
     chats = []
     prev_key = ""
     for row in messages:
-        record = {}
-        for key, value in row.items():
-            if isinstance(value, datetime):
-                record[key] = value.timestamp()
-            else:
-                record[key] = value
-        
+        record = dict(row)  # All timestamps are already Unix timestamps from SQL
+
         # Add reception data
         record["receptions"] = receptions_by_message.get(record['message_id'], [])
-        
+
         # Convert IDs to hex
         record["from"] = utils.convert_node_id_from_int_to_hex(record["from_id"])
         record["to"] = utils.convert_node_id_from_int_to_hex(record["to_id"])
-        
+
         # Deduplicate messages
         msg_key = f"{record['from']}{record['to']}{record['text']}{record['message_id']}"
         if msg_key != prev_key:
             chats.append(record)
             prev_key = msg_key
-    
+
     return {
         "items": chats,
         "total": total,
@@ -321,18 +299,37 @@ def get_node_page_data(node_hex, all_nodes=None):
     cutoff_time = int(time.time()) - zero_hop_timeout
 
     # --- Fetch all raw data ---
-    node_telemetry = md.get_node_telemetry(node_id)
-    node_route = md.get_route_coordinates(node_id)
-    telemetry_graph = draw_graph(node_telemetry)
-    neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
-    
+    try:
+        node_telemetry = md.get_node_telemetry(node_id)
+    except Exception as e:
+        logging.error(f"Error getting telemetry for node {node_hex}: {e}")
+        node_telemetry = []
+
+    try:
+        node_route = md.get_route_coordinates(node_id)
+    except Exception as e:
+        logging.error(f"Error getting route coordinates for node {node_hex}: {e}")
+        node_route = []
+
+    try:
+        telemetry_graph = draw_graph(node_telemetry)
+    except Exception as e:
+        logging.error(f"Error drawing telemetry graph for node {node_hex}: {e}")
+        telemetry_graph = ""
+
+    try:
+        neighbor_heard_by = md.get_heard_by_from_neighbors(node_id)
+    except Exception as e:
+        logging.error(f"Error getting neighbors for node {node_hex}: {e}")
+        neighbor_heard_by = []
+
     # Only process LOS if enabled
     los_profiles = {}
     if los_enabled:
         # Create a minimal nodes dict for LOSProfile with only the current node and its neighbors
         los_nodes = {}
         los_nodes[node_hex] = current_node
-        
+
         # Add only the nodes that are within LOS distance and have positions
         max_distance = int(config.get("los", "max_distance", fallback=5000))
         for other_hex, other_node in all_nodes.items():
@@ -353,9 +350,16 @@ def get_node_page_data(node_hex, all_nodes=None):
                         los_nodes[other_hex] = other_node
             except:
                 continue
-        
-        lp = LOSProfile(los_nodes, node_id, config, None)  # cache not available in utils
-        
+
+        # Create a simple cache for LOS profiles if not available
+        from database_cache import DatabaseCache
+        try:
+            cache = DatabaseCache()
+        except:
+            cache = None  # Fallback to no cache
+
+        lp = LOSProfile(los_nodes, node_id, config, cache)
+
         # Get LOS profiles and clean up the LOSProfile instance
         try:
             los_profiles = lp.get_profiles()
@@ -403,7 +407,7 @@ def get_node_page_data(node_hex, all_nodes=None):
         linked_node_ids.add(heard['received_by_id'])
     if current_node.get('updated_via'):
         linked_node_ids.add(current_node.get('updated_via'))
-        
+
     linked_nodes_details = {}
     for linked_id_int in linked_node_ids:
         if not linked_id_int: continue
@@ -420,7 +424,7 @@ def get_node_page_data(node_hex, all_nodes=None):
     # Build elsewhere links
     node_hex_id = utils.convert_node_id_from_int_to_hex(node_id)
     elsewhere_links = get_elsewhere_links(node_id, node_hex_id)
-    
+
     # Return a dictionary that does NOT include the full `all_nodes` object
     return {
         'node': current_node,
@@ -441,16 +445,16 @@ def calculate_node_distance(node1_hex, node2_hex):
     nodes = get_cached_nodes()
     if not nodes:
         return None
-    
+
     node1 = nodes.get(node1_hex)
     node2 = nodes.get(node2_hex)
-    
+
     if not node1 or not node2:
         return None
-    
+
     if not node1.get("position") or not node2.get("position"):
         return None
-    
+
     return utils.calculate_distance_between_nodes(node1, node2)
 
 def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=None, zero_hop_links=None, sender_pos=None, receiver_pos=None, debug=False):
@@ -623,69 +627,66 @@ def find_relay_node_by_suffix(relay_suffix, nodes, receiver_ids=None, sender_id=
 def get_elsewhere_links(node_id, node_hex_id):
     """
     Build Elsewhere links for a node based on config.ini [tools] section.
-    
+
     Args:
         node_id: The node ID as integer
         node_hex_id: The node ID as hex string
-        
+
     Returns:
         List of (label, url, icon) tuples for the Elsewhere section
     """
     elsewhere_links = []
-    
+
     def get_icon_for_tool(label, url):
         """Determine appropriate icon based on tool name and URL."""
         label_lower = label.lower()
         url_lower = url.lower()
-        
+
         # Map-related tools
         if 'map' in label_lower or 'map' in url_lower:
             return '🗺️'
-        
+
         # Logs/Logging tools
         if 'log' in label_lower or 'log' in url_lower:
             return '📋'
-        
+
         # Dashboard/Monitoring tools
         if 'dashboard' in label_lower or 'monitor' in label_lower:
             return '📊'
-        
+
         # Network/Graph tools
         if 'graph' in label_lower or 'network' in label_lower:
             return '🕸️'
-        
+
         # Chat/Message tools
         if 'chat' in label_lower or 'message' in label_lower:
             return '💬'
-        
+
         # Settings/Config tools
         if 'config' in label_lower or 'setting' in label_lower:
             return '⚙️'
-        
+
         # Default icon for external links
         return '🔗'
-    
-    # Process keys ending with _node_link
+
+    # Process keys starting with node_link
     for key, value in config.items('tools'):
-        if key.endswith('_node_link'):
-            # Extract the base key (remove _node_link suffix)
-            base_key = key[:-10]  # Remove '_node_link'
-            
+        if key.startswith('node_link') and not key.endswith('_label'):
             # Get the label from the corresponding _label key
-            label_key = base_key + '_label'
+            label_key = key + '_label'
             label = config.get('tools', label_key, fallback=None)
             if not label:
                 # Fallback to a generated label if no _label is found
-                label = base_key.replace('_', ' ').title()
-            
+                label = 'External Link'
+
             # Replace placeholders in URL and strip any extra quotes
             url = value.replace('{{ node.id }}', str(node_id)).replace('{{ node.hex_id }}', node_hex_id).strip('"')
-            
+
             # Get appropriate icon
             icon = get_icon_for_tool(label, url)
-            
+
             elsewhere_links.append((label, url, icon))
-    
+
     return elsewhere_links
 
 def get_cached_nodes():
@@ -703,16 +704,16 @@ def get_cached_hardware_models():
 def get_role_badge(role_value):
     """
     Convert a role value to a colored badge with improved readability.
-    
+
     Args:
         role_value: The numeric role value
-        
+
     Returns:
         A tuple of (badge_text, badge_style) for styling
     """
     if role_value is None:
         return ("?", "background-color: #6c757d; color: white;")
-    
+
     role_mapping = {
         0: ("C", "background-color: #0d6efd; color: white;"),      # Client - Dark Blue
         1: ("CM", "background-color: #0dcaf0; color: #000;"),      # Client Mute - Light Blue with dark text
@@ -727,5 +728,5 @@ def get_role_badge(role_value):
         10: ("AT", "background-color: #6c757d; color: white;"),    # ATAK Tracker - Gray
         11: ("RL", "background-color: #dc3545; color: white;"),    # Router Late - Red
     }
-    
-    return role_mapping.get(role_value, ("?", "background-color: #212529; color: white;")) 
+
+    return role_mapping.get(role_value, ("?", "background-color: #212529; color: white;"))

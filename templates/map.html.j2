@@ -13,7 +13,7 @@
 
 {% block content %}
   <div id="map" class="map" style="height: 100vh"></div>
-  
+
   {# Settings Toggle Button #}
   <button id="settingsToggle" class="settings-toggle">
     <i class="bi bi-gear-fill"></i>
@@ -25,7 +25,7 @@
       <h5 class="m-0">Settings</h5>
       <small class="text-muted">Changes are only saved in this browser.</small>
     </div>
-    
+
     <div class="mb-3">
       <label class="form-label">Nodes Max Age</label>
       <select id="nodesMaxAge" class="form-select form-select-sm">
@@ -35,14 +35,14 @@
         <option value="10800">3 hours</option>
         <option value="21600">6 hours</option>
         <option value="43200">12 hours</option>
-        <option value="86400">24 hours</option>
+        <option value="86400" selected>24 hours</option>
         <option value="172800">2 days</option>
         <option value="259200">3 days</option>
         <option value="345600">4 days</option>
         <option value="432000">5 days</option>
         <option value="518400">6 days</option>
         <option value="604800">7 days</option>
-        <option value="0">Show All</option>
+        <option value="0" selected>Show All</option>
       </select>
       <small class="text-muted d-block">Nodes not updated within this time are hidden. Reload to update map.</small>
     </div>
@@ -56,7 +56,7 @@
         <option value="10800">3 hours</option>
         <option value="21600">6 hours</option>
         <option value="43200">12 hours</option>
-        <option value="86400">24 hours</option>
+        <option value="86400" selected>24 hours</option>
         <option value="172800">2 days</option>
         <option value="259200">3 days</option>
         <option value="345600">4 days</option>
@@ -77,7 +77,7 @@
         <option value="10800">3 hours</option>
         <option value="21600">6 hours</option>
         <option value="43200">12 hours</option>
-        <option value="86400">24 hours</option>
+        <option value="86400" selected>24 hours</option>
         <option value="172800">2 days</option>
         <option value="259200">3 days</option>
         <option value="345600">4 days</option>
@@ -184,21 +184,21 @@
       if (channelId in channelColors) {
         return channelColors[channelId];
       }
-      
+
       // For unknown channels, generate a consistent color based on the channel ID
       const hash = channelId.toString().split('').reduce((acc, char) => {
         return char.charCodeAt(0) + ((acc << 5) - acc);
       }, 0);
-      
+
       const color = `hsl(${Math.abs(hash) % 360}, 70%, 50%)`;
       return color;
     }
 
     // Add settings management code at the top
     const settings = {
-      nodesMaxAge: localStorage.getItem('nodesMaxAge') || '0', // Default to Show All
-      nodesDisconnectedAge: localStorage.getItem('nodesDisconnectedAge') || '10800', // Default to 3 hours (10800 seconds)
-      nodesOfflineAge: localStorage.getItem('nodesOfflineAge') || '10800', // Default to 3 hours (10800 seconds)
+      nodesMaxAge: localStorage.getItem('nodesMaxAge') || '0', // Default to Show All for debugging
+      nodesDisconnectedAge: localStorage.getItem('nodesDisconnectedAge') || '86400', // Default to 24 hours
+      nodesOfflineAge: localStorage.getItem('nodesOfflineAge') || '86400', // Default to 24 hours
       neighboursMaxDistance: localStorage.getItem('neighboursMaxDistance') || '5000',
       channelFilter: localStorage.getItem('channelFilter') || 'all'
     };
@@ -346,7 +346,7 @@
     const features = [];
     // Create a map to track positions
     const positionMap = new Map();
-    
+
     Object.values(nodes).forEach(function(node) {
       // Only add features for nodes with valid lat/lon
       if (
@@ -361,7 +361,7 @@
       ) {
         const posKey = node.position.join(',');
         const offset = positionMap.get(posKey) || 0;
-        
+
         // Create slightly offset coordinates if this position was seen before
         let offsetCoords = [...node.position];
         if (offset > 0) {
@@ -369,7 +369,7 @@
           offsetCoords[0] += 0.0001;
           offsetCoords[1] += 0.0001;
         }
-        
+
         const feature = new Feature({
           geometry: new Point(fromLonLat(offsetCoords)),
           node: node,
@@ -507,7 +507,7 @@
     function applyFilters() {
       const now = Math.floor(Date.now() / 1000);
       const features = layer.getSource().getFeatures();
-      
+
       features.forEach(function(feature) {
         const node = feature.getProperties().node;
         let visible = true;
@@ -604,7 +604,7 @@
       neighborLayers.forEach(function(layer) {
         const maxDistance = parseInt(settings.neighboursMaxDistance);
         const features = layer.getSource().getFeatures();
-        
+
         features.forEach(function(feature) {
           const geometry = feature.getGeometry();
           const coordinates = geometry.getCoordinates();
@@ -612,7 +612,7 @@
             coordinates[0],
             coordinates[1]
           ) * 1000; // Convert km to meters
-          
+
           feature.setStyle(distance <= maxDistance ? feature.get('originalStyle') : null);
         });
       });
@@ -637,17 +637,17 @@
           const node = f.getProperties().node;
           return node && node.id === selectedNodeId;
         });
-        
+
         if (targetFeature) {
           const node = targetFeature.getProperties().node;
-          
+
           // Center the map on the node first
           map.getView().animate({
             center: targetFeature.getGeometry().getCoordinates(),
             zoom: 15,
             duration: 1000
           });
-          
+
           // Then trigger the node selection logic directly
           setTimeout(() => {
             // Clear existing neighbor layers
@@ -689,7 +689,7 @@
 
               const currentFill = currentImage.getFill();
               const currentStroke = currentImage.getStroke();
-              
+
               if (n.id === node.id || connectedNodeIds.has(n.id)) {
                 // Clicked node and connected nodes get highest z-index
                 f.setStyle(new Style({
@@ -725,41 +725,41 @@
 
             // Show and populate the node info panel
             $('#details').show();
-            
+
             // Build the basic info panel
             var panel = '<div style="position: relative; margin-bottom: 12px">'
-              + '<span title="' + (node.online ? 'Online' : 'Offline') + '" style="position: absolute; top: 0; right: 0; font-size: 1.5em">' 
+              + '<span title="' + (node.online ? 'Online' : 'Offline') + '" style="position: absolute; top: 0; right: 0; font-size: 1.5em">'
               + (node.online ? '🟢' : '⚫') + '</span>'
               + '<div class="fw-bold"><a href="node_' + node.id + '.html" target="_blank">' + node.long_name + '</a></div>'
               + '<div class="text-muted small">' + node.id + ' <span style="font-weight: bold; color: #333;">(' + node.short_name + ')</span></div>'
               + '</div>'
               + '<div class="small">'
               + '<div class="mb-2"><i class="text-muted">Last seen:</i> ' + node.last_seen + '</div>'
-              + '<div class="mb-2"><i class="text-muted">MQTT Status:</i> ' 
+              + '<div class="mb-2"><i class="text-muted">MQTT Status:</i> '
               + (node.ts_uplink ? 'Connected ' + timeAgo(node.ts_uplink) : 'Not Connected')
               + '</div>'
               + '<div class="mb-2"><i class="text-muted">Position:</i> ' + node.position + '</div>'
               + '<div class="mb-2"><i class="text-muted">Location:</i> ' + 'Loading...' + '</div>'
-              + '<div class="mb-2"><i class="text-muted">Channel:</i> ' 
+              + '<div class="mb-2"><i class="text-muted">Channel:</i> '
               + node.channel_name
               + '</div>';
-            
+
             // Add mapreport-specific fields if available
             if (node.has_default_channel !== null && node.has_default_channel !== undefined) {
-              panel += '<div class="mb-2"><i class="text-muted">Default Channel:</i> ' 
+              panel += '<div class="mb-2"><i class="text-muted">Default Channel:</i> '
                 + (node.has_default_channel ? '<span style="color: green;">Yes</span>' : '<span style="color: orange;">No</span>')
                 + '</div>';
             }
-            
+
             if (node.num_online_local_nodes !== null && node.num_online_local_nodes !== undefined) {
-              panel += '<div class="mb-2"><i class="text-muted">Local Nodes:</i> ' 
+              panel += '<div class="mb-2"><i class="text-muted">Local Nodes:</i> '
                 + node.num_online_local_nodes + ' nodes</div>';
             }
-            
+
             if (node.region !== null && node.region !== undefined) {
               var regionNames = {
                 1: 'US (915 MHz)',
-                2: 'EU (433 MHz)', 
+                2: 'EU (433 MHz)',
                 3: 'CN (470 MHz)',
                 4: 'JP (923 MHz)',
                 5: 'ANZ (915 MHz)',
@@ -771,10 +771,10 @@
                 11: 'TH (920 MHz)',
                 12: 'LORA_24 (2.4 GHz)'
               };
-              panel += '<div class="mb-2"><i class="text-muted">LoRa Region:</i> ' 
+              panel += '<div class="mb-2"><i class="text-muted">LoRa Region:</i> '
                 + (regionNames[node.region] || 'Unknown (' + node.region + ')') + '</div>';
             }
-            
+
             if (node.modem_preset !== null && node.modem_preset !== undefined) {
               var modemPresetNames = {
                 0: 'Long Fast',
@@ -787,10 +787,10 @@
                 7: 'Long Moderate',
                 8: 'Short Turbo'
               };
-              panel += '<div class="mb-2"><i class="text-muted">Modem Preset:</i> ' 
+              panel += '<div class="mb-2"><i class="text-muted">Modem Preset:</i> '
                 + (modemPresetNames[node.modem_preset] || 'Unknown (' + node.modem_preset + ')') + '</div>';
             }
-            
+
             panel += '</div>';
 
             // Add the heard section
@@ -864,10 +864,23 @@
             panel += "</tbody></table>";
 
             // Add elsewhere section
+            {% set node_links = [] %}
+            {% if 'tools' in config %}
+              {% for key, value in config['tools'].items() if key.startswith('node_link') and not key.endswith('_label') %}
+                {% if value %}
+                  {% set label_key = key + '_label' %}
+                  {% set label = config['tools'][label_key] if label_key in config['tools'] else 'External Link' %}
+                  {% set _ = node_links.append({'url': value, 'label': label}) %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% if node_links %}
             panel += '<br/><b>Elsewhere</b><br/>';
             var node_id = parseInt(node.id, 16);
-            panel += '<a href="https://meshtastic.davekeogh.com/?node_id=' + node_id + '" target="_blank">PugetMesh Map</a><br/>';
-            panel += '<a href="https://meshmap.net/#' + node_id + '" target="_blank">MeshMap</a><br/>';
+            {% for link in node_links %}
+            panel += '<a href="{{ link.url|replace('{{ node.id }}', "' + node_id + '") }}" target="_blank">{{ link.label }}</a><br/>';
+            {% endfor %}
+            {% endif %}
 
             // Draw connection lines
             // Draw neighbor connections
@@ -893,7 +906,7 @@
                   node.position[0] < -180 || node.position[0] > 180 ||
                   node.position[1] < -90 || node.position[1] > 90
                 ) return;
-                
+
                 const featureLine = new Feature({
                   geometry: new LineString([
                     fromLonLat(node.position),
@@ -943,7 +956,7 @@
                   node.position[0] < -180 || node.position[0] > 180 ||
                   node.position[1] < -90 || node.position[1] > 90
                 ) return;
-                
+
                 const featureLine = new Feature({
                   geometry: new LineString([
                     fromLonLat(node.position),
@@ -992,10 +1005,10 @@
                   node.position[0] < -180 || node.position[0] > 180 ||
                   node.position[1] < -90 || node.position[1] > 90
                 ) return;
-                
+
                 // Skip if we already drew a line for this connection
                 if (node.zero_hop_data.heard.some(h => h.node_id === heard.node_id)) return;
-                
+
                 const featureLine = new Feature({
                   geometry: new LineString([
                     fromLonLat(node.position),
@@ -1089,13 +1102,13 @@
       neighborLayers = [];
       overlay.setPosition(undefined);
       closer.blur();
-      
+
       // Hide and clear node info panel
       $('#details').hide();
       nodeTitle.innerHTML = '';
       nodeSubtitle.innerHTML = '';
       nodeContent.innerHTML = '';
-      
+
       return false;
     };
 
@@ -1121,13 +1134,13 @@
         var feature = map.forEachFeatureAtPixel(event.pixel, function(feature) {
           return feature;
         });
-        
+
         if (feature) {
           var properties = feature.getProperties();
           var node = properties.node;
           var address = await reverseGeocode(node.position[0], node.position[1]);
           var display_name = 'Unknown location';
-          
+
           if (address && address.address) {
             // Handle Nominatim format
             var location_parts = [address.address.town, address.address.city, address.address.county, address.address.state, address.address.country].filter(Boolean);
@@ -1164,7 +1177,7 @@
 
             const currentFill = currentImage.getFill();
             const currentStroke = currentImage.getStroke();
-            
+
             if (n.id === node.id || connectedNodeIds.has(n.id)) {
               // Clicked node and connected nodes get highest z-index
               f.setStyle(new Style({
@@ -1200,41 +1213,41 @@
 
           // Show and populate the node info panel
           $('#details').show();
-          
+
           // Build the basic info panel
           var panel = '<div style="position: relative; margin-bottom: 12px">'
-            + '<span title="' + (node.online ? 'Online' : 'Offline') + '" style="position: absolute; top: 0; right: 0; font-size: 1.5em">' 
+            + '<span title="' + (node.online ? 'Online' : 'Offline') + '" style="position: absolute; top: 0; right: 0; font-size: 1.5em">'
             + (node.online ? '🟢' : '⚫') + '</span>'
             + '<div class="fw-bold"><a href="node_' + node.id + '.html" target="_blank">' + node.long_name + '</a></div>'
             + '<div class="text-muted small">' + node.id + ' <span style="font-weight: bold; color: #333;">(' + node.short_name + ')</span></div>'
             + '</div>'
             + '<div class="small">'
             + '<div class="mb-2"><i class="text-muted">Last seen:</i> ' + node.last_seen + '</div>'
-            + '<div class="mb-2"><i class="text-muted">MQTT Status:</i> ' 
+            + '<div class="mb-2"><i class="text-muted">MQTT Status:</i> '
             + (node.ts_uplink ? 'Connected ' + timeAgo(node.ts_uplink) : 'Not Connected')
             + '</div>'
             + '<div class="mb-2"><i class="text-muted">Position:</i> ' + node.position + '</div>'
             + '<div class="mb-2"><i class="text-muted">Location:</i> ' + display_name + '</div>'
-            + '<div class="mb-2"><i class="text-muted">Channel:</i> ' 
+            + '<div class="mb-2"><i class="text-muted">Channel:</i> '
             + node.channel_name
             + '</div>';
-          
+
           // Add mapreport-specific fields if available
           if (node.has_default_channel !== null && node.has_default_channel !== undefined) {
-            panel += '<div class="mb-2"><i class="text-muted">Default Channel:</i> ' 
+            panel += '<div class="mb-2"><i class="text-muted">Default Channel:</i> '
               + (node.has_default_channel ? '<span style="color: green;">Yes</span>' : '<span style="color: orange;">No</span>')
               + '</div>';
           }
-          
+
           if (node.num_online_local_nodes !== null && node.num_online_local_nodes !== undefined) {
-            panel += '<div class="mb-2"><i class="text-muted">Local Nodes:</i> ' 
+            panel += '<div class="mb-2"><i class="text-muted">Local Nodes:</i> '
               + node.num_online_local_nodes + ' nodes</div>';
           }
-          
+
           if (node.region !== null && node.region !== undefined) {
             var regionNames = {
               1: 'US (915 MHz)',
-              2: 'EU (433 MHz)', 
+              2: 'EU (433 MHz)',
               3: 'CN (470 MHz)',
               4: 'JP (923 MHz)',
               5: 'ANZ (915 MHz)',
@@ -1246,10 +1259,10 @@
               11: 'TH (920 MHz)',
               12: 'LORA_24 (2.4 GHz)'
             };
-            panel += '<div class="mb-2"><i class="text-muted">LoRa Region:</i> ' 
+            panel += '<div class="mb-2"><i class="text-muted">LoRa Region:</i> '
               + (regionNames[node.region] || 'Unknown (' + node.region + ')') + '</div>';
           }
-          
+
           if (node.modem_preset !== null && node.modem_preset !== undefined) {
             var modemPresetNames = {
               0: 'Long Fast',
@@ -1262,10 +1275,10 @@
               7: 'Long Moderate',
               8: 'Short Turbo'
             };
-            panel += '<div class="mb-2"><i class="text-muted">Modem Preset:</i> ' 
+            panel += '<div class="mb-2"><i class="text-muted">Modem Preset:</i> '
               + (modemPresetNames[node.modem_preset] || 'Unknown (' + node.modem_preset + ')') + '</div>';
           }
-          
+
           panel += '</div>';
 
           // Add the heard section
@@ -1339,10 +1352,13 @@
           panel += "</tbody></table>";
 
           // Add elsewhere section
+          {% if node_links %}
           panel += '<br/><b>Elsewhere</b><br/>';
           var node_id = parseInt(node.id, 16);
-          panel += '<a href="https://meshtastic.davekeogh.com/?node_id=' + node_id + '" target="_blank">PugetMesh Map</a><br/>';
-          panel += '<a href="https://meshmap.net/#' + node_id + '" target="_blank">MeshMap</a><br/>';
+          {% for link in node_links %}
+          panel += '<a href="{{ link.url|replace('{{ node.id }}', "' + node_id + '") }}" target="_blank">{{ link.label }}</a><br/>';
+          {% endfor %}
+          {% endif %}
 
           // Draw connection lines
           // Draw neighbor connections
@@ -1368,7 +1384,7 @@
                 node.position[0] < -180 || node.position[0] > 180 ||
                 node.position[1] < -90 || node.position[1] > 90
               ) return;
-              
+
               const featureLine = new Feature({
                 geometry: new LineString([
                   fromLonLat(node.position),
@@ -1418,7 +1434,7 @@
                 node.position[0] < -180 || node.position[0] > 180 ||
                 node.position[1] < -90 || node.position[1] > 90
               ) return;
-              
+
               const featureLine = new Feature({
                 geometry: new LineString([
                   fromLonLat(node.position),
@@ -1467,10 +1483,10 @@
                 node.position[0] < -180 || node.position[0] > 180 ||
                 node.position[1] < -90 || node.position[1] > 90
               ) return;
-              
+
               // Skip if we already drew a line for this connection
               if (node.zero_hop_data.heard.some(h => h.node_id === heard.node_id)) return;
-              
+
               const featureLine = new Feature({
                 geometry: new LineString([
                   fromLonLat(node.position),
@@ -1561,4 +1577,4 @@
       content: "x";
     }
   </style>
-{% endblock %} 
+{% endblock %}
