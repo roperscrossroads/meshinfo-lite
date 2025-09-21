@@ -174,6 +174,22 @@ def create_auth_tables(cursor):
     else:
         logger.info("blacklisted_tokens table already exists")
 
+    # Create failed_logins table
+    if not check_table_exists(cursor, "failed_logins"):
+        cursor.execute("""
+            CREATE TABLE failed_logins (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                email VARCHAR(255) NOT NULL,
+                ip_address VARCHAR(45),
+                attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_email_time (email, attempt_time),
+                INDEX idx_attempt_time (attempt_time)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+        logger.info("Created failed_logins table")
+    else:
+        logger.info("failed_logins table already exists")
+
 
 def add_indexes(cursor):
     """Add performance indexes"""
@@ -218,6 +234,9 @@ def create_cleanup_procedure(cursor):
 
                 -- Delete old audit logs (keep 90 days)
                 DELETE FROM auth_audit WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY);
+
+                -- Delete old failed login attempts (keep 7 days)
+                DELETE FROM failed_logins WHERE attempt_time < DATE_SUB(NOW(), INTERVAL 7 DAY);
 
                 -- Clear expired verification codes
                 UPDATE meshuser

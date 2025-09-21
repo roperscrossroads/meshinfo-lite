@@ -1,4 +1,4 @@
-# MeshInfo-Lite
+# MeshInfo-Lite (Generic & Configurable)
 
 Realtime web UI to run against a Meshtastic regional or private mesh network.
 
@@ -6,11 +6,28 @@ Realtime web UI to run against a Meshtastic regional or private mesh network.
 
 MeshInfo-Lite is a highly customized version of [MeshInfo](https://github.com/MeshAddicts/meshinfo) written in Python and connects to an MQTT server that is receiving Meshtastic messages for the purpose of visualizing and inspecting traffic. It uses MariaDB to persist content.
 
+**🎯 NEW: Fully Generic & Configurable!** This version has been made completely generic and configurable via `config.ini` files. Multiple mesh networks can use the same codebase by simply swapping configuration files - no template modifications required!
+
 To make deployment to run an instance for your mesh easy, Docker support is included. We recommend using Docker Compose with a personalized version of the `docker-compose.yml` file to most easily deploy it, but any seasoned Docker user can also use the Docker image alone.
 
-If you use MeshInfoLite and have a publicly accessible instance, we'd like to know! Drop a note to dade@dade.co.za with details and we'll link it below.
+## 🎯 For Other Mesh Networks
 
-See an example instance running on the [South African Mesh](https://mesh.zr1rf.za.net).
+This fork has been made **generic and configurable**. Other mesh networks can:
+
+1. **Fork this repository**
+2. **Copy one of the example configs** (`config-csra.ini.example` or `config-middlega.ini.example`) 
+3. **Customize the config** for their network
+4. **Deploy without any template modifications**
+
+**No more mesh-specific forks needed!** 🎉 Everything is driven by configuration files.
+
+**Example deployments:**
+- [CSRA Mesh](https://csramesh.duckdns.org/) (Central Savannah River Area)
+- [Middle GA Mesh](https://middlega.duckdns.org) (Middle Georgia)
+- [South African Mesh](https://mesh.zr1rf.za.net) (Original example)
+- Your mesh network here!
+
+If you deploy this for your mesh network, let us know and we'll add you to the list above!
 
 If you are running a high elevation node, preferrably a `Router` or `Repeater` node, you might be interested in getting on the notification list for a [cavity filter](https://shop.airframes.io/products/lora-915mhz-filter) that Kevin and Trevor are having made.
 
@@ -52,6 +69,24 @@ If you're interested in aeronautical (ADS-B/ACARS/VDL/HFDL/SATCOM) or ship track
 - Traceroutes
 - Routing Messages
 
+### Configuration-Driven Customization
+
+**🆕 All mesh-specific content is now configurable via `config.ini`:**
+
+- **Branding**: Mesh name, region, description, logo
+- **MQTT Settings**: Server, credentials, display settings
+- **Navigation Links**: Customizable dropdown with external tools/resources
+- **Community Links**: Fellow mesh network cross-linking
+- **External Node Links**: MeshMap, regional maps, etc.
+- **Theming**: Colors, styles, favicon
+- **Features**: Toggle #MeshtasticMonday, experimental features
+- **Node Registration**: Optional user accounts and node claiming
+
+**Example mesh networks using this codebase:**
+- CSRA Mesh (Central Savannah River Area)
+- Middle GA Mesh (Middle Georgia)
+- Your mesh network here!
+
 ### Upcoming
 
 - Statistics
@@ -70,6 +105,36 @@ If you're using this and have questions, or perhaps you want to join in on the d
 - **[Caching & Performance](docs/CACHING.md)** - Memory management and optimization
 - **[Contributing](docs/CONTRIBUTING.md)** - How to contribute to the project
 
+## 🚀 Quick Deploy Guide
+
+### For Your Mesh Network
+
+1. **Clone this repository**
+2. **Choose a starting config:**
+   - Copy `config.ini.sample` to `config.ini` for a blank template
+   - OR copy `config-csra.ini.example` to `config.ini` for CSRA-style setup
+   - OR copy `config-middlega.ini.example` to `config.ini` for Middle GA-style setup
+3. **Edit your `config.ini`:**
+   - Update `[mesh]` section with your network details
+   - Update `[mqtt]` section with your MQTT server
+   - Customize `[tools]` and `[community_links]` sections as needed
+4. **Deploy using Docker Compose** (see sections below)
+
+That's it! No template modifications needed - everything is config-driven.
+
+### 💡 **Why This Fork?**
+
+Unlike other MeshInfo-Lite forks that require template modifications for each mesh network, this version:
+
+- ✅ **Single codebase** supports unlimited mesh networks
+- ✅ **Zero template editing** required 
+- ✅ **Easy updates** without losing customizations
+- ✅ **Professional branding** for each mesh network
+- ✅ **Community cross-linking** between mesh networks
+- ✅ **Example configurations** to get started quickly
+
+**Perfect for mesh network operators who want a professional site without the hassle!**
+
 ## Running
 
 ### Docker Compose (preferred for 24/7 servers)
@@ -77,6 +142,8 @@ If you're using this and have questions, or perhaps you want to join in on the d
 For detailed Docker setup instructions, see **[docs/SETUP_DOCKER.md](docs/SETUP_DOCKER.md)**.
 
 #### Quick Setup
+
+🎉 **Now with fully automatic database setup!** Just configure and run - no manual database steps required.
 
 ##### Clone the repo
 
@@ -87,7 +154,10 @@ cd meshinfo-lite
 
 ##### Edit Configuration
 
-1. Copy and then edit the `config.ini.sample` to `config.ini`. 
+1. Copy and then edit the `config.ini.sample` to `config.ini`
+2. **OR** use one of the provided example configs:
+   - `cp config-csra.ini.example config.ini` (for CSRA Mesh setup)
+   - `cp config-middlega.ini.example config.ini` (for Middle GA Mesh setup) 
       
 #### To Run
 
@@ -98,13 +168,21 @@ cd meshinfo-lite
 ```
 
 ```sh
-docker compose pull && docker compose down && docker compose up -d && docker compose ps && docker compose logs -f meshinfo
+docker compose down && docker compose up --build -d && docker compose ps && docker compose logs -f meshinfo
 ```
+
+**That's it!** The application now automatically:
+- ✅ Waits for database to be ready
+- ✅ Sets up database privileges  
+- ✅ Runs all database migrations
+- ✅ Starts with full functionality
+
+No manual database setup steps required!
 
 #### To Update
 
 ```sh
-git fetch && git pull && docker compose pull && docker compose down && docker compose up -d && docker compose ps && docker compose logs -f meshinfo
+git fetch && git pull && docker compose down && docker compose up --build -d && docker compose ps && docker compose logs -f meshinfo
 ```
 
 ### Directly (without Docker)

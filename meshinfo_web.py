@@ -1513,7 +1513,8 @@ def login(success_message=None, error_message=None):
         email = request.form.get('email')
         password = request.form.get('password')
         reg = Register()
-        res = reg.authenticate(email, password)
+        ip_address = request.environ.get('REMOTE_ADDR')
+        res = reg.authenticate(email, password, ip_address)
         if "error" in res:
             error_message = res["error"]
         elif "success" in res:

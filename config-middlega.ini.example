@@ -1,0 +1,184 @@
+[mesh]
+name=Middle GA Mesh
+short_name=MiddleGA
+region=Middle Georgia
+description=Serving Meshtastic to Middle Georgia
+contact=https://middlegeorgiamesh.org
+url=https://middlegeorgiamesh.org
+# URL for this MeshInfo instance (used for verification emails, etc.)
+meshinfo_url=https://middlega.duckdns.org
+# Optional: link to your mesh's configuration guide
+config_url=https://middlegeorgiamesh.org/setup
+# Optional: link to your mesh's Discord or community chat
+discord_url=https://discord.gg/6cSJ738Prp
+latitude=32.8407
+longitude=-83.6324
+channel_key=1PG7OiApB1nwvP+rz05pAQ==
+# Optional: path to logo image (leave blank for text-only)
+logo_path=
+# MQTT display settings for user instructions
+mqtt_server_display=middlegamesh.duckdns.org
+mqtt_username_display=meshdev
+mqtt_password_display=large4cats
+mqtt_root_topic_display=msh/US/GA/middlega
+
+[mqtt]
+# Middle GA MQTT Server
+broker=middlegamesh.duckdns.org
+port=1883
+topic=msh/US/GA/middlega/#
+username=meshdev
+password=large4cats
+
+[database]
+host=mariadb
+username=meshdata
+password=passw0rd
+database=meshdata
+
+[webserver]
+port=8000
+
+[server]
+node_activity_prune_threshold=7200
+node_location_prune_threshold=86400
+render_interval=15
+debug=true
+timezone=America/New_York
+zero_hop_timeout=43200
+telemetry_retention_days=30
+metrics_average_interval=7200
+
+[channels]
+# Comma-separated list of channel names to ignore
+#ignored_channels=PKI
+
+[geocoding]
+enabled=false
+apikey=YOUR_KEY_HERE
+
+[registrations]
+# Set to true to enable user registration and node claiming
+enabled=false
+jwt_secret=YOUR_JWT_SECRET
+
+[smtp]
+# Required for user registration - configure when enabling registrations
+# Gmail example (recommended):
+#email=middlegamesh.noreply@gmail.com
+#password=your-gmail-app-password
+#server=smtp.gmail.com
+#port=587
+# Generic example:
+email=YOUR_EMAIL_ADDRESS
+password=SMTP_PASSWORD
+server=SMTP_SERVER
+port=SMTP_PORT
+
+[los]
+enabled=true
+max_distance=10000
+cache_duration=43200
+
+[srtm]
+# SRTM elevation data download settings for LOS (Line of Sight) terrain analysis
+# Set coordinates for your mesh region to download appropriate elevation data
+# Middle Georgia region
+min_latitude=31
+max_latitude=34
+min_longitude=-85
+max_longitude=-82
+
+[features]
+# Show or hide the #MeshtasticMonday page
+show_meshtastic_monday=true
+
+[community_links]
+# Fellow mesh networks - Georgia
+link1=https://csramesh.duckdns.org/
+link1_label=CSRA Mesh
+link2=https://discord.com/invite/mgzj2PmhKf
+link2_label=CSRA Mesh Discord
+# Fellow mesh networks - Southeast
+link3=https://ncmesh.net/
+link3_label=NC Mesh
+link4=https://discord.gg/AUjz5RGGVu
+link4_label=NC Mesh Discord
+link5=https://birminghammesh.org/
+link5_label=Birmingham Mesh (AL)
+link6=https://mtnme.sh/
+link6_label=Mountain Mesh
+link7=https://discord.gg/4WN32RHGSs
+link7_label=Mountain Mesh Discord
+link8=https://view.mtnme.sh/map
+link8_label=Mountain Mesh View
+# Fellow mesh networks - Original meshbros
+link9=https://pugetmesh.org
+link9_label=PugetMesh (Seattle, WA)
+link10=https://baymesh.net
+link10_label=BayMesh (SF Bay Area, CA)
+# Fellow mesh networks - International
+link11=https://za.localmesh.org/
+link11_label=ZA Mesh (South Africa)
+link12=https://bit.ly/buildthemesh
+link12_label=Build the Mesh (ZA)
+
+[tools]
+# Middle GA specific tools and resources in navigation dropdown
+tool1=https://middlega.duckdns.org
+tool1_label=Middle GA Mesh Map
+tool2=https://discord.gg/6cSJ738Prp
+tool2_label=Middle GA Mesh Discord
+tool3=https://middlegeorgiamesh.org
+tool3_label=Middle GA Mesh Website
+# Georgia mesh networks
+tool4=https://csramesh.duckdns.org/
+tool4_label=CSRA Mesh
+tool5=https://discord.com/invite/mgzj2PmhKf
+tool5_label=CSRA Mesh Discord
+
+# Node-specific external links (shown on individual node pages)
+node_link1=https://middlega.duckdns.org/map.html?node={{ node.id }}
+node_link1_label=Middle GA Mesh Map
+node_link2=https://meshmap.net/#{{ node.id }}
+node_link2_label=MeshMap
+
+[theme]
+# Header background color (navbar)
+header_color=#9fdef9
+# Header brand/title color
+header_brand_color=#000
+# Header navigation link color
+header_link_color=#555
+# Header active navigation link color
+header_link_active_color=#000
+# Accent color (login/logout button, etc.)
+accent_color=#17a2b8
+# Page background color
+page_background_color=#ffffff
+# Table header background color
+table_header_color=#D7F9FF
+# Table subheader background color
+table_subheader_color=#e1ebef
+# Table border color
+table_border_color=#dee2e6
+# Table alternating row background color
+table_alternating_row_color=#f0f0f0
+# Link color
+link_color=#007bff
+# Link hover color  
+link_color_hover=#0056b3
+# Control color (buttons, form controls)
+control_color=#17a2b8
+# Control hover color
+control_color_hover=#1396a5
+# Chat box background color
+chat_box_background_color=#f0f0f0
+# Chat box border color (leave empty for no border)
+chat_box_border_color=
+# Banner background color (e.g. for newest node welcome in nodes page)
+banner_background_color=#F9F9D7
+# Favicon background color override (optional, falls back to accent_color if not set)
+favicon_background_color=
+# Favicon logo (stroke) color override (optional, falls back to auto-contrast if not set)
+favicon_logo_color=

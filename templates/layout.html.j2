@@ -26,6 +26,7 @@
     'traceroutes': 'bi-arrow-repeat',
     'logs': 'bi-journal-text',
     'metrics': 'bi-speedometer2',
+    'diagnostics': 'bi-cpu',
     'my nodes': 'bi-person-check'
   } %}
   {% set icon = icon_map.get(page_name.lower(), 'bi-circle') %}
@@ -38,6 +39,7 @@
   <meta charset="utf-8">
   <link rel="icon" type="image/x-icon" href="/images/icons/favicon.ico">
   <link href="/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/css/compatibility-fixes.css" rel="stylesheet">
   <link href="/css/meshinfo.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
@@ -45,19 +47,19 @@
     .bi::before {
       font-family: "bootstrap-icons" !important;
     }
-    
+
     /* Ensure experimental features flask icon is visible in mobile */
     #experimentalDropdown .bi-flask {
       display: inline-block !important;
       margin-right: 0.175rem !important;
     }
-    
+
     /* Additional debugging for flask icon */
     .d-lg-none .bi-flask {
       display: inline-block !important;
       visibility: visible !important;
     }
-  </style>  
+  </style>
 
   {% block head %}
     <meta property="og:title" content="{% block og_title %}{{ config['mesh']['name'] }}{% endblock %}" />
@@ -87,9 +89,9 @@
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarToggler">
-      <a class="navbar-brand" href="{{  config["mesh"]["url"] }}">{{ config["mesh"]["name"] }}</a>
+      <a class="navbar-brand" href="/">{{ config["mesh"]["name"] }}</a>
       <ul class="navbar-nav mr-auto mt-2 mt-lg-0">
-        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs","metrics"] %}
+        {% for page in ["chat", "graph", "map", "nodes", "neighbors", "telemetry", "traceroutes", "logs","metrics", "diagnostics"] %}
         <li class="nav-item{% if page == this_page %} active{% endif %}">
           <a class="nav-link" href="{{ page }}.html"><span class="d-lg-none d-xl-inline">{{ page_icon(page) }}</span>{{ page.title() }}</a>
         </li>
@@ -99,18 +101,28 @@
           <a class="nav-link" href="{{ url_for("mynodes") }}"><span class="d-lg-none d-xl-inline">{{ page_icon("my nodes") }}</span>My Nodes</a>
         </li>
         {% endif %}
-         <li class="nav-item dropdown">
+        {% if 'tools' in config %}
+        {% set tool_items = [] %}
+        {% for key, value in config['tools'].items() if key.startswith('tool') and not key.endswith('_label') %}
+          {% if value %}
+            {% set label = config['tools'].get(key + '_label', 'External Tool') %}
+            {% set _ = tool_items.append({'url': value, 'label': label}) %}
+          {% endif %}
+        {% endfor %}
+        {% if tool_items %}
+        <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            <span class="d-lg-none"><i class="bi bi-tools me-1"></i>&nbsp;<span>Tools</span></span>
-            <span class="d-none d-lg-inline"><i class="bi bi-tools"></i></span>
+            <span class="d-lg-none"><i class="bi bi-link-45deg me-1"></i>&nbsp;<span>Links</span></span>
+            <span class="d-none d-lg-inline"><i class="bi bi-link-45deg me-1"></i>Links</span>
           </a>
           <div class="dropdown-menu" aria-labelledby="toolsDropdown">
-            {% for key, value in config['tools'].items() if not key.endswith('_label') and not key.endswith('_node_link') %}
-              {% set label = config['tools'].get(key + '_label', key.replace('_', ' ').title()) %}
-              <a class="dropdown-item" href="{{ value }}" target="_blank">{{ label }}</a>
+            {% for item in tool_items %}
+              <a class="dropdown-item" href="{{ item.url }}" target="_blank">{{ item.label }}</a>
             {% endfor %}
           </div>
         </li>
+        {% endif %}
+        {% endif %}
         {% if config['server'].get('experimental_features_menu', 'false')|lower == 'true' %}
         <!-- Experimental Features Dropdown -->
         <li class="nav-item dropdown">
@@ -127,11 +139,13 @@
           </div>
         </li>
         {% endif %}
-        {% set current_local_time = convert_to_local(datetime.now().timestamp()) %}
+        {% if 'features' not in config or ('show_meshtastic_monday' not in config['features']) or config['features']['show_meshtastic_monday']|lower == 'true' %}
+        {% set current_local_time = convert_to_local(current_time.timestamp()) %}
         {% if current_local_time.weekday() == 0 %}
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
           <a class="nav-link" href="monday.html"><span class="d-lg-none d-xl-inline"></span>#MeshtasticMonday</a>
         </li>
+        {% endif %}
         {% endif %}
       </ul>
       {% if not auth %}
