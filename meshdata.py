@@ -7,6 +7,7 @@ import utils
 import logging
 import re
 from timezone_utils import time_ago  # Import time_ago from timezone_utils
+import pytz
 from meshtastic_support import get_hardware_model_name, get_modem_preset_name  # Import functions from meshtastic_support
 from database_cache import DatabaseCache  # Import DatabaseCache from its own file
 import types
@@ -27,7 +28,18 @@ class CustomJSONEncoder(json.JSONEncoder):
             return list(obj)  # Convert set to list
         # Use default serialization for other types
         return super().default(obj)
-    
+
+def safe_timestamp_convert(dt_obj):
+    """Safely convert datetime object to Unix timestamp, treating as UTC"""
+    if dt_obj is None:
+        return None
+    if isinstance(dt_obj, datetime.datetime):
+        # Treat datetime as UTC (MySQL stores UTC) and convert properly
+        if dt_obj.tzinfo is None:
+            dt_obj = dt_obj.replace(tzinfo=pytz.UTC)
+        return int(dt_obj.timestamp())
+    return dt_obj  # Already a timestamp or other value
+
 class MeshData:
     def __init__(self):
         config = configparser.ConfigParser()
