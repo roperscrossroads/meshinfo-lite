@@ -1,5 +1,5 @@
 # trunk-ignore-all(checkov/CKV_DOCKER_3)
-FROM python:3.13.3-slim-bookworm
+FROM python:3.13.7-slim-bookworm
 
 LABEL org.opencontainers.image.source=https://github.com/agessaman/meshinfo-lite
 LABEL org.opencontainers.image.description="Realtime web UI to run against a Meshtastic regional or private mesh network."
@@ -36,7 +36,7 @@ RUN apt-get update && \
     libproj-dev \
     proj-bin \
     default-mysql-client \
-    $([ "$TARGETPLATFORM" = "linux/arm64" ] && echo "curl") \
+    curl \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
