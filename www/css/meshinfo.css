@@ -45,6 +45,13 @@ nav {
     background: transparent !important;
 }
 
+/* Add vertical divider lines for neighbors table columns */
+#neighbors-table > tbody > tr > td:nth-child(4),
+#neighbors-table > tbody > tr > td:nth-child(5),
+#neighbors-table > tbody > tr > td:nth-child(6) {
+    border-left: 2px solid #dee2e6 !important;
+}
+
 /* Badge styling */
 .badge.bg-good-snr {
     background-color: #2d8659;
@@ -323,6 +330,16 @@ nav {
     margin-left: 1em;
 }
 
+.role-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-weight: bold;
+    font-size: 0.85em;
+    text-align: center;
+    display: inline-block;
+}
+
 .btn-group .btn {
     padding: 0.25rem 0.5rem;
 }
@@ -558,6 +575,80 @@ nav {
     overflow-y: auto;
 }
 
+/* Node Info Panel - Node Name Link */
+.node-info-panel .fw-bold a {
+    font-size: 1.3em !important;
+    font-weight: 600 !important;
+    color: #17a2b8 !important;
+    text-decoration: none !important;
+    transition: color 0.2s ease;
+}
+
+.node-info-panel .fw-bold a:hover {
+    color: #1396a5 !important;
+    text-decoration: underline !important;
+}
+
+/* Modern Table Styling for Node Info Panel */
+.node-info-panel .table {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    border: none !important;
+    margin-bottom: 1rem !important;
+}
+
+.node-info-panel .table thead th {
+    border: none !important;
+    padding: 0.75rem 0.5rem !important;
+    font-weight: 600 !important;
+    font-size: 0.85em !important;
+}
+
+.node-info-panel .table tbody td {
+    border: none !important;
+    border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+    padding: 0.6rem 0.5rem !important;
+    font-size: 0.85em !important;
+}
+
+.node-info-panel .table tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+.node-info-panel .table tbody tr:hover {
+    background-color: rgba(0,0,0,0.02) !important;
+}
+
+/* Modern Table Styling for Node Tables (nodes.html.j2 and allnodes.html.j2) */
+.container .table {
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    border: none !important;
+    margin-bottom: 1rem !important;
+}
+
+.container .table thead th {
+    border: none !important;
+    padding: 0.75rem 0.5rem !important;
+    font-weight: 600 !important;
+}
+
+.container .table tbody td {
+    border: none !important;
+    border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+    padding: 0.375rem 0.5rem !important;
+}
+
+.container .table tbody tr:last-child td {
+    border-bottom: none !important;
+}
+
+.container .table tbody tr:hover {
+    background-color: rgba(0,0,0,0.02) !important;
+}
+
 /* Make settings and node info panels responsive */
 @media (max-width: 768px) {
     .settings-panel,
@@ -686,6 +777,7 @@ a:hover, a:focus {
 }
 .table td, .table th {
   border-color: #dee2e6 !important;
+  color: #000 !important;
 }
 
 /* Pagination link and icon theming */
@@ -711,7 +803,7 @@ a:hover, a:focus {
 /* --- END MIGRATED STYLES --- */
 
 .newest-node-welcome, .banner {
-  background: #F9F9D7 !important;
+  background:  !important;
 }
 
 /* Themed Bootstrap Popover Styles */
@@ -799,6 +891,26 @@ a:hover, a:focus {
     font-family: monospace, monospace;
     transition: border-color 0.2s ease;
 }
+
+/* Routing Page Form Controls - Override white text issue */
+.routing-filters .form-control,
+.routing-filters .form-select {
+    background-color: #fff !important;
+    color: #333 !important;
+    border: 1px solid #17a2b8 !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace, monospace;
+    transition: border-color 0.2s ease;
+}
+
+.routing-filters .form-control:focus,
+.routing-filters .form-select:focus {
+    border-color: #1396a5 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.15);
+    background-color: #fff !important;
+    color: #333 !important;
+}
 #nodeFilter:focus,
 #senderFilter:focus,
 #messageTypeFilter:focus,
@@ -839,6 +951,26 @@ a:hover, a:focus {
 #senderFilter::placeholder {
     color: #6c757d !important;
     opacity: 1;
+}
+
+/* Map Settings Panel Controls Theming */
+#settings .form-select,
+#settings .form-control {
+    background-color: #fff !important;
+    color: #333 !important;
+    border: 1px solid #17a2b8 !important;
+    border-radius: 0.375rem !important;
+    font-family: monospace, monospace;
+    transition: border-color 0.2s ease;
+}
+
+#settings .form-select:focus,
+#settings .form-control:focus {
+    border-color: #1396a5 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.15);
+    background-color: #fff !important;
+    color: #333 !important;
 }
 
 /* Utilization Map Settings Panel Controls Theming */
@@ -952,4 +1084,116 @@ a:hover, a:focus {
   font-size: 1.05rem;
   font-weight: 500;
   word-break: break-word;
+} 
+
+/* --- Monday Page Styles --- */
+body.monday-page {
+  background: #ffffff;
+}
+.monday-banner {
+  background: ;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(23,162,184,0.08);
+  border: 1px solid #dee2e6;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  margin-bottom: 2rem;
+}
+.monday-banner strong {
+  color: #17a2b8;
+}
+.monday-table {
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(23,162,184,0.06);
+  border: 1px solid #dee2e6;
+  overflow: hidden;
+}
+.monday-table th {
+  background: #D7F9FF !important;
+  color: #222;
+  border-bottom: 2px solid #17a2b8 !important;
+  font-weight: 600;
+  font-size: 1rem;
+}
+.monday-table td, .monday-table th {
+  border-color: #dee2e6 !important;
+}
+.monday-table tr:nth-child(even) td {
+  background: #f0f0f0;
+}
+.monday-date-row th {
+  background:  !important;
+  color: #17a2b8 !important;
+  font-size: 1.15em;
+  font-weight: 700;
+  text-align: center;
+  border: none;
+}
+
+.monday-table a {
+  color: #007bff;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.monday-table a:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+.monday-streak {
+  color: #17a2b8;
+  font-weight: 600;
+  font-size: 0.95em;
+}
+.monday-checkins {
+  color: #888;
+  font-size: 0.92em;
+}
+.monday-example {
+  padding: 7px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-style: italic;
+  margin-top: 0.5em;
+  border: 1px solid #dee2e6;
+  color: #333;
+}
+/* --- End Monday Page Styles --- */ 
+
+/* Modern Table Styling for Routing Page (custom-wide-container) */
+.custom-wide-container .table {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  border: none !important;
+  margin-bottom: 1rem !important;
+}
+
+.custom-wide-container .table thead th {
+  border: none !important;
+  padding: 0.75rem 0.5rem !important;
+  font-weight: 600 !important;
+}
+
+.custom-wide-container .table tbody td {
+  border: none !important;
+  border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+  padding: 0.375rem 0.5rem !important;
+}
+
+.custom-wide-container .table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+.custom-wide-container .table tbody tr:hover {
+  background-color: rgba(0,0,0,0.02) !important;
+} 
+
+/* Custom wide container for routing page */
+.custom-wide-container {
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  padding-left: 15px;
+  padding-right: 15px;
 } 
