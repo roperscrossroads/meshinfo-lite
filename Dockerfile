@@ -45,15 +45,19 @@ RUN fc-cache -fv
 # Architecture-specific rasterio installation
 ENV GDAL_CONFIG=/usr/bin/gdal-config
 
-# For ARM64: Install conda/mamba and use conda-forge for rasterio
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-    curl -L -O https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh && \
-    bash Miniforge3-Linux-aarch64.sh -b -p /opt/conda && \
-    rm Miniforge3-Linux-aarch64.sh && \
-    /opt/conda/bin/mamba install -c conda-forge rasterio -y; \
-    fi
+# Install conda/mamba for both architectures for consistency
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+    echo "ARM64 detected, installing miniforge"; \
+    curl -fsSL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh; \
+    else \
+    echo "x86-64 detected, installing miniforge"; \
+    curl -fsSL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh; \
+    fi && \
+    bash miniforge.sh -b -p /opt/conda && \
+    rm miniforge.sh && \
+    /opt/conda/bin/mamba install -c conda-forge rasterio -y
 
-# Update PATH to include conda if installed
+# Update PATH to include conda for both architectures
 ENV PATH="/opt/conda/bin:${PATH}"
 
 COPY requirements.txt banner run.sh ./
@@ -61,14 +65,18 @@ COPY requirements.txt banner run.sh ./
 # Upgrade pip and install packages
 RUN pip install --upgrade pip setuptools wheel
 
-# Install requirements, excluding rasterio for ARM64 (already installed via conda)
-RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-    grep -v "^rasterio" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt; \
-    else \
-    cp requirements.txt requirements_filtered.txt; \
-    fi
+# Install requirements, excluding rasterio (already installed via conda)
+# Filter out rasterio since it's installed via conda for both architectures
+RUN grep -v "^rasterio" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt
 
-RUN su app -c "pip install --no-cache-dir --user -r requirements_filtered.txt"
+# Use piwheels for ARM64 builds for faster installation, standard pip for x86-64
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+    echo "ARM64: Using piwheels for faster package installation"; \
+    su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements_filtered.txt"; \
+    else \
+    echo "x86-64: Using standard pip installation"; \
+    su app -c "pip install --no-cache-dir --user -r requirements_filtered.txt"; \
+    fi
 
 COPY --chown=app:app banner run.sh ./
 COPY --chown=app:app *.py ./
