@@ -1,8 +1,8 @@
 {% extends "layout.html.j2" %}
 
 {% block title %}
-{% if config.has_section('mesh') and config.has_option('mesh', 'short_name') %}
-{{ config.get('mesh', 'short_name') }} Mesh Metrics
+{% if 'mesh' in config and 'short_name' in config['mesh'] %}
+{{ config['mesh']['short_name'] }} Mesh Metrics
 {% else %}
 Mesh Metrics
 {% endif %}
@@ -174,8 +174,8 @@ Mesh Metrics
 {% block content %}
 <div class="page-header">
     <h1>
-    {% if config.has_section('mesh') and config.has_option('mesh', 'short_name') %}
-    {{ config.get('mesh', 'short_name') }} Mesh Metrics
+    {% if 'mesh' in config and 'short_name' in config['mesh'] %}
+    {{ config['mesh']['short_name'] }} Mesh Metrics
     {% else %}
     Mesh Metrics
     {% endif %}
