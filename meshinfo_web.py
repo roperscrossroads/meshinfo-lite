@@ -702,7 +702,7 @@ def auth():
 def not_found(e):
     return render_template(
         "404.html.j2",
-        auth=auth,
+        auth=auth(),
         config=config
     ), 404
 
@@ -1265,7 +1265,7 @@ def neighbors():
         # Handle case with no nodes gracefully
         return render_template(
             "neighbors.html.j2",
-            auth=auth, config=config, nodes={},
+            auth=auth(), config=config, nodes={},
             active_nodes_with_connections={}, view_type=view_type,
             utils=utils, datetime=datetime.datetime, timestamp=datetime.datetime.now()
         )
