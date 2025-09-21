@@ -6,6 +6,7 @@ import re
 import jwt
 import time
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,89 @@ WHERE email = %s"""
         cur.close()
         self.db.commit()
         return otp
+
+    def request_password_reset(self, email):
+        """Request password reset with secure token generation."""
+        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not email or not re.match(email_regex, email):
+            return {"error": "Invalid email address."}
+
+        # Check if email exists and is verified
+        sql = "SELECT username FROM meshuser WHERE status='VERIFIED' AND email = %s"
+        cur = self.db.cursor()
+        cur.execute(sql, (email.lower(),))
+        row = cur.fetchone()
+        cur.close()
+
+        if not row:
+            # Don't reveal if email exists (security best practice)
+            return {"success": "If your email is in our system, you will receive a password reset link."}
+
+        # Generate secure reset token
+        reset_token = jwt.encode(
+            {
+                "email": email.lower(),
+                "purpose": "password_reset",
+                "exp": int(time.time()) + 86400,  # 24 hours
+                "jti": str(uuid.uuid4())
+            },
+            self.config["registrations"]["jwt_secret"],
+            algorithm="HS256"
+        )
+
+        # Send reset email
+        base_url = self.config["mesh"].get("meshinfo_url", self.config["mesh"]["url"])
+        utils.send_email(
+            email,
+            "MeshInfo Password Reset",
+            f"You requested a password reset for your MeshInfo account.\n\n"
+            f"Click the link below to reset your password:\n"
+            f"{base_url}/reset-password.html?token={reset_token}\n\n"
+            f"This link will expire in 24 hours.\n\n"
+            f"If you didn't request this reset, please ignore this email."
+        )
+
+        return {"success": "If your email is in our system, you will receive a password reset link."}
+
+    def reset_password(self, token, new_password):
+        """Reset password using secure token."""
+        # Validate new password (we'll need to add this validation function)
+        if len(new_password) < 8:
+            return {"error": "Password must be at least 8 characters long."}
+
+        try:
+            # Decode and validate token
+            payload = jwt.decode(
+                token,
+                self.config["registrations"]["jwt_secret"],
+                algorithms=["HS256"]
+            )
+
+            # Verify token purpose
+            if payload.get("purpose") != "password_reset":
+                return {"error": "Invalid reset token."}
+
+            email = payload.get("email")
+            if not email:
+                return {"error": "Invalid reset token."}
+
+            # Update password
+            password_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt())
+            sql = "UPDATE meshuser SET password = %s WHERE email = %s"
+            cur = self.db.cursor()
+            cur.execute(sql, (password_hash, email.lower()))
+            self.db.commit()
+            cur.close()
+
+            return {"success": "Password successfully reset! You can now log in with your new password."}
+
+        except jwt.ExpiredSignatureError:
+            return {"error": "Reset link has expired. Please request a new password reset."}
+        except jwt.InvalidTokenError:
+            return {"error": "Invalid reset token."}
+        except Exception as e:
+            logger.error(f"Password reset error: {str(e)}")
+            return {"error": "An error occurred while resetting your password."}
 
     def __del__(self):
         if self.db:
