@@ -55,7 +55,7 @@ RUN if [ "$(uname -m)" = "aarch64" ]; then \
     fi && \
     bash miniforge.sh -b -p /opt/conda && \
     rm miniforge.sh && \
-    /opt/conda/bin/mamba install -c conda-forge rasterio -y
+    /opt/conda/bin/mamba install -c conda-forge python=3.13 rasterio -y
 
 # Update PATH to include conda for both architectures
 ENV PATH="/opt/conda/bin:${PATH}"
