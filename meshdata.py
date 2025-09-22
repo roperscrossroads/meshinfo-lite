@@ -327,7 +327,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         total = cur.fetchone()[0]
         # Get paginated request_ids
         cur.execute("""
-            SELECTrequest_id
+            SELECT request_id
             FROM traceroute
             GROUP BY request_id
             ORDER BY MAX(ts_created) DESC
@@ -468,7 +468,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         # Combined query to get all node data in one go
         sql = """
         WITH latest_telemetry AS (
-            SELECTid as telemetry_id, 
+            SELECT id as telemetry_id, 
                    air_util_tx,
                    battery_level,
                    channel_utilization,
@@ -486,7 +486,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             WHERE battery_level IS NOT NULL
         ),
         latest_position AS (
-            SELECTid as position_id,
+            SELECT id as position_id,
                    altitude,
                    ground_speed,
                    ground_track,
@@ -500,16 +500,16 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             FROM position
         ),
         latest_channel AS (
-            SELECTid as channel_id, channel, ts_created
+            SELECT id as channel_id, channel, ts_created
             FROM (
-                SELECTid, channel, ts_created,
+                SELECT id, channel, ts_created,
                        ROW_NUMBER() OVER (PARTITION BY id ORDER BY ts_created DESC) as rn
                 FROM (
-                    SELECTid, channel, ts_created
+                    SELECT id, channel, ts_created
                     FROM telemetry
                     WHERE channel IS NOT NULL
                     UNION ALL
-                    SELECTfrom_id as id, channel, ts_created
+                    SELECT from_id as id, channel, ts_created
                     FROM text
                     WHERE channel IS NOT NULL
                 ) combined
@@ -643,7 +643,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         all_node_ids = [n['id'] for n in nodes.values()]
         if all_node_ids:
             neighbor_sql = """
-                SELECTid, neighbor_id, snr
+                SELECT id, neighbor_id, snr
                 FROM neighborinfo
                 WHERE id IN (%s)
             """ % ','.join(['%s'] * len(all_node_ids))
@@ -701,7 +701,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         total = cur.fetchone()[0]
         # Get paginated results with reception data
         sql = """
-        SELECTt.message_id, t.from_id, t.to_id, t.text, t.channel,
+        SELECT t.message_id, t.from_id, t.to_id, t.text, t.channel,
                UNIX_TIMESTAMP(t.ts_created) as ts_created,
             GROUP_CONCAT(
                 CONCAT_WS(':', r.received_by_id, r.rx_snr, r.rx_rssi, r.hop_limit, r.hop_start)
@@ -2707,7 +2707,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         # Handle single receiver case
         if len(receiver_ids) == 1:
             query = """
-                SELECTreceived_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node
+                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node
                 FROM message_reception
                 WHERE message_id = %s AND received_by_id = %s
             """
@@ -2715,7 +2715,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         else:
             placeholders = ','.join(['%s'] * len(receiver_ids))
             query = f"""
-                SELECTreceived_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node
+                SELECT received_by_id, rx_snr, rx_rssi, rx_time, hop_limit, hop_start, relay_node
                 FROM message_reception
                 WHERE message_id = %s AND received_by_id IN ({placeholders})
             """
@@ -2738,7 +2738,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         Get a list of nodes that have the given node_id in their neighbor list.
         """
         sql = """
-            SELECTid, snr
+            SELECT id, snr
             FROM neighborinfo
             WHERE neighbor_id = %s
         """
@@ -2759,13 +2759,13 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             if days > 0:
                 cutoff = int(time.time()) - days * 86400
                 cursor.execute("""
-                    SELECTmessage_id, from_id, received_by_id, relay_node, rx_time, hop_limit, hop_start
+                    SELECT message_id, from_id, received_by_id, relay_node, rx_time, hop_limit, hop_start
                     FROM message_reception
                     WHERE rx_time > %s
                 """, (cutoff,))
             else:
                 cursor.execute("""
-                    SELECTmessage_id, from_id, received_by_id, relay_node, rx_time, hop_limit, hop_start
+                    SELECT message_id, from_id, received_by_id, relay_node, rx_time, hop_limit, hop_start
                     FROM message_reception
                 """)
             receptions = cursor.fetchall()
