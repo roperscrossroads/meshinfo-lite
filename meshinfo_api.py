@@ -950,7 +950,13 @@ def get_map_data():
         # Get filter parameters from request
         nodes_max_age = request.args.get('nodes_max_age', '0', type=int)  # seconds, 0 = show all
         nodes_disconnected_age = request.args.get('nodes_disconnected_age', '10800', type=int)  # seconds
-        nodes_offline_age = request.args.get('nodes_offline_age', '10800', type=int)  # seconds
+
+        # Handle nodes_offline_age with special case for 'never'
+        nodes_offline_age_param = request.args.get('nodes_offline_age', '10800')
+        if nodes_offline_age_param == 'never':
+            nodes_offline_age = 'never'
+        else:
+            nodes_offline_age = int(nodes_offline_age_param)
         channel_filter = request.args.get('channel_filter', 'all')  # all or specific channel
         neighbours_max_distance = request.args.get('neighbours_max_distance', '5000', type=int)  # meters
         cursor = md.db.cursor(dictionary=True)
