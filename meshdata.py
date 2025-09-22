@@ -363,7 +363,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
                 t.success,
                 t.channel,
                 t.hop_limit,
-                t.ts_created,
+                UNIX_TIMESTAMP(t.ts_created) as ts_created,
                 t.is_reply,
                 t.error_reason,
                 t.attempt_number,
@@ -535,9 +535,9 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             n.modem_preset,
             n.owner,
             n.updated_via,
-            n.ts_seen,
-            n.ts_created,
-            n.ts_updated,
+            UNIX_TIMESTAMP(n.ts_seen) as ts_seen,
+            UNIX_TIMESTAMP(n.ts_created) as ts_created,
+            UNIX_TIMESTAMP(n.ts_updated) as ts_updated,
             u.username as owner_username,
             CASE WHEN n.ts_seen > FROM_UNIXTIME(%s) THEN 1 ELSE 0 END as is_active,
             UNIX_TIMESTAMP(n.ts_uplink) as ts_uplink,
@@ -552,7 +552,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             t.barometric_pressure,
             t.gas_resistance,
             t.current,
-            t.telemetry_time,
+            UNIX_TIMESTAMP(t.telemetry_time) as telemetry_time,
             t.telemetry_channel,
             -- Position fields
             p.altitude,
@@ -562,7 +562,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
             p.longitude_i,
             p.location_source,
             p.precision_bits,
-            p.position_time,
+            UNIX_TIMESTAMP(p.position_time) as position_time,
             p.geocoded,
             -- Channel
             c.channel
@@ -836,7 +836,7 @@ ORDER BY ts_created DESC"""
         return logs
 
     def get_latest_node(self):
-        sql = """select id, ts_created from nodeinfo
+        sql = """select id, UNIX_TIMESTAMP(ts_created) as ts_created from nodeinfo
 where id <> 4294967295 order by ts_created desc limit 1"""
         cur = self.db.cursor()
         cur.execute(sql)
@@ -845,7 +845,7 @@ where id <> 4294967295 order by ts_created desc limit 1"""
         if row:
             latest = {
                 "id": row[0],
-                "ts_created": row[1].timestamp()
+                "ts_created": row[1]
             }
         cur.close()
         return latest
@@ -2318,7 +2318,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 t.snr_back,
                 t.route,
                 t.route_back,
-                t.ts_created,
+                UNIX_TIMESTAMP(t.ts_created) as ts_created,
                 t.success,
                 p1.latitude_i as lat_from_i,
                 p1.longitude_i as lon_from_i,
