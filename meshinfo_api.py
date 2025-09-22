@@ -62,7 +62,7 @@ def log_detailed_memory_analysis():
             logging.info("Large dictionaries:")
             for size, repr_str in sorted(large_dicts, reverse=True)[:5]:
                 logging.info(f"  Dict with {size:,} items: {repr_str}")
-                if large_lists:
+        if large_lists:
             logging.info("Large lists:")
             for size, repr_str in sorted(large_lists, reverse=True)[:5]:
                 logging.info(f"  List with {size:,} items: {repr_str}")
@@ -79,7 +79,7 @@ def get_cached_nodes():
     md = get_meshdata()
     if not md:
         return None
-    
+
     # Use the cached method to prevent duplicate dictionaries
     nodes_data = md.get_nodes_cached()
     logging.debug(f"Fetched {len(nodes_data)} nodes from API cache")
@@ -90,7 +90,7 @@ def get_metrics():
     md = get_meshdata()
     if not md:
         return jsonify({'error': 'Database connection unavailable'}), 503
-    
+
     try:
         # Get time range from request parameters
         time_range = request.args.get('time_range', 'day')  # day, week, month, year, all
@@ -112,12 +112,12 @@ def get_metrics():
             cursor.execute("SELECT MIN(ts_created) as min_time FROM telemetry")
             min_time = cursor.fetchone()['min_time']
             cursor.close()
-                if min_time:
+            if min_time:
                 start_time = min_time
             else:
                 # Default to 1 year if no data
                 start_time = end_time - timedelta(days=365)
-                bucket_size = 10080  # 7 days in minutes
+            bucket_size = 10080  # 7 days in minutes
         else:  # default to day
             start_time = end_time - timedelta(hours=24)
             bucket_size = 30  # 30 minutes
@@ -168,7 +168,7 @@ def get_metrics():
             channel_condition_reception = ""
         # Nodes Online Query
         nodes_online_query = f"""
-            SELECT 
+            SELECT
                 DATE_FORMAT(
                     DATE_ADD(
                         ts_created,
@@ -186,7 +186,7 @@ def get_metrics():
         nodes_online_data = {row['time_slot']: row['node_count'] for row in cursor.fetchall()}
         # Message Traffic Query
         message_traffic_query = f"""
-            SELECT 
+            SELECT
                 DATE_FORMAT(
                     DATE_ADD(
                         ts_created,
@@ -204,7 +204,7 @@ def get_metrics():
         message_traffic_data = {row['time_slot']: row['message_count'] for row in cursor.fetchall()}
         # Channel Utilization Query
         channel_util_query = f"""
-            SELECT 
+            SELECT
                 DATE_FORMAT(
                     DATE_ADD(
                         ts_created,
@@ -222,7 +222,7 @@ def get_metrics():
         channel_util_data = {row['time_slot']: float(row['avg_util']) if row['avg_util'] is not None else 0.0 for row in cursor.fetchall()}
         # Battery Levels Query
         battery_query = f"""
-            SELECT 
+            SELECT
                 DATE_FORMAT(
                     DATE_ADD(
                         ts_created,
@@ -240,7 +240,7 @@ def get_metrics():
         battery_data = {row['time_slot']: float(row['avg_battery']) if row['avg_battery'] is not None else 0.0 for row in cursor.fetchall()}
         # Temperature Query
         temperature_query = f"""
-            SELECT 
+            SELECT
                 DATE_FORMAT(
                     DATE_ADD(
                         ts_created,
@@ -258,7 +258,7 @@ def get_metrics():
         temperature_data = {row['time_slot']: float(row['avg_temp']) if row['avg_temp'] is not None else 0.0 for row in cursor.fetchall()}
         # SNR Query
         snr_query = f"""
-            SELECT 
+            SELECT
                 DATE_FORMAT(
                     DATE_ADD(
                         ts_created,
@@ -345,7 +345,7 @@ def get_metrics():
         # Now apply moving average and round to nearest integer
         nodes_online_smoothed = [round(x) for x in moving_average_centered(nodes_heard_per_slot, metrics_avg_minutes, bucket_size)]
         cursor.close()
-    
+
         # Apply moving averages to other metrics
         channel_util_smoothed = moving_average_centered(channel_util_raw, metrics_avg_minutes, bucket_size)
         battery_levels_smoothed = moving_average_centered(battery_levels_raw, metrics_avg_minutes, bucket_size)
@@ -380,7 +380,7 @@ def get_metrics():
         })
     except Exception as e:
         logging.error(f"Error in metrics API: {str(e)}")
-        return jsonify({'error': f'Error fetching metrics: {str(e)}'}), 500 
+        return jsonify({'error': f'Error fetching metrics: {str(e)}'}), 500
 
 
 
@@ -390,12 +390,12 @@ def get_chattiest_nodes():
     md = get_meshdata()
     if not md:
         return jsonify({'error': 'Database connection unavailable'}), 503
-    
+
     # Get filter parameters from request
     time_frame = request.args.get('time_frame', 'day')  # day, week, month, year, all
     message_type = request.args.get('message_type', 'all')  # all, text, position, telemetry
     channel = request.args.get('channel', 'all')  # all or specific channel number
-    
+
     try:
         cursor = md.db.cursor(dictionary=True)
         # Build the time frame condition
@@ -422,10 +422,10 @@ def get_chattiest_nodes():
             # For text messages, we need to qualify the columns with table aliases
             time_condition_with_prefix = time_condition.replace("WHERE", "WHERE t.").replace(" AND", " AND t.")
             channel_condition_text_with_prefix = channel_condition_text.replace("WHERE", "WHERE t.").replace(" AND", " AND t.")
-                message_query = (
+            message_query = (
                 "SELECT t.from_id as node_id, t.ts_created, t.channel as channel "
                 "FROM text t "
-                + time_condition_with_prefix 
+                + time_condition_with_prefix
                 + channel_condition_text_with_prefix + " "
                 "UNION ALL "
                 "SELECT id as node_id, ts_created, NULL as channel "
@@ -434,7 +434,7 @@ def get_chattiest_nodes():
                 "UNION ALL "
                 "SELECT id as node_id, ts_created, channel "
                 "FROM telemetry "
-                + time_condition 
+                + time_condition
                 + channel_condition_telemetry
             )
         elif message_type == 'text':
@@ -464,7 +464,7 @@ def get_chattiest_nodes():
         # Query to get the top 20 nodes by message count, including node names and role
         query = """
             WITH messages AS ({message_query})
-            SELECT 
+            SELECT
                 m.node_id as from_id,
                 n.long_name,
                 n.short_name,
@@ -473,21 +473,21 @@ def get_chattiest_nodes():
                 COUNT(DISTINCT DATE_FORMAT(m.ts_created, '%Y-%m-%d')) as active_days,
                 MIN(m.ts_created) as first_message,
                 MAX(m.ts_created) as last_message,
-                CASE 
+                CASE
                     WHEN '{channel}' != 'all' THEN '{channel}'
                     ELSE GROUP_CONCAT(DISTINCT NULLIF(CAST(m.channel AS CHAR), 'NULL'))
                 END as channels,
-                CASE 
+                CASE
                     WHEN '{channel}' != 'all' THEN 1
                     ELSE COUNT(DISTINCT NULLIF(m.channel, 'NULL'))
                 END as channel_count
-            FROM 
+            FROM
                 messages m
             LEFT JOIN
                 nodeinfo n ON m.node_id = n.id
-            GROUP BY 
+            GROUP BY
                 m.node_id, n.long_name, n.short_name, n.role
-            ORDER BY 
+            ORDER BY
                 message_count DESC
             LIMIT 20
         """.format(message_query=message_query, channel=channel)
@@ -554,7 +554,7 @@ def api_telemetry(node_id):
     md = get_meshdata()
     if not md:
         return jsonify({'error': 'Database connection unavailable'}), 503
-    
+
     telemetry = md.get_telemetry_for_node(node_id)
     return jsonify(telemetry)
 
@@ -563,7 +563,7 @@ def api_environmental_telemetry(node_id):
     md = get_meshdata()
     if not md:
         return jsonify({'error': 'Database connection unavailable'}), 503
-    
+
     days = request.args.get('days', 1, type=int)
     # Limit days to reasonable range (1-30 days)
     days = max(1, min(30, days))
@@ -575,10 +575,10 @@ def debug_memory():
     """Manual trigger for detailed memory analysis."""
     if not auth():
         abort(401)
-    
+
     log_memory_usage(force=True)
     log_detailed_memory_analysis()
-    
+
     return jsonify({
         'status': 'success',
         'message': 'Memory analysis completed. Check logs for details.'
@@ -589,9 +589,9 @@ def debug_cache():
     """Manual trigger for cache analysis."""
     if not auth():
         abort(401)
-    
+
     log_cache_stats()
-    
+
     return jsonify({
         'status': 'success',
         'message': 'Cache analysis completed. Check logs for details.'
@@ -602,7 +602,7 @@ def debug_cleanup():
     """Manual trigger for cache cleanup."""
     if not auth():
         abort(401)
-    
+
     try:
         # Check database privileges first
         config = configparser.ConfigParser()
@@ -637,11 +637,11 @@ def debug_clear_nodes():
     """Manual trigger to clear nodes cache."""
     if not auth():
         abort(401)
-    
+
     clear_nodes_cache()
     clear_database_cache()
     gc.collect()
-    
+
     return jsonify({
         'status': 'success',
         'message': 'Nodes cache cleared. Check logs for details.'
@@ -652,7 +652,7 @@ def debug_database_cache():
     """Manual trigger for database cache analysis."""
     if not auth():
         abort(401)
-    
+
     try:
         # Check database privileges
         config = configparser.ConfigParser()
@@ -662,7 +662,7 @@ def debug_database_cache():
         md = get_meshdata()
         if md and hasattr(md, 'db_cache'):
             stats = md.db_cache.get_cache_stats()
-                # Get application cache info
+            # Get application cache info
             app_cache_info = {}
             if hasattr(md, '_nodes_cache'):
                 app_cache_info = {
@@ -670,7 +670,7 @@ def debug_database_cache():
                     'cache_keys': list(md._nodes_cache.keys()),
                     'cache_timestamps': {k: v['timestamp'] for k, v in md._nodes_cache.items()}
                 }
-                return jsonify({
+            return jsonify({
                 'status': 'success',
                 'database_cache_stats': stats,
                 'application_cache_info': app_cache_info,
@@ -681,7 +681,7 @@ def debug_database_cache():
                 'status': 'error',
                 'message': 'Database cache not available'
             }), 500
-        except Exception as e:
+    except Exception as e:
         logging.error(f"Error during database cache analysis: {e}")
         return jsonify({
             'status': 'error',
@@ -706,7 +706,7 @@ def api_geocode():
             return jsonify(geocoded)
         else:
             return jsonify({'error': 'Geocoding failed'}), 500
-        except Exception as e:
+    except Exception as e:
         logging.error(f"Geocoding error: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
@@ -715,7 +715,7 @@ def get_node_positions_batch(node_ids):
     nodes = get_cached_nodes()
     if not nodes:
         return {}
-    
+
     positions = {}
     for node_id in node_ids:
         if node_id in nodes:
@@ -725,7 +725,7 @@ def get_node_positions_batch(node_ids):
                     'latitude': node['position']['latitude'],
                     'longitude': node['position']['longitude']
                 }
-    
+
     return positions
 
 @api.route('/node-positions')
@@ -749,7 +749,7 @@ def get_utilization_data():
     md = get_meshdata()
     if not md:
         return jsonify({'error': 'Database connection unavailable'}), 503
-    
+
     try:
         # Get parameters from request
         time_range = request.args.get('time_range', '24')  # hours
@@ -768,7 +768,7 @@ def get_utilization_data():
             return jsonify({'error': 'No node data available'}), 503
         # Get most recent telemetry for active nodes only
         sql = f"""
-            SELECT 
+            SELECT
                 t.id,
                 t.channel_utilization,
                 t.ts_created
@@ -797,7 +797,7 @@ def get_utilization_data():
             # Use placeholders for the IN clause
             placeholders = ','.join(['%s'] * len(active_node_ids))
             contact_sql = f"""
-                SELECT 
+                SELECT
                     from_id,
                     received_by_id,
                     p1.latitude_i as from_lat_i,
@@ -811,33 +811,33 @@ def get_utilization_data():
                     OR (r.hop_start - r.hop_limit = 0)
                 AND r.rx_time >= NOW() - INTERVAL {hours} HOUR
                 AND r.from_id IN ({placeholders})
-                AND p1.latitude_i IS NOT NULL 
+                AND p1.latitude_i IS NOT NULL
                 AND p1.longitude_i IS NOT NULL
-                AND p2.latitude_i IS NOT NULL 
+                AND p2.latitude_i IS NOT NULL
                 AND p2.longitude_i IS NOT NULL
             """
-                cursor.execute(contact_sql, active_node_ids)
+            cursor.execute(contact_sql, active_node_ids)
             contact_rows = cursor.fetchall()
-                # Build contact distance lookup
+            # Build contact distance lookup
             for row in contact_rows:
                 from_id = row['from_id']
                 to_id = row['received_by_id']
-                        # Check for null coordinates before calculating distance
-                if (row['from_lat_i'] is None or row['from_lon_i'] is None or 
+                # Check for null coordinates before calculating distance
+                if (row['from_lat_i'] is None or row['from_lon_i'] is None or
                     row['to_lat_i'] is None or row['to_lon_i'] is None):
                     continue
-                        # Calculate distance using Haversine formula
+                # Calculate distance using Haversine formula
                 lat1 = row['from_lat_i'] / 10000000.0
                 lon1 = row['from_lon_i'] / 10000000.0
                 lat2 = row['to_lat_i'] / 10000000.0
                 lon2 = row['to_lon_i'] / 10000000.0
-                        # Haversine distance calculation
+                # Haversine distance calculation
                 import math
                 R = 6371  # Earth's radius in km
                 dlat = math.radians(lat2 - lat1)
                 dlon = math.radians(lon2 - lon1)
-                a = (math.sin(dlat/2) * math.sin(dlat/2) + 
-                     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * 
+                a = (math.sin(dlat/2) * math.sin(dlat/2) +
+                     math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
                      math.sin(dlon/2) * math.sin(dlon/2))
                 c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
                 distance = R * c
@@ -854,17 +854,17 @@ def get_utilization_data():
         for node_id, telemetry_data in node_utilization.items():
             node_hex = utils.convert_node_id_from_int_to_hex(node_id)
             node_data = nodes.get(node_hex)
-                if node_data and node_data.get('position'):
+            if node_data and node_data.get('position'):
                 position = node_data['position']
                 if position and position.get('latitude_i') and position.get('longitude_i'):
                     # Calculate contact distance
                     node_contacts = contact_data.get(node_id, {'distances': [], 'contacts': set()})
                     mean_distance = 2.0  # Default
                     contact_count = len(node_contacts['contacts'])
-                                if node_contacts['distances']:
+                    if node_contacts['distances']:
                         mean_distance = sum(node_contacts['distances']) / len(node_contacts['distances'])
                         mean_distance = max(2.0, mean_distance)  # Minimum 2km
-                                # Use cached node data for position and names
+                    # Use cached node data for position and names
                     result.append({
                         'id': node_id,
                         'utilization': round(telemetry_data['utilization'], 2),
@@ -896,11 +896,11 @@ def get_hardware_models():
     md = get_meshdata()
     if not md:
         return jsonify({'error': 'Database connection unavailable'}), 503
-    
+
     # Query hardware model data
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
-        SELECT 
+        SELECT
             hw_model,
             COUNT(*) as count,
             COUNT(DISTINCT id) as unique_nodes
@@ -910,7 +910,7 @@ def get_hardware_models():
         ORDER BY count DESC
     """)
     hw_models = cursor.fetchall()
-    
+
     # Process results and get hardware model names
     hardware_stats = []
     for row in hw_models:
@@ -924,20 +924,20 @@ def get_hardware_models():
             'node_count': row['count'],
             'unique_nodes': row['unique_nodes']
         })
-    
+
     # Get top 15 most common
     most_common = hardware_stats[:15]
-    
+
     # Get bottom 15 least common (but only if we have more than 15 total models)
     least_common = hardware_stats[-15:] if len(hardware_stats) > 15 else hardware_stats
     least_common = sorted(least_common, key=lambda x: x['node_count'])  # Sort by node_count
-    
+
     cursor.close()
     return jsonify({
         'most_common': most_common,
         'least_common': least_common,
         'total_models': len(hardware_stats)
-    }) 
+    })
 
 @api.route('/map-data')
 def get_map_data():
@@ -945,7 +945,7 @@ def get_map_data():
     md = get_meshdata()
     if not md:
         return jsonify({'error': 'Database connection unavailable'}), 503
-    
+
     try:
         # Get filter parameters from request
         nodes_max_age = request.args.get('nodes_max_age', '0', type=int)  # seconds, 0 = show all
@@ -1007,10 +1007,12 @@ def get_map_data():
             ts_seen = node_data.get('ts_seen')
             if hasattr(ts_seen, 'timestamp'):
                 ts_seen = ts_seen.timestamp()
-                ts_uplink = node_data.get('ts_uplink')
+
+            ts_uplink = node_data.get('ts_uplink')
             if hasattr(ts_uplink, 'timestamp'):
                 ts_uplink = ts_uplink.timestamp()
-                # Check if node should be shown as offline
+
+            # Check if node should be shown as offline
             show_as_offline = False
             if nodes_offline_age != 'never' and ts_seen:
                 if now - ts_seen > nodes_offline_age:
@@ -1018,7 +1020,7 @@ def get_map_data():
                 # Calculate active status
             active_threshold = int(config.get('server', 'node_activity_prune_threshold', fallback=7200))
             is_active = ts_seen and (now - ts_seen) <= active_threshold
-                filtered_node_data = {
+            filtered_node_data = {
                 'id': node_id_hex,
                 'short_name': node_data.get('short_name', ''),
                 'long_name': node_data.get('long_name', ''),
@@ -1046,7 +1048,8 @@ def get_map_data():
                     filtered_node_data['position'] = None
             else:
                 filtered_node_data['position'] = None
-                filtered_nodes[node_id_hex] = filtered_node_data
+
+            filtered_nodes[node_id_hex] = filtered_node_data
         logging.info(f"Map API filtered to {len(filtered_nodes)} nodes")
         # Node processing is now done above in the filtering loop
         # Use existing functions to get zero-hop and neighbor data
@@ -1064,11 +1067,11 @@ def get_map_data():
                 if node_id_int in zero_hop_links:
                     for neighbor_id_int, link_data in zero_hop_links[node_id_int]['heard'].items():
                         neighbor_id_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
-                                        # Convert last_heard to timestamp if it's a datetime object
+                        # Convert last_heard to timestamp if it's a datetime object
                         last_heard_timestamp = link_data.get('last_heard', now)
                         if hasattr(last_heard_timestamp, 'timestamp'):
                             last_heard_timestamp = last_heard_timestamp.timestamp()
-                                        zero_hop_data = {
+                        zero_hop_data = {
                             'node_id': neighbor_id_hex,
                             'count': link_data.get('message_count', 1),
                             'best_snr': link_data.get('snr'),
@@ -1076,14 +1079,14 @@ def get_map_data():
                             'last_rx_time': last_heard_timestamp
                         }
                         filtered_nodes[node_id_hex]['zero_hop_data']['heard'].append(zero_hop_data)
-                                # Add zero-hop heard_by data
+                # Add zero-hop heard_by data
                     for neighbor_id_int, link_data in zero_hop_links[node_id_int]['heard_by'].items():
                         neighbor_id_hex = utils.convert_node_id_from_int_to_hex(neighbor_id_int)
-                                        # Convert last_heard to timestamp if it's a datetime object
+                        # Convert last_heard to timestamp if it's a datetime object
                         last_heard_timestamp = link_data.get('last_heard', now)
                         if hasattr(last_heard_timestamp, 'timestamp'):
                             last_heard_timestamp = last_heard_timestamp.timestamp()
-                                        zero_hop_data = {
+                        zero_hop_data = {
                             'node_id': neighbor_id_hex,
                             'count': link_data.get('message_count', 1),
                             'best_snr': link_data.get('snr'),
@@ -1121,4 +1124,4 @@ def get_map_data():
         logging.error(f"Error fetching map data: {str(e)}", exc_info=True)
         return jsonify({
             'error': f'Error fetching map data: {str(e)}'
-        }), 500 
+        }), 500
