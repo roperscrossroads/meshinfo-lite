@@ -1,11 +1,13 @@
 import configparser
 import mysql.connector
 import mysql.connector.pooling
+from contextlib import contextmanager
 import bcrypt
 import utils
 import re
 import jwt
 import time
+import datetime
 import logging
 import uuid
 import string
@@ -51,12 +53,34 @@ class Register:
             cur = self.db.cursor()
             cur.execute("SET NAMES utf8mb4;")
 
+    @contextmanager
     def get_db_connection(self):
-        """Get database connection from pool or fallback connection."""
-        if self.db_pool:
-            return self.db_pool.get_connection()
-        else:
-            return self.db
+        """Context manager for database connections."""
+        conn = None
+        try:
+            if self.db_pool:
+                conn = self.db_pool.get_connection()
+            else:
+                conn = self.db
+
+            # Set UTF8MB4 for proper Unicode support
+            cursor = conn.cursor()
+            cursor.execute("SET NAMES utf8mb4")
+            cursor.close()
+
+            yield conn
+
+        except Exception as e:
+            logger.error(f"Database connection error: {str(e)}")
+            if conn and conn != self.db:
+                conn.rollback()
+            raise
+        finally:
+            if conn and conn != self.db:
+                try:
+                    conn.close()
+                except:
+                    pass
 
     def validate_password(self, password):
         """Validate password against security policy."""
@@ -173,21 +197,30 @@ VALUES (%s, %s, %s, %s)"""
         cur.close()
         self.db.commit()
 
-    def register(self, username, email, password):
+    def register(self, username, email, password, confirm_password=None):
+        """Register a new user with enhanced validation."""
+        # Email validation
         email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        username_regex = r'^\w+$'
         if not email or not re.match(email_regex, email):
-            return {"error": "Invalid email."}
+            return {"error": "Invalid email address."}
 
-        # Use enhanced password validation
+        # Username validation
+        username_regex = r'^\w{3,20}$'  # 3-20 alphanumeric characters
+        if not username or not re.match(username_regex, username):
+            return {"error": "Username must be 3-20 characters, letters, numbers, and underscores only."}
+
+        # Password validation
         password_valid, password_message = self.validate_password(password)
         if not password_valid:
             return {"error": password_message}
 
-        if not username or not re.match(username_regex, username):
-            return {"error": "Invalid username."}
-        elif not self.verify(username, email):
-            return {"error": "Username or email already exist."}
+        # Confirm password check (if provided)
+        if confirm_password is not None and password != confirm_password:
+            return {"error": "Passwords do not match."}
+
+        # Check if user already exists
+        if not self.verify(username, email):
+            return {"error": "Username or email already exists."}
 
         # Use secure code generation
         code = self.generate_secure_code(8)  # More secure than utils.generate_random_code(4)
@@ -200,10 +233,14 @@ VALUES (%s, %s, %s, %s)"""
         base_url = self.config["mesh"]["url"]
         utils.send_email(
             email,
-            "MeshInfo Verify Account",
-            f"Please visit {base_url}/verify?c={code} to verify your account."
+            "MeshInfo Account Verification",
+            f"Welcome to MeshInfo!\n\n"
+            f"Please verify your account by clicking the link below:\n"
+            f"{base_url}/verify?c={code}\n\n"
+            f"This link will expire in 24 hours.\n\n"
+            f"If you didn't create this account, please ignore this email."
         )
-        return {"success": "Please check your email to verify your account."}
+        return {"success": "Registration successful! Please check your email to verify your account."}
     
     def update_password(self, email, newpass):
         hashed = utils.hash_password(newpass)
@@ -239,9 +276,11 @@ WHERE status='VERIFIED' AND email = %s"""
 
             encoded_jwt = jwt.encode(
                 {
-                    "email": email,
+                    "email": email.lower(),
                     "username": row[1],
-                    "time": int(time.time())
+                    "iat": int(time.time()),  # Issued at
+                    "exp": int(time.time()) + 86400,  # Expires in 24 hours
+                    "jti": str(uuid.uuid4())  # JWT ID for potential blacklisting
                 },
                 self.config["registrations"]["jwt_secret"],
                 algorithm="HS256"
