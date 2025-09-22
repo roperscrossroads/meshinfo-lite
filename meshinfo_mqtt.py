@@ -33,7 +33,18 @@ def connect_mqtt() -> mqtt_client:
             logger.error("Failed to connect, return code %d", rc)
 
     def on_disconnect(client, userdata, rc):
-        logger.warning(f"Disconnected with result code {rc}. Will attempt reconnect.")
+        # Provide human-readable disconnect reasons for better debugging
+        disconnect_reasons = {
+            0: "Normal disconnection",
+            1: "Unacceptable protocol version",
+            2: "Identifier rejected",
+            3: "Server unavailable",
+            4: "Bad username or password",
+            5: "Not authorized",
+            7: "Connection lost"
+        }
+        reason = disconnect_reasons.get(rc, f"Unknown reason (code {rc})")
+        logger.warning(f"Disconnected with result code {rc} ({reason}). Will attempt reconnect.")
         # No need for manual reconnect loop, paho handles it with reconnect_delay_set
 
     client = mqtt_client.Client(client_id="", clean_session=True, userdata=mesh_data_instance) # Ensure clean session if needed
