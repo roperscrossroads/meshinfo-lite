@@ -45,7 +45,7 @@ import json
 import datetime
 from meshinfo_api import api
 from meshinfo_utils import (
-    get_meshdata, get_cache_timeout, auth, config, log_memory_usage, 
+    get_meshdata, get_cache_timeout, auth, config, log_memory_usage,
     clear_nodes_cache, clear_database_cache, get_cached_chat_data, get_node_page_data,
     calculate_node_distance, find_relay_node_by_suffix, get_elsewhere_links, get_role_badge
 )
@@ -61,6 +61,7 @@ PIL.ImageDraw.ImageDraw.textsize = textsize
 
 app = Flask(__name__)
 
+
 # --- OG image generation for message_map ---
 OG_IMAGE_DIR = "/tmp/og_images"
 os.makedirs(OG_IMAGE_DIR, exist_ok=True)
@@ -70,26 +71,21 @@ def generate_message_map_image_staticmaps(message_id, sender_pos, receiver_posit
     extra = 40  # extra height for attribution
     context = staticmaps.Context()
     context.set_tile_provider(staticmaps.tile_provider_OSM)
-    
     # Add sender marker and lines if sender position is available
     if sender_pos and sender_pos.get('latitude') and sender_pos.get('longitude'):
         sender = staticmaps.create_latlng(sender_pos['latitude'], sender_pos['longitude'])
-        
-        # Add all lines from sender to receivers first (so they appear behind markers)
+            # Add all lines from sender to receivers first (so they appear behind markers)
         for pos in receiver_positions:
             if pos.get('latitude') and pos.get('longitude'):
                 receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
                 context.add_object(staticmaps.Line([sender, receiver], color=staticmaps.BLUE, width=2))
-        
-        # Add sender marker
+            # Add sender marker
         context.add_object(staticmaps.Marker(sender, color=staticmaps.RED, size=8))
-    
     # Add all receiver markers
     for pos in receiver_positions:
         if pos.get('latitude') and pos.get('longitude'):
             receiver = staticmaps.create_latlng(pos['latitude'], pos['longitude'])
             context.add_object(staticmaps.Marker(receiver, color=staticmaps.BLUE, size=6))
-    
     image = context.render_pillow(width, height + extra)
     # Crop off the bottom 'extra' pixels to remove attribution
     image = image.crop((0, 0, width, height))
@@ -105,7 +101,6 @@ def og_image_message_map(message_id):
     data = get_cached_message_map_data(message_id)
     if not data or not data.get('receiver_positions'):
         abort(404)
-    
     sender_pos = data.get('sender_position')
     def get_latlon(pos):
         lat = pos.get('latitude')
@@ -115,40 +110,32 @@ def og_image_message_map(message_id):
         if lon is None and 'longitude_i' in pos:
             lon = pos['longitude_i'] / 1e7
         return {'latitude': lat, 'longitude': lon}
-    
     # Handle sender position (optional)
     sender_pos_processed = None
     if sender_pos:
         sender_pos_processed = get_latlon(sender_pos)
         if not sender_pos_processed['latitude'] or not sender_pos_processed['longitude']:
             sender_pos_processed = None
-    
     # Process receiver positions
     receiver_positions = [get_latlon(p) for p in data['receiver_positions'].values() if p]
     receiver_positions = [p for p in receiver_positions if p['latitude'] and p['longitude']]
-    
     if not receiver_positions:
         abort(404)
-    
     path = os.path.join("/tmp/og_images", f"message_map_{message_id}.png")
     cache_expired = False
-    
     if os.path.exists(path):
         # Check file age
         file_age = time.time() - os.path.getmtime(path)
         max_cache_age = 3600  # 1 hour in seconds
-        
-        # Also check if message was updated since image was created
+            # Also check if message was updated since image was created
         if data.get('message', {}).get('ts_created'):
             message_created = data['message']['ts_created']
             if hasattr(message_created, 'timestamp'):
                 message_created = message_created.timestamp()
-            
-            if file_age > max_cache_age or (message_created and os.path.getmtime(path) < message_created):
+                    if file_age > max_cache_age or (message_created and os.path.getmtime(path) < message_created):
                 cache_expired = True
         elif file_age > max_cache_age:
             cache_expired = True
-    
     if not os.path.exists(path) or cache_expired:
         generate_message_map_image_staticmaps(message_id, sender_pos_processed, receiver_positions)
     return send_file(path, mimetype='image/png')
@@ -158,56 +145,46 @@ def generate_traceroute_map_image_staticmaps(traceroute_id, source_pos, destinat
     extra = 40  # extra height for attribution
     context = staticmaps.Context()
     context.set_tile_provider(staticmaps.tile_provider_OSM)
-    
     # Add all lines first (so they appear behind markers)
     if source_pos and destination_pos:
         source = staticmaps.create_latlng(source_pos['latitude'], source_pos['longitude'])
         destination = staticmaps.create_latlng(destination_pos['latitude'], destination_pos['longitude'])
-        
-        # Create forward path through all hops
+            # Create forward path through all hops
         forward_path_points = [source]
         for hop_pos in forward_hop_positions:
             if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
                 forward_path_points.append(staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude']))
         forward_path_points.append(destination)
-        
-        # Add forward path lines (green)
+            # Add forward path lines (green)
         for i in range(len(forward_path_points) - 1):
             context.add_object(staticmaps.Line([forward_path_points[i], forward_path_points[i+1]], color=staticmaps.Color(68, 170, 68), width=2))
-        
-        # Create return path if return hops exist
+            # Create return path if return hops exist
         if return_hop_positions:
             return_path_points = [destination]
             for hop_pos in return_hop_positions:
                 if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
                     return_path_points.append(staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude']))
             return_path_points.append(source)
-            
-            # Add return path lines (purple)
+                    # Add return path lines (purple)
             for i in range(len(return_path_points) - 1):
                 context.add_object(staticmaps.Line([return_path_points[i], return_path_points[i+1]], color=staticmaps.Color(170, 68, 170), width=2))
-    
     # Add all markers after lines (so they appear on top)
     if source_pos:
         source = staticmaps.create_latlng(source_pos['latitude'], source_pos['longitude'])
         context.add_object(staticmaps.Marker(source, color=staticmaps.RED, size=8))
-    
     # Add forward hop markers (green)
     for i, hop_pos in enumerate(forward_hop_positions):
         if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
             hop = staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude'])
             context.add_object(staticmaps.Marker(hop, color=staticmaps.Color(68, 170, 68), size=6))
-    
     if destination_pos:
         destination = staticmaps.create_latlng(destination_pos['latitude'], destination_pos['longitude'])
         context.add_object(staticmaps.Marker(destination, color=staticmaps.BLUE, size=8))
-    
     # Add return hop markers (purple) - but only if they're different from forward hops
     for i, hop_pos in enumerate(return_hop_positions):
         if hop_pos and hop_pos.get('latitude') and hop_pos.get('longitude'):
             hop = staticmaps.create_latlng(hop_pos['latitude'], hop_pos['longitude'])
             context.add_object(staticmaps.Marker(hop, color=staticmaps.Color(170, 68, 170), size=6))
-    
     image = context.render_pillow(width, height + extra)
     # Crop off the bottom 'extra' pixels to remove attribution
     image = image.crop((0, 0, width, height))
@@ -222,7 +199,6 @@ def og_image_traceroute_map(traceroute_id):
     md = get_meshdata()
     if not md:
         abort(404)
-    
     # Get traceroute data
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
@@ -232,10 +208,8 @@ def og_image_traceroute_map(traceroute_id):
     """, (traceroute_id,))
     traceroute_data = cursor.fetchone()
     cursor.close()
-    
     if not traceroute_data:
         abort(404)
-    
     # Get positions for source and destination
     def get_node_position(node_id):
         cursor = md.db.cursor(dictionary=True)
@@ -248,21 +222,17 @@ def og_image_traceroute_map(traceroute_id):
         """, (node_id,))
         pos = cursor.fetchone()
         cursor.close()
-        
-        if pos and pos['latitude_i'] is not None and pos['longitude_i'] is not None:
+            if pos and pos['latitude_i'] is not None and pos['longitude_i'] is not None:
             return {
                 'latitude': pos['latitude_i'] / 1e7,
                 'longitude': pos['longitude_i'] / 1e7,
                 'position_time': pos['position_time']
             }
         return None
-    
     source_pos = get_node_position(traceroute_data['from_id'])
     destination_pos = get_node_position(traceroute_data['to_id'])
-    
     if not source_pos or not destination_pos:
         abort(404)
-    
     # Get positions for all hops
     forward_hop_positions = []
     if traceroute_data['route']:
@@ -270,7 +240,6 @@ def og_image_traceroute_map(traceroute_id):
         for hop_id in route:
             hop_pos = get_node_position(hop_id)
             forward_hop_positions.append(hop_pos)
-    
     # Get positions for return hops
     return_hop_positions = []
     if traceroute_data['route_back']:
@@ -278,30 +247,24 @@ def og_image_traceroute_map(traceroute_id):
         for hop_id in route_back:
             hop_pos = get_node_position(hop_id)
             return_hop_positions.append(hop_pos)
-    
     # Generate the image
     path = os.path.join("/tmp/og_images", f"traceroute_map_{traceroute_id}.png")
     cache_expired = False
-    
     if os.path.exists(path):
         # Check file age
         file_age = time.time() - os.path.getmtime(path)
         max_cache_age = 3600  # 1 hour in seconds
-        
-        # Also check if traceroute was updated since image was created
+            # Also check if traceroute was updated since image was created
         if traceroute_data.get('ts_created'):
             traceroute_created = traceroute_data['ts_created']
             if hasattr(traceroute_created, 'timestamp'):
                 traceroute_created = traceroute_created.timestamp()
-            
-            if file_age > max_cache_age or (traceroute_created and os.path.getmtime(path) < traceroute_created):
+                    if file_age > max_cache_age or (traceroute_created and os.path.getmtime(path) < traceroute_created):
                 cache_expired = True
         elif file_age > max_cache_age:
             cache_expired = True
-    
     if not os.path.exists(path) or cache_expired:
         generate_traceroute_map_image_staticmaps(traceroute_id, source_pos, destination_pos, forward_hop_positions, return_hop_positions)
-    
     return send_file(path, mimetype='image/png')
 
 cache_dir = os.path.join(os.path.dirname(__file__), 'runtime_cache')
@@ -321,11 +284,9 @@ cache = None
 def initialize_cache():
     """Initialize the Flask cache with configuration."""
     global cache
-    
     # Load config first
     config = configparser.ConfigParser()
     config.read("config.ini")
-    
     # Configure Flask-Caching
     cache_config = {
         'CACHE_TYPE': 'FileSystemCache',
@@ -337,7 +298,6 @@ def initialize_cache():
             'max_size': 50 * 1024 * 1024  # 50MB max size per item
         }
     }
-    
     if cache_dir:
         logging.info(f"Using FileSystemCache with directory: {cache_dir}")
     else:
@@ -401,8 +361,7 @@ def log_cache_stats():
         total_size = get_cache_size()
         entry_count = get_cache_entry_count()
         largest_entries = get_largest_cache_entries()
-        
-        logging.info(f"Cache Statistics:")
+            logging.info(f"Cache Statistics:")
         logging.info(f"  Total Size: {total_size / 1024 / 1024:.2f} MB")
         logging.info(f"  Entry Count: {entry_count}")
         logging.info("  Largest Entries:")
@@ -419,26 +378,20 @@ def cleanup_cache():
         log_memory_usage(force=True)
         logging.info("Cache stats before cleanup:")
         log_cache_stats()
-        
-        # Clear nodes-related cache entries
+            # Clear nodes-related cache entries
         clear_nodes_cache()
-        
-        # Clear database query cache
+            # Clear database query cache
         clear_database_cache()
-        
-        # Clear the cache
+            # Clear the cache
         with app.app_context():
             cache.clear()
-        
-        # Force garbage collection
+            # Force garbage collection
         gc.collect()
-        
-        logging.info("Memory usage after cache cleanup:")
+            logging.info("Memory usage after cache cleanup:")
         log_memory_usage(force=True)
         logging.info("Cache stats after cleanup:")
         log_cache_stats()
-        
-    except Exception as e:
+        except Exception as e:
         logging.error(f"Error during cache cleanup: {e}")
 
 # Make globals available to templates
@@ -563,17 +516,14 @@ def log_detailed_memory_analysis():
     try:
         import gc
         gc.collect()
-        
-        logging.info("=== DETAILED MEMORY ANALYSIS ===")
-        
-        # Check database connections
+            logging.info("=== DETAILED MEMORY ANALYSIS ===")
+            # Check database connections
         db_connections = 0
         for obj in gc.get_objects():
             if hasattr(obj, '__class__') and 'mysql' in str(obj.__class__).lower():
                 db_connections += 1
         logging.info(f"Database connection objects: {db_connections}")
-        
-        # Check cache objects
+            # Check cache objects
         cache_objects = 0
         cache_size = 0
         for obj in gc.get_objects():
@@ -584,22 +534,19 @@ def log_detailed_memory_analysis():
                 except:
                     pass
         logging.info(f"Cache objects: {cache_objects} ({cache_size / 1024 / 1024:.1f} MB)")
-        
-        # Check for Flask/WSGI objects
+            # Check for Flask/WSGI objects
         flask_objects = 0
         for obj in gc.get_objects():
             if hasattr(obj, '__class__') and 'flask' in str(obj.__class__).lower():
                 flask_objects += 1
         logging.info(f"Flask objects: {flask_objects}")
-        
-        # Check for template objects
+            # Check for template objects
         template_objects = 0
         for obj in gc.get_objects():
             if hasattr(obj, '__class__') and 'template' in str(obj.__class__).lower():
                 template_objects += 1
         logging.info(f"Template objects: {template_objects}")
-        
-        # Check for large dictionaries and lists
+            # Check for large dictionaries and lists
         large_dicts = []
         large_lists = []
         for obj in gc.get_objects():
@@ -610,25 +557,20 @@ def log_detailed_memory_analysis():
                     large_lists.append((len(obj), str(obj)[:50]))
             except:
                 pass
-        
-        if large_dicts:
+            if large_dicts:
             logging.info("Large dictionaries:")
             for size, repr_str in sorted(large_dicts, reverse=True)[:5]:
                 logging.info(f"  Dict with {size:,} items: {repr_str}")
-                
-        if large_lists:
+                    if large_lists:
             logging.info("Large lists:")
             for size, repr_str in sorted(large_lists, reverse=True)[:5]:
                 logging.info(f"  List with {size:,} items: {repr_str}")
-        
-        # Check for circular references
+            # Check for circular references
         circular_refs = gc.collect()
         if circular_refs > 0:
             logging.warning(f"Found {circular_refs} circular references")
-        
-        logging.info("=== END DETAILED ANALYSIS ===")
-        
-    except Exception as e:
+            logging.info("=== END DETAILED ANALYSIS ===")
+        except Exception as e:
         logging.error(f"Error in detailed memory analysis: {e}")
 
 # Modify the memory watchdog to include detailed analysis
@@ -639,8 +581,7 @@ def memory_watchdog():
             process = psutil.Process(os.getpid())
             memory_info = process.memory_info()
             memory_mb = memory_info.rss / 1024 / 1024
-            
-            if memory_mb > 1000:  # If over 1GB (reduced from 2GB)
+                    if memory_mb > 1000:  # If over 1GB (reduced from 2GB)
                 logging.warning(f"Memory usage high ({memory_mb:.2f} MB), performing detailed analysis")
                 log_detailed_memory_analysis()
                 logging.info("Cache stats before high memory cleanup:")
@@ -654,8 +595,7 @@ def memory_watchdog():
                 gc.collect()
                 logging.info("Cache stats after high memory cleanup:")
                 log_cache_stats()
-                
-            if memory_mb > 2000:  # If over 2GB (reduced from 4GB)
+                        if memory_mb > 2000:  # If over 2GB (reduced from 4GB)
                 logging.error(f"Memory usage critical ({memory_mb:.2f} MB), logging detailed memory info")
                 log_memory_usage(force=True)
                 log_detailed_memory_analysis()
@@ -665,11 +605,9 @@ def memory_watchdog():
                 clear_nodes_cache()
                 clear_database_cache()
                 gc.collect()
-                
-        except Exception as e:
+                    except Exception as e:
             logging.error(f"Error in memory watchdog: {e}")
-            
-        time.sleep(30)  # Check every 30 seconds instead of 60
+                time.sleep(30)  # Check every 30 seconds instead of 60
 
 # Start monitoring threads
 connection_monitor_thread = threading.Thread(target=monitor_connections, daemon=True)
@@ -720,7 +658,6 @@ def get_cached_nodes():
     md = get_meshdata()
     if not md:
         return None
-    
     # Use the cached method to prevent duplicate dictionaries
     nodes_data = md.get_nodes_cached()
     logging.debug(f"Fetched {len(nodes_data)} nodes from application cache")
@@ -748,8 +685,7 @@ def get_cached_message_map_data(message_id):
     md = get_meshdata()
     if not md:
         return None
-        
-    # Get message and basic reception data
+        # Get message and basic reception data
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
         SELECT t.*, GROUP_CONCAT(r.received_by_id) as receiver_ids
@@ -781,7 +717,6 @@ def get_cached_message_map_data(message_id):
 
     # Batch load all reception details
     reception_details = md.get_reception_details_batch(message_id, receiver_ids_list)
-    
     # Ensure keys are int for lookups
     receiver_positions = {int(k): v for k, v in positions.items() if k in receiver_ids_list}
     receiver_details = {int(k): v for k, v in reception_details.items() if k in receiver_ids_list}
@@ -815,7 +750,6 @@ def get_cached_message_map_data(message_id):
         xy_points = [latlon_to_xy(lon, lat) for lon, lat in coords]
         hull_xy = MultiPoint(xy_points).convex_hull
         convex_hull_area_km2 = hull_xy.area
-    
     # Prepare message object for template
     message = {
         'id': message_id,
@@ -826,7 +760,6 @@ def get_cached_message_map_data(message_id):
         'ts_created': message_time,
         'receiver_ids': receiver_ids_list
     }
-    
     return {
         'message': message,
         'sender_position': sender_position,
@@ -840,15 +773,12 @@ def message_map():
     message_id = request.args.get('id')
     if not message_id:
         return redirect(url_for('chat'))
-    
     # Get cached data
     data = get_cached_message_map_data(message_id)
     if not data:
         return redirect(url_for('chat'))
-    
     # Get nodes once and create a simplified version with only needed nodes
     all_nodes = get_cached_nodes()
-    
     # Create simplified nodes dict with only nodes used in this message
     used_node_ids = set()
     used_node_ids.add(utils.convert_node_id_from_int_to_hex(data['message']['from_id']))
@@ -856,7 +786,6 @@ def message_map():
         used_node_ids.add(utils.convert_node_id_from_int_to_hex(data['message']['to_id']))
     for receiver_id in data['message']['receiver_ids']:
         used_node_ids.add(utils.convert_node_id_from_int_to_hex(receiver_id))
-    
     simplified_nodes = {}
     for node_id in used_node_ids:
         if node_id in all_nodes:
@@ -866,7 +795,6 @@ def message_map():
                 'short_name': node.get('short_name', ''),
                 'position': node.get('position')
             }
-    
     # --- Provide zero_hop_links and position data for relay node inference ---
     md = get_meshdata()
     sender_id = data['message']['from_id']
@@ -903,11 +831,9 @@ def traceroute_map():
     traceroute_id = request.args.get('id')
     if not traceroute_id:
         abort(404)
-        
-    md = get_meshdata()
+        md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    
     # Get traceroute attempt by unique id first
     cursor = md.db.cursor(dictionary=True)
     cursor.execute("""
@@ -917,27 +843,22 @@ def traceroute_map():
     if not traceroute_data:
         cursor.close()
         abort(404)
-    
     # Format the forward route data
     route = []
     if traceroute_data['route']:
         route = [int(hop) for hop in traceroute_data['route'].split(';') if hop]
-    
     # Format the return route data
     route_back = []
     if traceroute_data['route_back']:
         route_back = [int(hop) for hop in traceroute_data['route_back'].split(';') if hop]
-    
     # Format the forward SNR values and scale by dividing by 4
     snr_towards = []
     if traceroute_data['snr_towards']:
         snr_towards = [float(s)/4.0 for s in traceroute_data['snr_towards'].split(';') if s]
-    
     # Format the return SNR values and scale by dividing by 4
     snr_back = []
     if traceroute_data['snr_back']:
         snr_back = [float(s)/4.0 for s in traceroute_data['snr_back'].split(';') if s]
-    
     # Create a clean traceroute object for the template
     traceroute = {
         'id': traceroute_data['traceroute_id'],
@@ -952,13 +873,10 @@ def traceroute_map():
         'snr_back': snr_back,
         'success': traceroute_data['success']
     }
-    
     cursor.close()
-    
     # Get nodes and create simplified version with only needed nodes
     all_nodes = get_cached_nodes()
     used_node_ids = set([traceroute['from_id'], traceroute['to_id']] + traceroute['route'] + traceroute['route_back'])
-    
     simplified_nodes = {}
     for node_id in used_node_ids:
         node_hex = utils.convert_node_id_from_int_to_hex(node_id)
@@ -974,7 +892,6 @@ def traceroute_map():
                 'hw_model': node.get('hw_model'),
                 'firmware_version': node.get('firmware_version')
             }
-    
     # --- Build traceroute_positions dict for historical accuracy ---
     node_ids = set([traceroute['from_id'], traceroute['to_id']] + traceroute['route'] + traceroute['route_back'])
     traceroute_positions = {}
@@ -1005,7 +922,6 @@ def traceroute_map():
         if pos:
             traceroute_positions[node_id] = pos
 
-    
     return render_template(
         "traceroute_map.html.j2",
         auth=auth(),
@@ -1040,12 +956,10 @@ def graph():
     view_type = request.args.get('view_type', 'merged')
     days = int(request.args.get('days', 1))
     zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
-    
     # Get cached data
     data = get_cached_graph_data(view_type, days, zero_hop_timeout)
     if not data:
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "graph.html.j2",
         auth=auth(),
@@ -1062,12 +976,10 @@ def graph2():
     view_type = request.args.get('view_type', 'merged')
     days = int(request.args.get('days', 1))
     zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
-    
     # Get cached data
     data = get_cached_graph_data(view_type, days, zero_hop_timeout)
     if not data:
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "graph2.html.j2",
         auth=auth(),
@@ -1084,12 +996,10 @@ def graph3():
     view_type = request.args.get('view_type', 'merged')
     days = int(request.args.get('days', 1))
     zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
-    
     # Get cached data
     data = get_cached_graph_data(view_type, days, zero_hop_timeout)
     if not data:
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "graph3.html.j2",
         auth=auth(),
@@ -1106,12 +1016,10 @@ def graph4():
     view_type = request.args.get('view_type', 'merged')
     days = int(request.args.get('days', 1))
     zero_hop_timeout = int(request.args.get('zero_hop_timeout', 43200))
-    
     # Get cached data
     data = get_cached_graph_data(view_type, days, zero_hop_timeout)
     if not data:
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "graph4.html.j2",
         auth=auth(),
@@ -1128,7 +1036,6 @@ def utilization_heatmap():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "utilization-heatmap.html.j2",
         auth=auth(),
@@ -1144,7 +1051,6 @@ def utilization_hexmap():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "utilization-hexmap.html.j2",
         auth=auth(),
@@ -1160,7 +1066,6 @@ def map():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "map_api.html.j2",
         auth=auth(),
@@ -1177,15 +1082,12 @@ def map_classic():
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
     nodes = get_cached_nodes()
-    
     # Get timeout from config
     zero_hop_timeout = int(config.get("server", "zero_hop_timeout", fallback=43200))
     cutoff_time = int(time.time()) - zero_hop_timeout
-    
     # Get zero-hop data for all nodes
     cursor = md.db.cursor(dictionary=True)
     zero_hop_data = {}
-    
     # Query for all zero-hop messages
     cursor.execute("""
         SELECT 
@@ -1209,17 +1111,14 @@ def map_classic():
         ORDER BY
             last_rx_time DESC
     """, (cutoff_time,))
-    
     for row in cursor.fetchall():
         from_id = utils.convert_node_id_from_int_to_hex(row['from_id'])
         received_by_id = utils.convert_node_id_from_int_to_hex(row['received_by_id'])
-        
-        if from_id not in zero_hop_data:
+            if from_id not in zero_hop_data:
             zero_hop_data[from_id] = {'heard': [], 'heard_by': []}
         if received_by_id not in zero_hop_data:
             zero_hop_data[received_by_id] = {'heard': [], 'heard_by': []}
-            
-        # Add to heard_by list of sender
+                # Add to heard_by list of sender
         zero_hop_data[from_id]['heard_by'].append({
             'node_id': received_by_id,
             'count': row['count'],
@@ -1227,8 +1126,7 @@ def map_classic():
             'avg_snr': row['avg_snr'],
             'last_rx_time': row['last_rx_time']
         })
-        
-        # Add to heard list of receiver
+            # Add to heard list of receiver
         zero_hop_data[received_by_id]['heard'].append({
             'node_id': from_id,
             'count': row['count'],
@@ -1236,9 +1134,7 @@ def map_classic():
             'avg_snr': row['avg_snr'],
             'last_rx_time': row['last_rx_time']
         })
-    
     cursor.close()
-    
     return render_template(
         "map.html.j2",
         auth=auth(),
@@ -1317,15 +1213,12 @@ def traceroutes():
         abort(503, description="Database connection unavailable")
     page = request.args.get('page', 1, type=int)
     per_page = 100
-    
     nodes = get_cached_nodes()
     traceroute_data = md.get_traceroutes(page=page, per_page=per_page)
-    
     # Calculate pagination info
     total = traceroute_data['total']
     start_item = (page - 1) * per_page + 1 if total > 0 else 0
     end_item = min(page * per_page, total)
-    
     # Create pagination info
     pagination = {
         'page': page,
@@ -1340,7 +1233,6 @@ def traceroutes():
         'start_item': start_item,
         'end_item': end_item
     }
-    
     return render_template(
         "traceroutes.html.j2",
         auth=auth(),
@@ -1360,10 +1252,8 @@ def logs():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    
     # Get node filter from query parameter
     node_filter = request.args.get('node')
-    
     logs = md.get_logs()
     return render_template(
         "logs.html.j2",
@@ -1382,20 +1272,16 @@ def routing():
     md = get_meshdata()
     if not md: # Check if MeshData failed to initialize
         abort(503, description="Database connection unavailable")
-    
     # Get query parameters
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     error_only = request.args.get('error_only', 'false').lower() == 'true'
     days = request.args.get('days', 7, type=int)
-    
     # Get routing messages
     routing_data = md.get_routing_messages(page=page, per_page=per_page, error_only=error_only, days=days)
-    
     # Get routing statistics
     stats = md.get_routing_stats(days=days)
     error_breakdown = md.get_routing_errors_by_type(days=days)
-    
     # Create template context
     template_context = {
         "auth": auth(),
@@ -1411,18 +1297,14 @@ def routing():
         "timestamp": datetime.datetime.now(),
         "meshtastic_support": get_meshtastic_support()
     }
-    
     response = render_template("routing.html.j2", **template_context)
-    
     # Clean up large objects to help with memory management
     del template_context
     del routing_data
     del stats
     del error_breakdown
-    
     # Force garbage collection
     gc.collect()
-    
     return response
 
 @app.route('/monday.html')
@@ -1649,8 +1531,7 @@ def serve_static(filename):
         nodes = get_cached_nodes()
         if not nodes:
             abort(503, description="Database connection unavailable")
-        
-        # Check if node exists first
+            # Check if node exists first
         if node_hex not in nodes:
             abort(404)
 
@@ -1684,17 +1565,13 @@ def serve_static(filename):
             max_distance=node_page_data['max_distance_km'],
             elsewhere_links=node_page_data['elsewhere_links']
         ))
-        
-        # Clean up node_page_data to help with memory management
+            # Clean up node_page_data to help with memory management
         del node_page_data
-        
-        # Force garbage collection to release memory immediately
+            # Force garbage collection to release memory immediately
         gc.collect()
-        
-        # Set Cache-Control header for client-side caching
+            # Set Cache-Control header for client-side caching
         response.headers['Cache-Control'] = 'public, max-age=60'
-        
-        return response
+            return response
 
     if re.match(userp, filename):
         match = re.match(userp, filename)
@@ -1812,16 +1689,13 @@ def metrics():
 def chat():
     page = request.args.get('page', 1, type=int)
     per_page = 50
-    
     # Get cached data
     nodes = get_cached_nodes()
     if not nodes:
         abort(503, description="Database connection unavailable")
-        
-    chat_data = get_cached_chat_data(page, per_page)
+        chat_data = get_cached_chat_data(page, per_page)
     if not chat_data:
         abort(503, description="Database connection unavailable")
-    
     return render_template(
         "chat.html.j2",
         auth=auth(),
@@ -1842,16 +1716,13 @@ def chat2():
     page = request.args.get('page', 1, type=int)
     per_page = 50
     channel = request.args.get('channel', 'all')
-    
     # Get cached data
     nodes = get_cached_nodes()
     if not nodes:
         abort(503, description="Database connection unavailable")
-        
-    chat_data = get_cached_chat_data(page, per_page, channel)
+        chat_data = get_cached_chat_data(page, per_page, channel)
     if not chat_data:
         abort(503, description="Database connection unavailable")
-    
     # Get available channels from meshtastic_support
     import meshtastic_support
     available_channels = []
@@ -1861,7 +1732,6 @@ def chat2():
             'name': meshtastic_support.get_channel_name(channel_enum.value),
             'short_name': meshtastic_support.get_channel_name(channel_enum.value, use_short_names=True)
         })
-    
     # Process channel display for the template
     channel_display = "All"
     if channel != 'all':
@@ -1874,7 +1744,6 @@ def chat2():
             channel_display = ', '.join(short_names)
         else:
             channel_display = channel
-    
     # Pre-process nodes to reduce template complexity
     # Only include nodes that are actually used in the chat messages
     used_node_ids = set()
@@ -1885,7 +1754,6 @@ def chat2():
         for reception in message.get("receptions", []):
             node_id = utils.convert_node_id_from_int_to_hex(reception["node_id"])
             used_node_ids.add(node_id)
-    
     # Create simplified nodes dict with only needed data
     simplified_nodes = {}
     for node_id in used_node_ids:
@@ -1905,7 +1773,6 @@ def chat2():
                 'telemetry': node.get('telemetry'),
                 'ts_seen': node.get('ts_seen')
             }
-    
     return render_template(
         "chat2.html.j2",
         auth=auth(),
@@ -1929,9 +1796,7 @@ def serve_index(success_message=None, error_message=None):
     nodes = get_cached_nodes()
     if not nodes:
         abort(503, description="Database connection unavailable")
-    
     active_nodes = get_cached_active_nodes()
-    
     return render_template(
         "index.html.j2",
         auth=auth(),
@@ -1951,11 +1816,9 @@ def nodes():
         abort(503, description="Database connection unavailable")
     latest = get_cached_latest_node()
     logging.info(f"/nodes.html: Loaded {len(nodes)} nodes.")
-    
     # Get hardware model filter from query parameters
     hw_model_filter = request.args.get('hw_model')
     hw_name_filter = request.args.get('hw_name')
-    
     return render_template(
         "nodes.html.j2",
         auth=auth(),
@@ -1981,11 +1844,9 @@ def allnodes():
         abort(503, description="Database connection unavailable")
     latest = get_cached_latest_node()
     logging.info(f"/allnodes.html: Loaded {len(nodes)} nodes.")
-    
     # Get hardware model filter from query parameters
     hw_model_filter = request.args.get('hw_model')
     hw_name_filter = request.args.get('hw_name')
-    
     return render_template(
         "allnodes.html.j2",
         auth=auth(),
@@ -2006,14 +1867,11 @@ def allnodes():
 @app.route('/message-paths.html')
 def message_paths():
     days = float(request.args.get('days', 0.167))  # Default to 4 hours if not provided
-    
     md = get_meshdata()
     if not md:
         abort(503, description="Database connection unavailable")
-    
     # Get relay network data
     relay_data = md.get_relay_network_data(days)
-    
     return render_template(
         "message-paths.html.j2",
         auth=auth(),
@@ -2036,11 +1894,9 @@ def get_cached_hardware_models():
         md = get_meshdata()
         if not md:
             return {'error': 'Database connection unavailable'}
-        
-        # Get hardware model statistics
+            # Get hardware model statistics
         cur = md.db.cursor(dictionary=True)
-        
-        # Query to get hardware model counts with model names
+            # Query to get hardware model counts with model names
         sql = """
         SELECT 
             hw_model,
@@ -2051,21 +1907,17 @@ def get_cached_hardware_models():
         GROUP BY hw_model 
         ORDER BY node_count DESC
         """
-        
-        cur.execute(sql)
+            cur.execute(sql)
         results = cur.fetchall()
         cur.close()
-        
-        # Process results and get hardware model names - use tuples to reduce memory
+            # Process results and get hardware model names - use tuples to reduce memory
         hardware_stats = []
         for row in results:
             hw_model_id = row['hw_model']
             hw_model_name = get_hardware_model_name(hw_model_id)
-            
-            # Get a sample node for icon
+                    # Get a sample node for icon
             sample_node = row['sample_names'].split(', ')[0] if row['sample_names'] else f"Model {hw_model_id}"
-            
-            # Use tuple instead of dict to reduce memory overhead
+                    # Use tuple instead of dict to reduce memory overhead
             hardware_stats.append((
                 hw_model_id,
                 hw_model_name or f"Unknown Model {hw_model_id}",
@@ -2073,16 +1925,13 @@ def get_cached_hardware_models():
                 row['sample_names'],
                 utils.graph_icon(sample_node)
             ))
-        
-        # Get top 15 most common
+            # Get top 15 most common
         most_common = hardware_stats[:15]
-        
-        # Get bottom 15 least common (but only if we have more than 15 total models)
+            # Get bottom 15 least common (but only if we have more than 15 total models)
         # Sort in ascending order (lowest count first)
         least_common = hardware_stats[-15:] if len(hardware_stats) > 15 else hardware_stats
         least_common = sorted(least_common, key=lambda x: x[2])  # Sort by node_count (index 2)
-        
-        # Convert tuples to dicts only for JSON serialization
+            # Convert tuples to dicts only for JSON serialization
         def tuple_to_dict(hw_tuple):
             return {
                 'model_id': hw_tuple[0],
@@ -2091,14 +1940,12 @@ def get_cached_hardware_models():
                 'sample_names': hw_tuple[3],
                 'icon_url': hw_tuple[4]
             }
-        
-        return {
+            return {
             'most_common': [tuple_to_dict(hw) for hw in most_common],
             'least_common': [tuple_to_dict(hw) for hw in least_common],
             'total_models': len(hardware_stats)
         }
-        
-    except Exception as e:
+        except Exception as e:
         logging.error(f"Error fetching hardware models: {e}")
         return {'error': 'Failed to fetch hardware model data'}
 
@@ -2107,20 +1954,16 @@ def generate_node_map_image_staticmaps(node_id, node_position, node_name):
     extra = 40  # extra height for attribution
     context = staticmaps.Context()
     context.set_tile_provider(staticmaps.tile_provider_OSM)
-    
     # Convert position coordinates
     lat = node_position['latitude_i'] / 10000000.0
     lon = node_position['longitude_i'] / 10000000.0
     node_point = staticmaps.create_latlng(lat, lon)
-    
     # Add node marker
     context.add_object(staticmaps.Marker(node_point, color=staticmaps.RED, size=16))
-    
     # Render the image
     image = context.render_pillow(width, height + extra)
     # Crop off the bottom 'extra' pixels to remove attribution
     image = image.crop((0, 0, width, height))
-    
     return image
 
 @app.route('/og_image/node_map/<int:node_id>.png')
@@ -2129,62 +1972,50 @@ def og_image_node_map(node_id):
     try:
         # Ensure the OG images directory exists
         os.makedirs("/tmp/og_images", exist_ok=True)
-        
-        # Get node data using the existing cached function
+            # Get node data using the existing cached function
         nodes = get_cached_nodes()
         if not nodes:
             return "Database unavailable", 503
-        
-        # Convert node ID to hex format
+            # Convert node ID to hex format
         node_id_hex = utils.convert_node_id_from_int_to_hex(node_id)
-        
-        # Get node data
+            # Get node data
         node_data = nodes.get(node_id_hex)
         if not node_data:
             return "Node not found", 404
-        
-        # Check if node has position data
+            # Check if node has position data
         position = node_data.get('position')
         if not position or not position.get('latitude_i') or not position.get('longitude_i'):
             return "Node has no position data", 404
-        
-        # Check cache expiration
+            # Check cache expiration
         path = os.path.join("/tmp/og_images", f"node_map_{node_id}.png")
         cache_expired = False
-        
-        if os.path.exists(path):
+            if os.path.exists(path):
             # Check file age
             file_age = time.time() - os.path.getmtime(path)
             max_cache_age = 3600  # 1 hour in seconds
-            
-            # Also check if node position has been updated since image was created
+                    # Also check if node position has been updated since image was created
             ts_seen = node_data.get('ts_seen')
             if ts_seen:
                 if hasattr(ts_seen, 'timestamp'):
                     node_last_seen = ts_seen.timestamp()
                 else:
                     node_last_seen = ts_seen
-                
-                if file_age > max_cache_age or (node_last_seen and os.path.getmtime(path) < node_last_seen):
+                            if file_age > max_cache_age or (node_last_seen and os.path.getmtime(path) < node_last_seen):
                     cache_expired = True
             elif file_age > max_cache_age:
                 cache_expired = True
-        
-        # Generate the image if it doesn't exist or is expired
+            # Generate the image if it doesn't exist or is expired
         if not os.path.exists(path) or cache_expired:
             node_position = {
                 'latitude_i': position['latitude_i'],
                 'longitude_i': position['longitude_i']
             }
             node_name = node_data.get('short_name') or node_data.get('long_name') or f"Node {node_id}"
-            
-            image = generate_node_map_image_staticmaps(node_id, node_position, node_name)
+                    image = generate_node_map_image_staticmaps(node_id, node_position, node_name)
             image.save(path)
-        
-        # Serve the image
+            # Serve the image
         return send_file(path, mimetype='image/png')
-        
-    except Exception as e:
+        except Exception as e:
         logging.error(f"Error generating node map OG image: {e}")
         return "Error generating image", 500
 
@@ -2227,7 +2058,6 @@ def run():
 
     waitress_logger = logging.getLogger("waitress")
     waitress_logger.setLevel(logging.DEBUG)  # Enable all logs from Waitress
-    
     # Configure Waitress to trust proxy headers for real IP addresses
     # This is needed when running behind Docker, nginx, or other reverse proxies
     serve(
