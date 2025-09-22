@@ -162,9 +162,14 @@ class MeshData:
 
     def get_telemetry(self, id):
         telemetry = {}
-        sql = """SELECT * FROM telemetry WHERE id = %s
-AND battery_level IS NOT NULL
-ORDER BY telemetry_time DESC LIMIT 1"""
+        sql = """SELECT id, air_util_tx, battery_level, channel_utilization,
+                        uptime_seconds, voltage, temperature, relative_humidity,
+                        barometric_pressure, gas_resistance, current,
+                        UNIX_TIMESTAMP(telemetry_time) as telemetry_time,
+                        channel as telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM telemetry WHERE id = %s
+                 AND battery_level IS NOT NULL
+                 ORDER BY telemetry_time DESC LIMIT 1"""
         params = (id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
@@ -172,17 +177,19 @@ ORDER BY telemetry_time DESC LIMIT 1"""
         if row:
             column_names = [desc[0] for desc in cur.description]
             for i in range(1, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    telemetry[column_names[i]] = row[i].timestamp()
-                else:
-                    telemetry[column_names[i]] = row[i]
+                telemetry[column_names[i]] = row[i]
         cur.close()
         return telemetry
 
     def get_telemetry_all(self):
         telemetry = []
-        sql = """SELECT * FROM telemetry
-ORDER BY ts_created DESC LIMIT 1000"""
+        sql = """SELECT id, air_util_tx, battery_level, channel_utilization,
+                        uptime_seconds, voltage, temperature, relative_humidity,
+                        barometric_pressure, gas_resistance, current,
+                        UNIX_TIMESTAMP(telemetry_time) as telemetry_time,
+                        channel as telemetry_channel, UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM telemetry
+                 ORDER BY ts_created DESC LIMIT 1000"""
         cur = self.db.cursor()
         cur.execute(sql)
         rows = cur.fetchall()
@@ -190,20 +197,19 @@ ORDER BY ts_created DESC LIMIT 1000"""
             record = {}
             column_names = [desc[0] for desc in cur.description]
             for i in range(0, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    record[column_names[i]] = row[i].timestamp()
-                else:
-                    record[column_names[i]] = row[i]
+                record[column_names[i]] = row[i]
             telemetry.append(record)
         cur.close()
         return telemetry
 
     def get_node_telemetry(self, node_id):
         telemetry = []
-        sql = """SELECT * FROM telemetry
-WHERE ts_created >= NOW() - INTERVAL 1 DAY
-AND id = %s AND battery_level IS NOT NULL
-ORDER BY ts_created"""
+        sql = """SELECT id, air_util_tx, battery_level, channel_utilization,
+                        UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM telemetry
+                 WHERE ts_created >= NOW() - INTERVAL 1 DAY
+                 AND id = %s AND battery_level IS NOT NULL
+                 ORDER BY ts_created"""
         params = (node_id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
@@ -212,17 +218,18 @@ ORDER BY ts_created"""
             record = {}
             column_names = [desc[0] for desc in cur.description]
             for i in range(0, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    record[column_names[i]] = row[i].timestamp()
-                else:
-                    record[column_names[i]] = row[i]
+                record[column_names[i]] = row[i]
             telemetry.append(record)
         cur.close()
         return telemetry
 
     def get_position(self, id):
         position = {}
-        sql = "SELECT * FROM position WHERE id = %s"
+        sql = """SELECT id, altitude, ground_speed, ground_track, latitude_i,
+                        longitude_i, precision_bits, sats_in_view,
+                        UNIX_TIMESTAMP(position_time) as position_time,
+                        UNIX_TIMESTAMP(ts_created) as ts_created
+                 FROM position WHERE id = %s"""
         params = (id, )
         cur = self.db.cursor()
         cur.execute(sql, params)
@@ -230,10 +237,7 @@ ORDER BY ts_created"""
         if row:
             column_names = [desc[0] for desc in cur.description]
             for i in range(1, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    position[column_names[i]] = row[i].timestamp()
-                else:
-                    position[column_names[i]] = row[i]
+                position[column_names[i]] = row[i]
         cur.close()
         return position
 
@@ -246,7 +250,7 @@ ORDER BY ts_created"""
             close_cur = True
         try:
             target_dt = datetime.datetime.fromtimestamp(target_timestamp)
-            sql = """SELECT latitude_i, longitude_i, ts_created
+            sql = """SELECT latitude_i, longitude_i, UNIX_TIMESTAMP(ts_created) as ts_created
                      FROM positionlog
                      WHERE id = %s
                      ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
@@ -258,7 +262,7 @@ ORDER BY ts_created"""
                 position = {
                     "latitude_i": row["latitude_i"],
                     "longitude_i": row["longitude_i"],
-                    "position_time": row["ts_created"].timestamp() if isinstance(row["ts_created"], datetime.datetime) else row["ts_created"],
+                    "position_time": row["ts_created"],
                     "latitude": row["latitude_i"] / 10000000 if row["latitude_i"] else None,
                     "longitude": row["longitude_i"] / 10000000 if row["longitude_i"] else None
                 }
@@ -295,10 +299,7 @@ AND a.ts_created >= NOW() - INTERVAL 1 DAY
         for row in rows:
             record = {}
             for i in range(1, len(row)):
-                if isinstance(row[i], datetime.datetime):
-                    record[column_names[i]] = row[i].timestamp()
-                else:
-                    record[column_names[i]] = row[i]
+                record[column_names[i]] = row[i]
 
             if record["lat1_i"] and record["lon1_i"] and \
                     record["lat2_i"] and record["lon2_i"]:
@@ -2792,7 +2793,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             close_cur = True
         try:
             target_dt = datetime.datetime.fromtimestamp(target_timestamp)
-            sql = """SELECT latitude_i, longitude_i, ts_created
+            sql = """SELECT latitude_i, longitude_i, UNIX_TIMESTAMP(ts_created) as ts_created
                      FROM positionlog
                      WHERE id = %s
                      ORDER BY ABS(TIMESTAMPDIFF(SECOND, ts_created, %s)) ASC
@@ -2804,7 +2805,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 position = {
                     "latitude_i": row["latitude_i"],
                     "longitude_i": row["longitude_i"],
-                    "position_time": row["ts_created"].timestamp() if isinstance(row["ts_created"], datetime.datetime) else row["ts_created"],
+                    "position_time": row["ts_created"],
                     "latitude": row["latitude_i"] / 10000000 if row["latitude_i"] else None,
                     "longitude": row["longitude_i"] / 10000000 if row["longitude_i"] else None
                 }
