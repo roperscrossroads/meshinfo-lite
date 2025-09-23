@@ -109,7 +109,7 @@ def get_data(msg):
         j = to_json(msg)
         if "decoded" not in j:
             logging.debug("Message has no decoded payload")
-            return None
+            return ("dropped", "NO_DECODED_PAYLOAD")
 
         # Add hop information to the JSON data
         if hasattr(msg, 'hop_limit'):
@@ -123,7 +123,7 @@ def get_data(msg):
         if portnum == portnums_pb2.ATAK_PLUGIN:
             _rate_limited_log("atak_drop", j['from'],
                              f"Dropping ATAK plugin message (portnum 72) from node {j['from']}")
-            return None
+            return ("dropped", "ATAK_PLUGIN")
 
         # Initialize type before the portnum checks
         j["type"] = None
@@ -314,7 +314,7 @@ def get_data(msg):
         return j
     except Exception as e:
         logging.error(f"Error processing message data: {str(e)}")
-        return None
+        return ("error", f"PROCESSING_ERROR: {str(e)}")
 
 
 def process_payload(payload, topic, md: MeshData):
@@ -335,16 +335,22 @@ def process_payload(payload, topic, md: MeshData):
     if mp:
         try:
             data = get_data(mp)
-            if data:  # Only store if we got valid data
+            if isinstance(data, tuple):  # Status tuple returned (status, reason)
+                status, reason = data
+                if status == "dropped":
+                    logger.debug(f"Message intentionally dropped on topic {topic}: {reason}")
+                elif status == "error":
+                    logger.warning(f"Error processing message on topic {topic}: {reason}")
+            elif data:  # Valid data returned
                 logger.debug(f"process_payload: Calling md.store() for topic {topic}")
                 # Use the passed-in MeshData instance
                 md.store(data, topic)
             else:
-                # Log topic only if debug is enabled or if it's an unsupported type
+                # Fallback for None returns (shouldn't happen with new code)
                 if config.get("server", "debug") == "true":
                     logging.warning(f"Received invalid or unsupported message type on topic {topic}. Payload: {payload[:100]}...") # Log partial payload for debug
                 else:
-                    logger.warning(f"process_payload: get_packet returned None for topic {topic}")
+                    logger.warning(f"process_payload: get_data returned None for topic {topic}")
 
         except KeyError as e:
             logging.warning(f"Failed to process message: Missing key {str(e)} in payload on topic {topic}")
