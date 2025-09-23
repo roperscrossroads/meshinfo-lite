@@ -1,2 +1,52 @@
 mariadb/
+mysql_data/
+mariadb_data/
+runtime_cache/
 docker-compose.yml
+docker-compose*.yml
+.git/
+.gitignore
+*.log
+*.pid
+.env
+.env.local
+config-*.ini.example
+preview_server.py
+
+# Development and testing files
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+.tox/
+.venv/
+node_modules/
+
+# Documentation and sample files
+README.md
+docs/
+*.md
+*.example
+*.sample
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# GitHub workflows (not needed in container)
+.github/
