@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import datetime
-from datetime import timedelta
+from datetime import timedelta, timezone
 import requests
 import time
 from math import asin, cos, radians, sin, sqrt
@@ -68,7 +68,7 @@ def convert_node_id_from_hex_to_int(node_id: str):
 
 def days_since_datetime(dt):
     """Return the number of days since a given UTC datetime."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(timezone.utc)
     if isinstance(dt, str):
         dt = datetime.datetime.fromisoformat(dt)
     return (now - dt).days

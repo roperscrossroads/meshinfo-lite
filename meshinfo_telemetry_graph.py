@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import datetime
+from datetime import timezone
 import io
 import base64
 import json
@@ -20,7 +21,7 @@ def draw_graph(telemetry):
 
     # Convert ts_created to datetime format
     time_stamps = [
-        datetime.datetime.fromtimestamp(int(t)) for t in data["ts_created"]
+        datetime.datetime.fromtimestamp(int(t), tz=timezone.utc) for t in data["ts_created"]
     ]
 
     # Create the plot

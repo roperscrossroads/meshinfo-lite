@@ -38,6 +38,7 @@ from meshinfo_los_profile import LOSProfile
 from timezone_utils import convert_to_local, format_timestamp, time_ago
 import json
 import datetime
+from datetime import timezone
 from meshinfo_api import api
 
 app = Flask(__name__)
@@ -562,7 +563,7 @@ def not_found(e):
 def cache_key_prefix():
     """Generate a cache key prefix based on current time bucket."""
     # Round to nearest minute for 60-second cache
-    return datetime.datetime.now().replace(second=0, microsecond=0).timestamp()
+    return datetime.datetime.now(timezone.utc).replace(second=0, microsecond=0).timestamp()
 
 def get_cache_timeout():
     """Get cache timeout from config."""
@@ -746,7 +747,7 @@ def message_map():
         convex_hull_area_km2=data['convex_hull_area_km2'],
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         find_relay_node_by_suffix=lambda relay_suffix, nodes, receiver_ids=None, sender_id=None: find_relay_node_by_suffix(
             relay_suffix, nodes, receiver_ids, sender_id, zero_hop_links=zero_hop_links, sender_pos=sender_pos, receiver_pos=None
         )
@@ -870,7 +871,7 @@ def traceroute_map():
         utils=utils,
         meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @cache.memoize(timeout=get_cache_timeout())
@@ -908,7 +909,7 @@ def graph():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @app.route('/graph2.html')
@@ -930,7 +931,7 @@ def graph2():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @app.route('/graph3.html')
@@ -952,7 +953,7 @@ def graph3():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @app.route('/graph4.html')
@@ -974,7 +975,7 @@ def graph4():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @app.route('/utilization-heatmap.html')
@@ -989,7 +990,7 @@ def utilization_heatmap():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         Channel=meshtastic_support.Channel  # Add Channel enum to template context
     )
 
@@ -1005,7 +1006,7 @@ def utilization_hexmap():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         Channel=meshtastic_support.Channel  # Add Channel enum to template context
     )
 
@@ -1086,7 +1087,7 @@ def map():
         zero_hop_timeout=zero_hop_timeout,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         Channel=meshtastic_support.Channel  # Add Channel enum to template context
     )
 
@@ -1105,7 +1106,7 @@ def neighbors():
             "neighbors.html.j2",
             auth=auth, config=config, nodes={},
             active_nodes_with_connections={}, view_type=view_type,
-            utils=utils, datetime=datetime.datetime, timestamp=datetime.datetime.now()
+            utils=utils, datetime=datetime.datetime, timestamp=datetime.datetime.now(timezone.utc)
         )
 
     # Get neighbors data using the new method
@@ -1127,7 +1128,7 @@ def neighbors():
         view_type=view_type,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
     )
 
 @app.route('/telemetry.html')
@@ -1145,7 +1146,7 @@ def telemetry():
         telemetry=telemetry,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 
@@ -1190,7 +1191,7 @@ def traceroutes():
         utils=utils,
         meshtastic_support=meshtastic_support,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         meshdata=md  # Add meshdata to template context
     )
 
@@ -1213,7 +1214,7 @@ def logs():
         node_filter=node_filter,  # Pass the node filter to template
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         json=json
     )
 
@@ -1234,7 +1235,7 @@ def monday():
         monday=monday,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
     )
 
 
@@ -1258,7 +1259,7 @@ def mynodes():
         meshtastic_support=meshtastic_support,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
     )
 
 
@@ -1299,7 +1300,7 @@ def register():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         error_message=error_message
     )
 
@@ -1323,7 +1324,7 @@ def login(success_message=None, error_message=None):
             auth=auth(),
             config=config,
             datetime=datetime.datetime,
-            timestamp=datetime.datetime.now(),
+            timestamp=datetime.datetime.now(timezone.utc),
             success_message=success_message,
             error_message=error_message
         )
@@ -1387,7 +1388,7 @@ def serve_static(filename):
             node_route=node_page_data['node_route'],
             utils=utils,
             datetime=datetime.datetime,
-            timestamp=datetime.datetime.now(),
+            timestamp=datetime.datetime.now(timezone.utc),
             zero_hop_heard=node_page_data['zero_hop_heard'],
             zero_hop_heard_by=node_page_data['zero_hop_heard_by'],
             neighbor_heard_by=node_page_data['neighbor_heard_by'],
@@ -1429,7 +1430,7 @@ def serve_static(filename):
             meshtastic_support=meshtastic_support,
             utils=utils,
             datetime=datetime.datetime,
-            timestamp=datetime.datetime.now(),
+            timestamp=datetime.datetime.now(timezone.utc),
         )
 
     return send_from_directory("www", filename)
@@ -1458,7 +1459,7 @@ def get_metrics():
         channel = request.args.get('channel', 'all')  # Get channel parameter
         
         # Set time range based on parameter
-        end_time = datetime.datetime.now()
+        end_time = datetime.datetime.now(timezone.utc)
         if time_range == 'week':
             start_time = end_time - datetime.timedelta(days=7)
             bucket_size = 180  # 3 hours in minutes
@@ -2203,7 +2204,7 @@ def chat():
         pagination=chat_data,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         debug=False,
     )
 
@@ -2279,7 +2280,7 @@ def chat2():
         pagination=chat_data,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         meshtastic_support=meshtastic_support,
         debug=False,
     )
@@ -2299,7 +2300,7 @@ def serve_index(success_message=None, error_message=None):
         config=config,
         nodes=nodes,
         active_nodes=active_nodes,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(timezone.utc),
         success_message=success_message,
         error_message=error_message
     )
@@ -2330,7 +2331,7 @@ def nodes():
         meshtastic_support=meshtastic_support,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @app.route('/allnodes.html')
@@ -2359,7 +2360,7 @@ def allnodes():
         meshtastic_support=meshtastic_support,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @app.route('/api/debug/memory')
@@ -2806,7 +2807,7 @@ def message_paths():
         stats=relay_data['stats'],
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(timezone.utc)
     )
 
 @cache.memoize(timeout=get_cache_timeout())  # Cache for 5 minutes
@@ -2895,7 +2896,7 @@ def get_utilization_data():
         
         # Calculate time window
         hours = int(time_range)
-        cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=hours)
+        cutoff_time = datetime.datetime.now(timezone.utc) - datetime.timedelta(hours=hours)
         
         cursor = md.db.cursor(dictionary=True)
         
