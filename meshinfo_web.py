@@ -49,6 +49,7 @@ from meshinfo_utils import (
     clear_nodes_cache, clear_database_cache, get_cached_chat_data, get_node_page_data,
     calculate_node_distance, find_relay_node_by_suffix, get_elsewhere_links, get_role_badge
 )
+
 from PIL import Image, ImageDraw
 import PIL.ImageDraw
 
@@ -449,6 +450,11 @@ app.jinja_env.globals.update(time_ago=time_ago)
 app.jinja_env.globals.update(min=min)
 app.jinja_env.globals.update(max=max)
 app.jinja_env.globals.update(datetime=datetime.datetime)
+def get_current_utc_time():
+    """Return current UTC time as datetime object for templates"""
+    return datetime.datetime.now(datetime.timezone.utc)
+
+app.jinja_env.globals.update(current_time=get_current_utc_time)
 app.jinja_env.globals.update(get_role_badge=get_role_badge)
 
 # Add template filters
@@ -733,7 +739,7 @@ def internal_error(error):
 def cache_key_prefix():
     """Generate a cache key prefix based on current time bucket."""
     # Round to nearest minute for 60-second cache
-    return datetime.datetime.now().replace(second=0, microsecond=0).timestamp()
+    return datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0).timestamp()
 
 
 
@@ -915,7 +921,7 @@ def message_map():
         convex_hull_area_km2=data['convex_hull_area_km2'],
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         find_relay_node_by_suffix=lambda relay_suffix, nodes, receiver_ids=None, sender_id=None: find_relay_node_by_suffix(
             relay_suffix, nodes, receiver_ids, sender_id, zero_hop_links=zero_hop_links, sender_pos=sender_pos, receiver_pos=None
         )
@@ -1039,7 +1045,7 @@ def traceroute_map():
         utils=utils,
         meshtastic_support=get_meshtastic_support(),
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @cache.memoize(timeout=get_cache_timeout())
@@ -1077,7 +1083,7 @@ def graph():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/graph2.html')
@@ -1099,7 +1105,7 @@ def graph2():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/graph3.html')
@@ -1121,7 +1127,7 @@ def graph3():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/graph4.html')
@@ -1143,7 +1149,7 @@ def graph4():
         view_type=view_type,
         days=days,
         zero_hop_timeout=zero_hop_timeout,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/utilization-heatmap.html')
@@ -1158,7 +1164,7 @@ def utilization_heatmap():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
@@ -1174,7 +1180,7 @@ def utilization_hexmap():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
@@ -1190,7 +1196,7 @@ def map():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
@@ -1271,7 +1277,7 @@ def map_classic():
         zero_hop_timeout=zero_hop_timeout,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         Channel=get_channel_enum(),  # Add Channel enum to template context
     )
 
@@ -1290,7 +1296,7 @@ def neighbors():
             "neighbors.html.j2",
             auth=auth(), config=config, nodes={},
             active_nodes_with_connections={}, view_type=view_type,
-            utils=utils, datetime=datetime.datetime, timestamp=datetime.datetime.now()
+            utils=utils, datetime=datetime.datetime, timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
 
     # Get neighbors data using the new method
@@ -1312,7 +1318,7 @@ def neighbors():
         view_type=view_type,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
 
 @app.route('/telemetry.html')
@@ -1330,7 +1336,7 @@ def telemetry():
         telemetry=telemetry,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/traceroutes.html')
@@ -1374,7 +1380,7 @@ def traceroutes():
         utils=utils,
         meshtastic_support=get_meshtastic_support(),
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         meshdata=md  # Add meshdata to template context
     )
 
@@ -1396,7 +1402,7 @@ def logs():
         node_filter=node_filter,  # Pass the node filter to template
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         json=json
     )
 
@@ -1431,7 +1437,7 @@ def routing():
         "days": days,
         "utils": utils,
         "datetime": datetime.datetime,
-        "timestamp": datetime.datetime.now(),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc),
         "meshtastic_support": get_meshtastic_support()
     }
 
@@ -1464,7 +1470,7 @@ def monday():
         monday=monday,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
 
 @app.route('/mynodes.html')
@@ -1487,7 +1493,7 @@ def mynodes():
         meshtastic_support=get_meshtastic_support(),
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
 
 @app.route('/linknode.html')
@@ -1527,7 +1533,7 @@ def register():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         error_message=error_message
     )
 
@@ -1558,7 +1564,7 @@ def login(success_message=None, error_message=None):
             auth=auth(),
             config=config,
             datetime=datetime.datetime,
-            timestamp=datetime.datetime.now(),
+            timestamp=datetime.datetime.now(datetime.timezone.utc),
             success_message=success_message,
             error_message=error_message
         )
@@ -1601,7 +1607,7 @@ def forgot_password():
                 auth=auth(),
                 config=config,
                 datetime=datetime.datetime,
-                timestamp=datetime.datetime.now(),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
                 error_message=res["error"]
             )
         elif "success" in res:
@@ -1610,7 +1616,7 @@ def forgot_password():
                 auth=auth(),
                 config=config,
                 datetime=datetime.datetime,
-                timestamp=datetime.datetime.now(),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
                 success_message=res["success"]
             )
 
@@ -1619,7 +1625,7 @@ def forgot_password():
         auth=auth(),
         config=config,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/reset-password.html', methods=['GET', 'POST'])
@@ -1635,7 +1641,7 @@ def reset_password():
                 auth=auth(),
                 config=config,
                 datetime=datetime.datetime,
-                timestamp=datetime.datetime.now(),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
                 token=token,
                 error_message="Passwords do not match."
             )
@@ -1648,7 +1654,7 @@ def reset_password():
                 auth=auth(),
                 config=config,
                 datetime=datetime.datetime,
-                timestamp=datetime.datetime.now(),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
                 token=token,
                 error_message=res["error"]
             )
@@ -1658,7 +1664,7 @@ def reset_password():
                 auth=auth(),
                 config=config,
                 datetime=datetime.datetime,
-                timestamp=datetime.datetime.now(),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
                 success_message=res["success"]
             )
 
@@ -1672,7 +1678,7 @@ def reset_password():
         auth=auth(),
         config=config,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         token=token
     )
 
@@ -1716,7 +1722,7 @@ def serve_static(filename):
             node_route=node_page_data['node_route'],
             utils=utils,
             datetime=datetime.datetime,
-            timestamp=datetime.datetime.now(),
+            timestamp=datetime.datetime.now(datetime.timezone.utc),
             zero_hop_heard=node_page_data['zero_hop_heard'],
             zero_hop_heard_by=node_page_data['zero_hop_heard_by'],
             neighbor_heard_by=node_page_data['neighbor_heard_by'],
@@ -1759,7 +1765,7 @@ def serve_static(filename):
             hardware_photos=get_hardware_photos(),
             utils=utils,
             datetime=datetime.datetime,
-            timestamp=datetime.datetime.now(),
+            timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
 
     return send_from_directory("www", filename)
@@ -1776,7 +1782,7 @@ def diagnostics():
         config=config,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/api/diagnostics')
@@ -1871,7 +1877,7 @@ def chat():
         pagination=chat_data,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         debug=False,
     )
 
@@ -1955,7 +1961,7 @@ def chat2():
         pagination=chat_data,
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         meshtastic_support=get_meshtastic_support(),
         debug=False,
         channel=channel,
@@ -1978,7 +1984,7 @@ def serve_index(success_message=None, error_message=None):
         config=config,
         nodes=nodes,
         active_nodes=active_nodes,
-        timestamp=datetime.datetime.now(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
         success_message=success_message,
         error_message=error_message
     )
@@ -2010,7 +2016,7 @@ def nodes():
         hardware_photos=get_hardware_photos(),
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/allnodes.html')
@@ -2040,7 +2046,7 @@ def allnodes():
         hardware_photos=get_hardware_photos(),
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 @app.route('/message-paths.html')
@@ -2062,7 +2068,7 @@ def message_paths():
         stats=relay_data['stats'],
         utils=utils,
         datetime=datetime.datetime,
-        timestamp=datetime.datetime.now()
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
 

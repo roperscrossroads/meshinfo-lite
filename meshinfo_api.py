@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime, timedelta
+import datetime as dt
 import logging
 import sys
 import psutil
@@ -96,7 +97,7 @@ def get_metrics():
         time_range = request.args.get('time_range', 'day')  # day, week, month, year, all
         channel = request.args.get('channel', 'all')  # Get channel parameter
         # Set time range based on parameter
-        end_time = datetime.now()
+        end_time = datetime.now(dt.timezone.utc)
         if time_range == 'week':
             start_time = end_time - timedelta(days=7)
             bucket_size = 180  # 3 hours in minutes
@@ -756,7 +757,7 @@ def get_utilization_data():
         channel = request.args.get('channel', 'all')
         # Calculate time window
         hours = int(time_range)
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = datetime.now(dt.timezone.utc) - timedelta(hours=hours)
         cursor = md.db.cursor(dictionary=True)
         # Build channel condition
         channel_condition = ""
