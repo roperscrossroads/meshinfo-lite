@@ -1,6 +1,7 @@
 import configparser
 import mysql.connector
 import datetime
+from datetime import timezone
 import json
 import time
 import utils
@@ -249,7 +250,7 @@ class MeshData:
             cur = self.db.cursor(dictionary=True)
             close_cur = True
         try:
-            target_dt = datetime.datetime.fromtimestamp(target_timestamp)
+            target_dt = datetime.datetime.fromtimestamp(target_timestamp, tz=timezone.utc)
             sql = """SELECT latitude_i, longitude_i, UNIX_TIMESTAMP(ts_created) as ts_created
                      FROM positionlog
                      WHERE id = %s
@@ -2241,7 +2242,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         for row in cursor.fetchall():
             sender_id = row['from_id']
             receiver_id = row['received_by_id']
-            last_heard_dt = datetime.datetime.fromtimestamp(row['last_heard_time'])
+            last_heard_dt = datetime.datetime.fromtimestamp(row['last_heard_time'], tz=timezone.utc)
 
             # Update last heard time for involved nodes
             zero_hop_last_heard[sender_id] = max(zero_hop_last_heard.get(sender_id, datetime.datetime.min), last_heard_dt)
@@ -2364,7 +2365,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             if isinstance(ts_created, datetime.datetime):
                 last_heard_dt = ts_created
             else:
-                last_heard_dt = datetime.datetime.fromtimestamp(ts_created)
+                last_heard_dt = datetime.datetime.fromtimestamp(ts_created, tz=timezone.utc)
 
             # Update last heard time for involved nodes
             zero_hop_last_heard[from_id] = max(zero_hop_last_heard.get(from_id, datetime.datetime.min), last_heard_dt)
@@ -2630,7 +2631,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             last_heard_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
             last_heard_by_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard_by'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
 
-            node_ts_seen = datetime.datetime.fromtimestamp(node_base_data['ts_seen']) if node_base_data.get('ts_seen') else datetime.datetime.min
+            node_ts_seen = datetime.datetime.fromtimestamp(node_base_data['ts_seen'], tz=timezone.utc) if node_base_data.get('ts_seen') else datetime.datetime.min
 
             final_node_data['last_heard'] = max(
                 node_ts_seen,
@@ -2778,7 +2779,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             cur = self.db.cursor(dictionary=True)
             close_cur = True
         try:
-            target_dt = datetime.datetime.fromtimestamp(target_timestamp)
+            target_dt = datetime.datetime.fromtimestamp(target_timestamp, tz=timezone.utc)
             sql = """SELECT latitude_i, longitude_i, UNIX_TIMESTAMP(ts_created) as ts_created
                      FROM positionlog
                      WHERE id = %s

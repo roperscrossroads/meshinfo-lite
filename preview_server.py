@@ -5,6 +5,7 @@ Minimal preview server for testing template customizations
 from flask import Flask, render_template, url_for, send_from_directory
 import configparser
 import datetime
+from datetime import timezone
 import os
 from timezone_utils import convert_to_local, format_timestamp, time_ago
 
@@ -17,7 +18,7 @@ config.read("config.ini")
 # Mock data for preview
 mock_data = {
     'active_nodes': [{'id': 1}, {'id': 2}, {'id': 3}],  # 3 fake nodes
-    'timestamp': datetime.datetime.now(),
+    'timestamp': datetime.datetime.now(timezone.utc),
     'auth': False,
     'success_message': None,
     'error_message': None,
@@ -25,13 +26,13 @@ mock_data = {
     'convert_to_local': convert_to_local,
     'time_ago': time_ago,
     'url_for': url_for,
-    'current_time': datetime.datetime.now()
+    'current_time': datetime.datetime.now(timezone.utc)
 }
 
 # Add datetime and current time to Jinja2 globals
 app.jinja_env.globals.update(
     datetime=datetime,
-    current_time=datetime.datetime.now()
+    current_time=datetime.datetime.now(timezone.utc)
 )
 
 @app.route('/')
