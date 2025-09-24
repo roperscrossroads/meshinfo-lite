@@ -1,5 +1,5 @@
 from time import strftime, localtime
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import utils
 
@@ -23,7 +23,7 @@ class MeshtasticMonday:
             current = frm + "." + text
             if current == uniq:
                 continue
-            dt = str(datetime.fromtimestamp(ts).date())
+            dt = str(datetime.fromtimestamp(ts, tz=timezone.utc).date())
             tmp = dict(chat)
             tmp["monday"] = dt
             monday.append(tmp)

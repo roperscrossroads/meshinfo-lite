@@ -36,7 +36,7 @@
       <tr>
         <td class="p-1 border text-secondary text-nowrap">
           {% if message.timestamp %}
-          {{ datetime.fromtimestamp(message.timestamp).astimezone(zoneinfo) }}
+          {{ format_timestamp(message.timestamp) }}
           {% endif %}
         </td>
         <td class="p-1 border text-secondary">{{ json.dumps(message, indent=2, cls=JSONEncoder) }}</td>

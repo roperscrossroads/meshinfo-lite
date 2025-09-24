@@ -155,27 +155,8 @@ def clear_database_cache():
     except Exception as e:
         logging.error(f"Error clearing database cache: {e}")
 
-def format_timestamp(timestamp):
-    """Format timestamp for display."""
-    if timestamp is None:
-        return "Unknown"
-    try:
-        dt = datetime.fromtimestamp(timestamp)
-        return dt.strftime('%Y-%m-%d %H:%M:%S')
-    except (ValueError, TypeError):
-        return str(timestamp)
-
-# time_ago function removed - use the timezone-aware version from timezone_utils.py instead
-
-def convert_to_local(timestamp):
-    """Convert timestamp to local timezone."""
-    if timestamp is None:
-        return "Unknown"
-    try:
-        dt = datetime.fromtimestamp(timestamp)
-        return dt.strftime('%Y-%m-%d %H:%M:%S')
-    except (ValueError, TypeError):
-        return str(timestamp)
+# format_timestamp, time_ago, and convert_to_local functions removed - 
+# use the timezone-aware versions from timezone_utils.py instead
 
 def get_cached_chat_data(page=1, per_page=50, channel=None):
     """Cache the chat data with optimized query, with optional channel filter (supports comma-separated list)."""
