@@ -140,7 +140,7 @@
         </li>
         {% endif %}
         {% if 'features' not in config or ('show_meshtastic_monday' not in config['features']) or config['features']['show_meshtastic_monday']|lower == 'true' %}
-        {% set current_local_time = convert_to_local(current_time().timestamp()) %}
+        {% set current_local_time = convert_to_local(now_utc().timestamp()) %}
         {% if current_local_time.weekday() == 0 %}
         <li class="nav-item{% if this_page == "#MeshtasticMonday" %} active{% endif %}">
           <a class="nav-link" href="monday.html"><span class="d-lg-none d-xl-inline"></span>#MeshtasticMonday</a>

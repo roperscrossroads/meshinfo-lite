@@ -27,13 +27,13 @@ def _rate_limited_log(msg_type, node_id, message, rate_limit_seconds=30):
         message: Log message
         rate_limit_seconds: Seconds between INFO logs for same node (default 30)
     """
-    current_time = time.time()
+    rate_check_timestamp = time.time()
     log_key = f"{msg_type}_{node_id}"
 
     # Check if we should log at INFO level (first time or after rate limit period)
-    if log_key not in _last_log_times or current_time - _last_log_times[log_key] >= rate_limit_seconds:
+    if log_key not in _last_log_times or rate_check_timestamp - _last_log_times[log_key] >= rate_limit_seconds:
         logging.info(message)
-        _last_log_times[log_key] = current_time
+        _last_log_times[log_key] = rate_check_timestamp
     else:
         # Rate limited - log at DEBUG level to reduce spam
         logging.debug(f"[RATE LIMITED] {message}")

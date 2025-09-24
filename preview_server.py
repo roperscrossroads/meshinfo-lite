@@ -15,7 +15,7 @@ app = Flask(__name__, static_folder='www')
 config = configparser.ConfigParser()
 config.read("config.ini")
 
-def get_current_utc_time():
+def _create_utc_datetime():
     """Return current UTC time as datetime object for templates"""
     return datetime.datetime.now(timezone.utc)
 
@@ -30,14 +30,14 @@ mock_data = {
     'convert_to_local': convert_to_local,
     'time_ago': time_ago,
     'url_for': url_for,
-    'current_time': get_current_utc_time
+    'now_utc': _create_utc_datetime
 }
 
 # Add datetime and current time to Jinja2 globals
 
 app.jinja_env.globals.update(
     datetime=datetime,
-    current_time=get_current_utc_time
+    now_utc=_create_utc_datetime
 )
 
 @app.route('/')

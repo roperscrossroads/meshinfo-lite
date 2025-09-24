@@ -451,11 +451,11 @@ app.jinja_env.globals.update(time_ago=time_ago)
 app.jinja_env.globals.update(min=min)
 app.jinja_env.globals.update(max=max)
 app.jinja_env.globals.update(datetime=datetime.datetime)
-def get_current_utc_time():
+def _create_utc_datetime():
     """Return current UTC time as datetime object for templates"""
     return datetime.datetime.now(timezone.utc)
 
-app.jinja_env.globals.update(current_time=get_current_utc_time())
+app.jinja_env.globals.update(now_utc=_create_utc_datetime)
 app.jinja_env.globals.update(get_role_badge=get_role_badge)
 
 # Add template filters

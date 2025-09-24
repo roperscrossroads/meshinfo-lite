@@ -276,14 +276,14 @@ def teardown_meshdata(exception):
 def log_memory_usage(force=False):
     """Log current memory usage with detailed information."""
     global last_memory_log, last_memory_usage
-    current_time = time.time()
+    memory_log_timestamp = time.time()
     current_usage = psutil.Process().memory_info().rss
     
     # Only log if:
     # 1. It's been more than MEMORY_LOG_INTERVAL seconds since last log
     # 2. Memory usage has changed by more than threshold
     # 3. Force flag is set
-    if not force and (current_time - last_memory_log < MEMORY_LOG_INTERVAL and 
+    if not force and (memory_log_timestamp - last_memory_log < MEMORY_LOG_INTERVAL and 
                      abs(current_usage - last_memory_usage) < MEMORY_CHANGE_THRESHOLD):
         return
         
@@ -369,7 +369,7 @@ def log_memory_usage(force=False):
         
         logging.info("=== END MEMORY REPORT ===")
             
-        last_memory_log = current_time
+        last_memory_log = memory_log_timestamp
         last_memory_usage = current_usage
         
     except Exception as e:
