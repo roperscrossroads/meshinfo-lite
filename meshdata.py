@@ -2245,8 +2245,8 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             last_heard_dt = datetime.datetime.fromtimestamp(row['last_heard_time'], tz=timezone.utc)
 
             # Update last heard time for involved nodes
-            zero_hop_last_heard[sender_id] = max(zero_hop_last_heard.get(sender_id, datetime.datetime.min), last_heard_dt)
-            zero_hop_last_heard[receiver_id] = max(zero_hop_last_heard.get(receiver_id, datetime.datetime.min), last_heard_dt)
+            zero_hop_last_heard[sender_id] = max(zero_hop_last_heard.get(sender_id, datetime.datetime.min.replace(tzinfo=timezone.utc)), last_heard_dt)
+            zero_hop_last_heard[receiver_id] = max(zero_hop_last_heard.get(receiver_id, datetime.datetime.min.replace(tzinfo=timezone.utc)), last_heard_dt)
 
             distance = None
             if (row['lat_sender_i'] and row['lon_sender_i'] and
@@ -2368,8 +2368,8 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
                 last_heard_dt = datetime.datetime.fromtimestamp(ts_created, tz=timezone.utc)
 
             # Update last heard time for involved nodes
-            zero_hop_last_heard[from_id] = max(zero_hop_last_heard.get(from_id, datetime.datetime.min), last_heard_dt)
-            zero_hop_last_heard[to_id] = max(zero_hop_last_heard.get(to_id, datetime.datetime.min), last_heard_dt)
+            zero_hop_last_heard[from_id] = max(zero_hop_last_heard.get(from_id, datetime.datetime.min.replace(tzinfo=timezone.utc)), last_heard_dt)
+            zero_hop_last_heard[to_id] = max(zero_hop_last_heard.get(to_id, datetime.datetime.min.replace(tzinfo=timezone.utc)), last_heard_dt)
 
             # Calculate distance if positions available
             distance = None
@@ -2628,14 +2628,15 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
             has_zero_hop_info = node_id_int in zero_hop_links
 
             # Determine overall last heard time for sorting
-            last_heard_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
-            last_heard_by_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard_by'].values()], default=datetime.datetime.min) if has_zero_hop_info else datetime.datetime.min
+            utc_min = datetime.datetime.min.replace(tzinfo=timezone.utc)
+            last_heard_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard'].values()], default=utc_min) if has_zero_hop_info else utc_min
+            last_heard_by_zero_hop = max([d['last_heard'] for d in zero_hop_links[node_id_int]['heard_by'].values()], default=utc_min) if has_zero_hop_info else utc_min
 
-            node_ts_seen = datetime.datetime.fromtimestamp(node_base_data['ts_seen'], tz=timezone.utc) if node_base_data.get('ts_seen') else datetime.datetime.min
+            node_ts_seen = datetime.datetime.fromtimestamp(node_base_data['ts_seen'], tz=timezone.utc) if node_base_data.get('ts_seen') else utc_min
 
             final_node_data['last_heard'] = max(
                 node_ts_seen,
-                zero_hop_last_heard.get(node_id_int, datetime.datetime.min)  # Use precalculated zero hop time
+                zero_hop_last_heard.get(node_id_int, utc_min)  # Use precalculated zero hop time
                 # We don't need to include neighbor info times here as they aren't distinct per-link
             )
 
@@ -2660,7 +2661,7 @@ VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))
         # Sort final results by last heard time
         active_nodes_data = dict(sorted(
             active_nodes_data.items(),
-            key=lambda item: item[1].get('last_heard', datetime.datetime.min),
+            key=lambda item: item[1].get('last_heard', datetime.datetime.min.replace(tzinfo=timezone.utc)),
             reverse=True
         ))
 

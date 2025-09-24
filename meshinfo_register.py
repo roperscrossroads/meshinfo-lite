@@ -176,10 +176,12 @@ class Register:
     def verify(self, username, email):
         sql = "SELECT 1 FROM meshuser WHERE username=%s OR email=%s"
         params = (username, email.lower())
-        cur = self.db.cursor()
-        cur.execute(sql, params)
-        okay = True if not cur.fetchone() else False
-        cur.close()
+
+        with self.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            okay = True if not cur.fetchone() else False
+            cur.close()
         return okay
 
     def add_user(self, username, email, password, code):
@@ -192,10 +194,12 @@ VALUES (%s, %s, %s, %s)"""
             password,
             code
         )
-        cur = self.db.cursor()
-        cur.execute(sql, params)
-        cur.close()
-        self.db.commit()
+
+        with self.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            cur.close()
+            conn.commit()
 
     def register(self, username, email, password, confirm_password=None):
         """Register a new user with enhanced validation."""
@@ -247,10 +251,12 @@ VALUES (%s, %s, %s, %s)"""
         sql = """UPDATE meshuser SET password = %s
 WHERE email = %s"""
         params = (hashed, email.lower())
-        cur = self.db.cursor()
-        cur.execute(sql, params)
-        cur.close()
-        self.db.commit()
+
+        with self.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            cur.close()
+            conn.commit()
 
     def authenticate(self, email, password, ip_address=None):
         # Check for account lockout
@@ -264,11 +270,13 @@ WHERE email = %s"""
         sql = """SELECT password, username FROM meshuser
 WHERE status='VERIFIED' AND email = %s"""
         params = (email.lower(), )
-        cur = self.db.cursor()
-        cur.execute(sql, params)
-        row = cur.fetchone()
-        hashed_password = row[0] if row else None
-        cur.close()
+
+        with self.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            hashed_password = row[0] if row else None
+            cur.close()
 
         if hashed_password and utils.check_password(password, hashed_password):
             # Clear any failed login attempts on successful login
@@ -310,11 +318,13 @@ verification = NULL
 WHERE verification=%s
 """
         params = (code, )
-        cur = self.db.cursor()
-        cur.execute(sql, params)
-        verified = True if cur.rowcount else False
-        cur.close()
-        self.db.commit()
+        with self.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            verified = True if cur.rowcount else False
+            cur.close()
+            conn.commit()
+
         if verified:
             return {"success": "Email verified. You can now log in."}
         else:
@@ -328,10 +338,12 @@ WHERE email = %s"""
             otp,
             email.lower()
         )
-        cur = self.db.cursor()
-        cur.execute(sql, params)
-        cur.close()
-        self.db.commit()
+
+        with self.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(sql, params)
+            cur.close()
+            conn.commit()
         return otp
 
     def request_password_reset(self, email):
@@ -342,10 +354,12 @@ WHERE email = %s"""
 
         # Check if email exists and is verified
         sql = "SELECT username FROM meshuser WHERE status='VERIFIED' AND email = %s"
-        cur = self.db.cursor()
-        cur.execute(sql, (email.lower(),))
-        row = cur.fetchone()
-        cur.close()
+
+        with self.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(sql, (email.lower(),))
+            row = cur.fetchone()
+            cur.close()
 
         if not row:
             # Don't reveal if email exists (security best practice)
@@ -403,10 +417,12 @@ WHERE email = %s"""
             # Update password
             password_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt())
             sql = "UPDATE meshuser SET password = %s WHERE email = %s"
-            cur = self.db.cursor()
-            cur.execute(sql, (password_hash, email.lower()))
-            self.db.commit()
-            cur.close()
+
+            with self.get_db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(sql, (password_hash, email.lower()))
+                conn.commit()
+                cur.close()
 
             return {"success": "Password successfully reset! You can now log in with your new password."}
 

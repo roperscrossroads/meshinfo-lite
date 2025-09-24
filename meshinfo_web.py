@@ -1306,7 +1306,7 @@ def neighbors():
     # Sort final results by last heard time
     active_nodes_data = dict(sorted(
         active_nodes_data.items(),
-        key=lambda item: item[1].get('last_heard', datetime.datetime.min),
+        key=lambda item: item[1].get('last_heard', datetime.datetime.min.replace(tzinfo=timezone.utc)),
         reverse=True
     ))
 
