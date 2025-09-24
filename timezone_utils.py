@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import configparser
 
@@ -17,9 +17,9 @@ def convert_to_local(timestamp):
         return None
         
     if isinstance(timestamp, (int, float)):
-        utc_dt = datetime.fromtimestamp(timestamp, pytz.UTC)
+        utc_dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
     else:
-        utc_dt = timestamp.replace(tzinfo=pytz.UTC)
+        utc_dt = timestamp.replace(tzinfo=timezone.utc)
     
     local_tz = pytz.timezone(get_timezone())
     return utc_dt.astimezone(local_tz)
@@ -40,12 +40,12 @@ def time_ago(timestamp):
         return "unknown"
     
     if isinstance(timestamp, (int, float)):
-        timestamp_dt = datetime.fromtimestamp(timestamp, pytz.UTC)
+        timestamp_dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
     else:
-        timestamp_dt = timestamp.replace(tzinfo=pytz.UTC)
+        timestamp_dt = timestamp.replace(tzinfo=timezone.utc)
     
     # Get current time in UTC
-    now = datetime.now(pytz.UTC)
+    now = datetime.now(timezone.utc)
     
     # Calculate the time difference
     diff = now - timestamp_dt

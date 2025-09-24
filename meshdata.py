@@ -37,7 +37,7 @@ def safe_timestamp_convert(dt_obj):
     if isinstance(dt_obj, datetime.datetime):
         # Treat datetime as UTC (MySQL stores UTC) and convert properly
         if dt_obj.tzinfo is None:
-            dt_obj = dt_obj.replace(tzinfo=pytz.UTC)
+            dt_obj = dt_obj.replace(tzinfo=timezone.utc)
         return int(dt_obj.timestamp())
     return dt_obj  # Already a timestamp or other value
 
