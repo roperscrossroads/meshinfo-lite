@@ -72,11 +72,11 @@ class Register:
 
         except Exception as e:
             logger.error(f"Database connection error: {str(e)}")
-            if conn and conn != self.db:
+            if conn and self.db_pool:
                 conn.rollback()
             raise
         finally:
-            if conn and conn != self.db:
+            if conn and self.db_pool:
                 try:
                     conn.close()
                 except:
@@ -435,5 +435,5 @@ WHERE email = %s"""
             return {"error": "An error occurred while resetting your password."}
 
     def __del__(self):
-        if self.db:
+        if hasattr(self, 'db') and self.db:
             self.db.close()
