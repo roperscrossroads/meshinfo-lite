@@ -8,10 +8,9 @@ import requests
 import json
 import time
 import psutil
-from datetime import datetime
+from datetime import datetime, timezone
 import datetime as dt
 import logging
-from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -58,7 +57,7 @@ def monitor_cache_performance(duration_minutes=10, interval_seconds=30):
     end_time = start_time + (duration_minutes * 60)
     
     while time.time() < end_time:
-        timestamp = datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         
         # Get memory usage
         memory = get_memory_usage()
