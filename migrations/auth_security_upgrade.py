@@ -273,6 +273,42 @@ def migrate_existing_users(cursor):
         logger.warning(f"Could not migrate existing users: {str(e)}")
 
 
+def migrate(db):
+    """Migration function interface for automatic execution"""
+    cursor = db.cursor()
+
+    try:
+        # Add new columns to meshuser table
+        logger.info("Step 1: Adding security columns to meshuser table...")
+        add_meshuser_columns(cursor)
+
+        # Create new authentication tables
+        logger.info("Step 2: Creating authentication tables...")
+        create_auth_tables(cursor)
+
+        # Add performance indexes
+        logger.info("Step 3: Adding performance indexes...")
+        add_indexes(cursor)
+
+        # Create cleanup stored procedure
+        logger.info("Step 4: Creating cleanup procedure...")
+        create_cleanup_procedure(cursor)
+
+        # Migrate existing users
+        logger.info("Step 5: Migrating existing user data...")
+        migrate_existing_users(cursor)
+
+        # Commit changes
+        db.commit()
+        logger.info("Migration completed successfully!")
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        db.rollback()
+        raise
+    finally:
+        cursor.close()
+
 def main():
     """Main migration function"""
     logger.info("Starting authentication security upgrade migration...")
