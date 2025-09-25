@@ -69,14 +69,8 @@ RUN pip install --upgrade pip setuptools wheel
 # Filter out rasterio since it's installed via conda for both architectures
 RUN grep -v "^rasterio" requirements.txt > requirements_filtered.txt || echo "" > requirements_filtered.txt
 
-# Use piwheels for ARM64 builds for faster installation, standard pip for x86-64
-RUN if [ "$(uname -m)" = "aarch64" ]; then \
-    echo "ARM64: Using piwheels for faster package installation"; \
-    su app -c "pip install --no-cache-dir --user --extra-index-url https://www.piwheels.org/simple -r requirements_filtered.txt"; \
-    else \
-    echo "x86-64: Using standard pip installation"; \
-    su app -c "pip install --no-cache-dir --user -r requirements_filtered.txt"; \
-    fi
+# Install requirements using standard PyPI for all architectures
+RUN su app -c "pip install --no-cache-dir --user -r requirements_filtered.txt"
 
 COPY --chown=app:app banner run.sh ./
 COPY --chown=app:app *.py ./
