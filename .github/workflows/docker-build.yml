@@ -22,7 +22,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          install: true
+          driver: docker
 
       - name: Calculate version
         id: version
@@ -68,7 +68,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          install: true
+          driver: docker
 
       - name: Calculate version
         id: version
