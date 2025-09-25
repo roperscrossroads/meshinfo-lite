@@ -16,7 +16,7 @@ rasterio
 scipy
 geopy
 boto3
-pytz
+pytz>=2023.3
 Flask-Caching
 pandas
 psutil>=7.0.0
