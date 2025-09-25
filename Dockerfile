@@ -1,7 +1,7 @@
 # trunk-ignore-all(checkov/CKV_DOCKER_3)
 FROM python:3.13.7-slim-bookworm
 
-LABEL org.opencontainers.image.source=https://github.com/agessaman/meshinfo-lite
+LABEL org.opencontainers.image.source=https://github.com/roperscrossroads/meshinfo-lite
 LABEL org.opencontainers.image.description="Realtime web UI to run against a Meshtastic regional or private mesh network."
 
 ENV MQTT_TLS=false

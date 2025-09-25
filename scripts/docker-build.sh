@@ -15,6 +15,6 @@ else
   echo "Using provided version: $VERSION"
 fi
 
-REPO=agessaman/meshinfo
+REPO=roperscrossroads/meshinfo-lite
 
 docker build -t $REPO:$VERSION --platform=linux/amd64 .

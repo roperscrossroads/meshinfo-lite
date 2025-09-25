@@ -9,7 +9,7 @@ if [ -z "$1" ]
     exit 1
 fi
 
-REPO=agessaman/meshinfo
+REPO=roperscrossroads/meshinfo-lite
 VERSION=$1
 # echo $CR_PAT | docker login ghcr.io -u USERNAME --password-stdin
 git tag -a $VERSION -m "Version $VERSION" && git push --tags && \
