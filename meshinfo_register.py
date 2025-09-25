@@ -227,7 +227,7 @@ VALUES (%s, %s, %s, %s)"""
             return {"error": "Username or email already exists."}
 
         # Use secure code generation
-        code = self.generate_secure_code(8)  # More secure than utils.generate_random_code(4)
+        code = utils.generate_random_code(4)  # Matches CHAR(4) database column size
         self.add_user(
            username,
            email.lower(),
