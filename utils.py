@@ -226,7 +226,7 @@ def get_owner_nodes(nodes, owner):
     }
 
 
-def generate_random_code(length=6):
+def generate_random_code(length=4):
     characters = string.ascii_letters
     return ''.join(random.choices(characters, k=length))
 
